@@ -1,0 +1,17 @@
+{
+    "mcp-atlassian": {
+        "command": "docker",
+        "args": [
+            "run",
+            "--rm",
+            "-i",
+            "--pull=always",
+            "--env-file",
+            "${JIRA_ENV_FILE}",
+            "ghcr.io/sooperset/mcp-atlassian:latest"
+        ],
+        "env": {
+            "JIRA_ENV_FILE": "${HOME}/.env.jira"
+        }
+    }
+}
