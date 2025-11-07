@@ -21,8 +21,6 @@ This skill enables seamless interaction with Jira through Claude Code, ensuring 
 ### 📝 Templates Included
 - **Bug Report Template**: Comprehensive bug documentation with proper formatting
 - **Feature Request Template**: Detailed feature proposals with acceptance criteria
-- **Task Template**: Standard task structure with checklists
-- **Comment Templates**: Structured updates and status reports
 
 ### 🎨 Jira Syntax Support
 - Headings (h1-h6)
@@ -39,11 +37,15 @@ This skill enables seamless interaction with Jira through Claude Code, ensuring 
 
 ### Prerequisites
 
-1. **mcp-atlassian MCP Server**: This skill requires the mcp-atlassian MCP server
-   - Repository: https://github.com/sooperset/mcp-atlassian
-   - Install via Docker or follow repository installation instructions
+1. **Docker**: Required for running the mcp-atlassian MCP server
+   - Install Docker Desktop: https://www.docker.com/products/docker-desktop
+   - Ensure Docker daemon is running
 
-2. **Jira Credentials**: You need one of:
+2. **mcp-atlassian MCP Server**: This skill requires the mcp-atlassian MCP server
+   - Repository: https://github.com/sooperset/mcp-atlassian
+   - Runs automatically via Docker when using the skill
+
+3. **Jira Credentials**: You need one of:
    - **Cloud**: API token from https://id.atlassian.com/manage-profile/security/api-tokens
    - **Server/DC**: Personal Access Token from your Jira instance
 
