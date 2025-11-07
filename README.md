@@ -1,28 +1,36 @@
-# Jira Integration Skill
+# Jira Integration Plugin
 
-Intelligent Jira integration for Claude Code using the mcp-atlassian MCP server with automatic Jira wiki markup syntax enforcement.
+Comprehensive Jira integration for Claude Code with two specialized skills: **jira-mcp** for API operations via mcp-atlassian MCP server, and **jira-syntax** for wiki markup validation and templates.
 
 ## Overview
 
-This skill enables seamless interaction with Jira through Claude Code, ensuring all ticket content follows official Jira wiki markup standards. It provides comprehensive templates, syntax validation, and workflow guidance for common Jira operations.
+This plugin enables seamless interaction with Jira through Claude Code with two complementary skills:
+
+- **jira-mcp**: Handles all Jira API operations (CRUD, search, transitions, linking, worklogs)
+- **jira-syntax**: Enforces Jira wiki markup standards with templates and validation
+
+Together, these skills ensure all Jira content follows official wiki markup standards while providing powerful API integration capabilities.
 
 ## Features
 
-### 🎯 Core Capabilities
-- **Issue Management**: Create, read, update, and search Jira issues
-- **Syntax Enforcement**: Automatic Jira wiki markup validation and formatting
+### 🎯 jira-mcp Skill (API Operations)
+- **Issue Management**: Create, read, update, and search Jira issues via MCP
 - **JQL Queries**: Powerful searching with Jira Query Language
 - **Bulk Operations**: Create or update multiple issues efficiently
-- **Work Logging**: Track time spent with properly formatted entries
+- **Work Logging**: Track time spent with API-integrated entries
 - **Issue Linking**: Connect related issues (blocks, relates to, duplicates)
 - **Attachments**: Upload and download file attachments
 - **Transitions**: Move issues through workflow states
+- **Agile Support**: Sprint and board operations
 
-### 📝 Templates Included
-- **Bug Report Template**: Comprehensive bug documentation with proper formatting
-- **Feature Request Template**: Detailed feature proposals with acceptance criteria
+### 📝 jira-syntax Skill (Syntax & Templates)
+- **Syntax Enforcement**: Automatic Jira wiki markup validation and formatting
+- **Templates Included**:
+  - **Bug Report Template**: Comprehensive bug documentation with proper formatting
+  - **Feature Request Template**: Detailed feature proposals with acceptance criteria
+- **Validation Script**: Automated syntax checking before submission
 
-### 🎨 Jira Syntax Support
+### 🎨 Jira Wiki Markup Support
 - Headings (h1-h6)
 - Text formatting (bold, italic, monospace, strikethrough)
 - Lists (bulleted, numbered, mixed)
@@ -32,6 +40,23 @@ This skill enables seamless interaction with Jira through Claude Code, ensuring 
 - Colors and highlighting
 - Links (issues, users, external, attachments)
 - Special blocks (expand, noformat, quote)
+
+## How the Skills Work Together
+
+1. **jira-syntax** provides templates and validates formatting
+2. **jira-mcp** submits validated content to Jira via API
+3. Result: Properly formatted issues created in Jira
+
+**Example Workflow:**
+```
+User: "Create bug report for authentication failure"
+
+1. jira-syntax activates → provides bug-report-template.md
+2. User fills template
+3. jira-syntax validates syntax
+4. jira-mcp creates issue via MCP
+5. ✅ PROJ-456 created with perfect formatting
+```
 
 ## Installation
 
@@ -90,15 +115,17 @@ export JIRA_PROJECTS_FILTER="PROJ1,PROJ2,PROJ3"
 
 **Note**: The MCP server runs automatically via Docker when you use the skill. No manual setup required!
 
-### Install Skill
+### Install Plugin
 
 ```bash
 # Add marketplace (if not already added)
 /plugin marketplace add netresearch/claude-code-marketplace
 
-# Install Jira skill
-/plugin install jira
+# Install Jira integration plugin (includes both skills)
+/plugin install jira-integration
 ```
+
+Both skills (`jira-mcp` and `jira-syntax`) are automatically available after installation.
 
 ## Usage
 
@@ -167,7 +194,7 @@ Result:
 
 ## Templates
 
-### Bug Report (`skills/jira/templates/bug-report-template.md`)
+### Bug Report (`skills/jira-syntax/templates/bug-report-template.md`)
 
 Comprehensive bug documentation structure:
 - Environment details
@@ -178,7 +205,7 @@ Comprehensive bug documentation structure:
 - Related issues
 - Technical notes
 
-### Feature Request (`skills/jira/templates/feature-request-template.md`)
+### Feature Request (`skills/jira-syntax/templates/feature-request-template.md`)
 
 Detailed feature proposal format:
 - Business value and user impact
@@ -191,9 +218,19 @@ Detailed feature proposal format:
 - Dependencies and open questions
 - Success metrics
 
-## Jira Syntax Reference
+## References
 
-Complete wiki markup syntax available in `skills/jira/references/jira-syntax-quick-reference.md`
+### Jira Syntax Reference
+Complete wiki markup syntax available in `skills/jira-syntax/references/jira-syntax-quick-reference.md`
+
+### JQL Reference
+Detailed JQL syntax and examples in `skills/jira-mcp/references/jql-reference.md`
+
+### MCP Tools Guide
+Complete tool documentation in `skills/jira-mcp/references/mcp-tools-guide.md`
+
+### Workflow Patterns
+Common operation sequences in `skills/jira-mcp/references/workflow-patterns.md`
 
 ### Quick Reference
 

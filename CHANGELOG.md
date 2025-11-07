@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2024-11-07
+
+### ⚠️ BREAKING CHANGES
+
+**Major architectural redesign**: The unified `jira` skill has been split into two specialized skills within a single plugin:
+
+- **jira-mcp**: MCP server communication and Jira API operations
+- **jira-syntax**: Jira wiki markup syntax validation and templates
+
+**Migration Required**: See MIGRATION.md for upgrade instructions.
+
+### Changed
+- **Plugin name**: `jira` → `jira-integration`
+- **Skill structure**: Single unified skill → Two specialized skills
+- **File organization**: Templates, references, and scripts reorganized by skill
+- **Activation patterns**: Skills now activate independently based on context
+
+### Added
+- **jira-mcp skill**: Dedicated MCP communication and API operations
+  - `references/jql-reference.md`: Comprehensive JQL syntax guide with examples
+  - `references/mcp-tools-guide.md`: Complete MCP tool documentation
+  - `references/workflow-patterns.md`: Common multi-step operation sequences
+- **jira-syntax skill**: Dedicated syntax validation and templates
+  - Same templates moved from unified skill
+  - Same syntax reference and validation scripts
+- **MIGRATION.md**: Complete migration guide from v1.x to v2.0.0
+- **Plugin-level configuration**: Both skills declared in single `plugin.json`
+
+### Improved
+- **Separation of concerns**: API operations vs syntax enforcement
+- **Offline capability**: jira-syntax works without MCP server for validation
+- **Clearer activation**: Skills activate based on specific context
+- **Better documentation**: Dedicated references for each domain
+- **Easier maintenance**: Update skills independently
+
+### Removed
+- Old unified `skills/jira/` directory (archived in `archive/jira-unified/`)
+
 ## [1.0.3] - 2024-11-07
 
 ### Fixed
@@ -81,7 +119,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/1.0.3...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/netresearch/jira-skill/compare/1.0.3...2.0.0
 [1.0.3]: https://github.com/netresearch/jira-skill/compare/1.0.2...1.0.3
 [1.0.2]: https://github.com/netresearch/jira-skill/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/netresearch/jira-skill/compare/1.0.0...1.0.1
