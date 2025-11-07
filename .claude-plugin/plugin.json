@@ -1,6 +1,6 @@
 {
   "name": "jira",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Intelligent Jira integration using mcp-atlassian MCP server with enforced Jira wiki markup syntax. Covers issue CRUD operations, JQL searching, project management, worklog management, attachment handling, and issue linking with proper wiki markup standards.",
   "repository": "https://github.com/netresearch/jira-skill",
   "license": "MIT",
@@ -18,5 +18,19 @@
     "attachments",
     "issue-linking",
     "wiki-markup"
-  ]
+  ],
+  "mcpServers": {
+    "mcp-atlassian": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--pull=always",
+        "--env-file",
+        "${HOME}/.env.jira",
+        "ghcr.io/sooperset/mcp-atlassian:latest"
+      ]
+    }
+  }
 }
