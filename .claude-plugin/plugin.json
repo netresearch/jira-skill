@@ -1,13 +1,13 @@
 {
   "name": "jira",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Intelligent Jira integration using mcp-atlassian MCP server with enforced Jira wiki markup syntax. Covers issue CRUD operations, JQL searching, project management, worklog management, attachment handling, and issue linking with proper wiki markup standards.",
+  "repository": "https://github.com/netresearch/jira-skill",
   "license": "MIT",
   "author": {
     "name": "Netresearch DTT GmbH",
     "email": "info@netresearch.de"
   },
-  "category": "development",
   "keywords": [
     "jira",
     "atlassian",
