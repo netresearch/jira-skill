@@ -1,120 +1,73 @@
 ---
 name: jira-communication
-description: >
-  Jira API operations via Python CLI scripts. Triggers on: worklog logging ("log 2h on PROJ-123"),
-  issue get/update ("show me PROJ-123", "update priority"), JQL search ("find issues in sprint"),
-  environment validation ("validate jira setup"). Zero MCP overhead - scripts invoked via uv run.
+description: Jira API operations via Python CLI scripts. Use when working with Jira issues, worklogs, sprints, transitions, comments, or searching with JQL. Supports both Jira Cloud and Server/Data Center.
 ---
 
-# Jira Communication Skill
+# Jira Communication
 
-Script-based Jira API operations using `uv run` with `atlassian-python-api`.
+Standalone CLI scripts for Jira operations using `uv run`.
 
-## Quick Reference
+## Instructions
 
-### Prerequisites
+- **Default to `--json` flag** when processing data programmatically
+- **Don't read scripts** - use `<script>.py --help` to understand options
+- **Validate first**: Run `jira-validate.py` before other operations
+- **Dry-run writes**: Use `--dry-run` for create/update/transition operations
+- Requires `~/.env.jira` with credentials (see `jira-validate.py --help`)
 
-1. **uv installed**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-2. **Credentials configured**: Create `~/.env.jira` with one of:
+## Available Scripts
 
-   **For Jira Cloud:**
-   ```
-   JIRA_URL=https://your-company.atlassian.net
-   JIRA_USERNAME=your-email@example.com
-   JIRA_API_TOKEN=your-api-token
-   ```
+### Core Operations
 
-   **For Jira Server/Data Center:**
-   ```
-   JIRA_URL=https://jira.your-company.com
-   JIRA_PERSONAL_TOKEN=your-personal-access-token
-   ```
+#### `scripts/core/jira-validate.py`
+**When to use:** Verify Jira connection and credentials
 
-### Validate Setup
+#### `scripts/core/jira-issue.py`
+**When to use:** Get or update issue details
+
+#### `scripts/core/jira-search.py`
+**When to use:** Search issues with JQL queries
+
+#### `scripts/core/jira-worklog.py`
+**When to use:** Add or list time tracking entries
+
+### Workflow Operations
+
+#### `scripts/workflow/jira-create.py`
+**When to use:** Create new issues
+
+#### `scripts/workflow/jira-transition.py`
+**When to use:** Change issue status (e.g., "In Progress" → "Done")
+
+#### `scripts/workflow/jira-comment.py`
+**When to use:** Add comments to issues
+
+#### `scripts/workflow/jira-sprint.py`
+**When to use:** List sprints or sprint issues
+
+#### `scripts/workflow/jira-board.py`
+**When to use:** List boards or board issues
+
+### Utility Operations
+
+#### `scripts/utility/jira-user.py`
+**When to use:** Get user profile information
+
+#### `scripts/utility/jira-fields.py`
+**When to use:** Search available Jira fields
+
+#### `scripts/utility/jira-link.py`
+**When to use:** Create or list issue links
+
+## Quick Start
+
+All scripts support `--help`, `--json`, and `--quiet`:
 
 ```bash
-uv run scripts/core/jira-validate.py --verbose
+uv run scripts/core/jira-issue.py --help
+uv run scripts/core/jira-issue.py get PROJ-123 --json
 ```
 
-## Core Operations (P0)
+## Authentication
 
-### Worklog Management (22.8% of usage)
-
-```bash
-# Add worklog entry
-uv run scripts/core/jira-worklog.py add PROJ-123 "2h 30m" -c "Code review"
-
-# List worklogs
-uv run scripts/core/jira-worklog.py list PROJ-123 --limit 10
-```
-
-**Time format**: Passed directly to Jira API (e.g., `2h`, `2h 30m`, `1d`, `30m`)
-
-### Issue Operations (26.7% of usage)
-
-```bash
-# Get issue details
-uv run scripts/core/jira-issue.py get PROJ-123
-uv run scripts/core/jira-issue.py get PROJ-123 --fields summary,status,assignee
-
-# Update issue
-uv run scripts/core/jira-issue.py update PROJ-123 --priority High --labels backend,urgent
-uv run scripts/core/jira-issue.py update PROJ-123 --summary "New title" --dry-run
-```
-
-### JQL Search (10.7% of usage)
-
-```bash
-# Search with JQL
-uv run scripts/core/jira-search.py query "project = PROJ AND status = 'In Progress'"
-uv run scripts/core/jira-search.py query "assignee = currentUser()" --output keys
-uv run scripts/core/jira-search.py query "updated >= -7d" --output json
-```
-
-**Common JQL patterns**:
-- `project = PROJ` - Issues in project
-- `assignee = currentUser()` - My issues
-- `status = "In Progress"` - By status
-- `updated >= -7d` - Updated last 7 days
-- `sprint in openSprints()` - Current sprint
-
-## Output Formats
-
-All scripts support:
-- **Default**: Human-readable formatted output
-- `--json`: Machine-readable JSON
-- `--quiet` / `-q`: Minimal output (keys only)
-
-## Error Handling
-
-Scripts provide actionable error messages:
-```
-✗ Configuration error: Missing authentication credentials. Provide either:
-    - JIRA_USERNAME + JIRA_API_TOKEN (for Cloud)
-    - JIRA_PERSONAL_TOKEN (for Server/DC)
-```
-
-Use `--debug` for verbose error output with stack traces.
-
-## Architecture
-
-```
-scripts/
-├── lib/                    # Shared utilities
-│   ├── client.py          # Jira client initialization
-│   ├── config.py          # Environment handling
-│   └── output.py          # Formatting helpers
-├── core/                   # P0 - Must have (68% coverage)
-│   ├── jira-validate.py   # Environment validation
-│   ├── jira-worklog.py    # Worklog operations
-│   ├── jira-issue.py      # Issue get/update
-│   └── jira-search.py     # JQL search
-├── workflow/               # P1 - Phase 2
-└── utility/                # P2 - Phase 3
-```
-
-## References
-
-- [JQL Syntax Reference](references/jql-reference.md)
-- [atlassian-python-api Docs](https://atlassian-python-api.readthedocs.io/)
-- [Jira REST API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/)
+Requires `~/.env.jira` - run `jira-validate.py --help` for setup details.

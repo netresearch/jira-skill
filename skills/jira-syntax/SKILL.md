@@ -5,7 +5,7 @@ description: "Jira wiki markup syntax validation, templates, and formatting guid
 
 # Jira Syntax Validation Skill
 
-Provides Jira wiki markup syntax validation, templates, and formatting guidance. For API operations, use the **jira-mcp** skill.
+Provides Jira wiki markup syntax validation, templates, and formatting guidance. For API operations, use the **jira-communication** skill.
 
 ## Quick Syntax Reference
 
@@ -65,13 +65,13 @@ scripts/validate-jira-syntax.sh path/to/content.txt
 | `- bullet` | `* bullet` |
 | `h2.Title` | `h2. Title` |
 
-## Integration with jira-mcp Skill
+## Integration with jira-communication Skill
 
 **Workflow:**
 1. Get template from jira-syntax
 2. Fill content using Jira wiki markup
 3. Validate with `scripts/validate-jira-syntax.sh`
-4. Submit via jira-mcp API tools
+4. Submit via jira-communication scripts (e.g., `uv run scripts/workflow/jira-create.py`)
 
 ## References
 
