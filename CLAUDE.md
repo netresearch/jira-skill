@@ -6,195 +6,142 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Claude Code plugin providing comprehensive Jira integration through **two specialized skills**:
 
-1. **jira-mcp**: MCP server communication for all Jira API operations
+1. **jira-communication**: Script-based Jira API operations via Python scripts (v3.0.0+)
 2. **jira-syntax**: Jira wiki markup syntax validation, templates, and formatting
 
-**Key Principle**: All Jira content (descriptions, comments) MUST use Jira wiki markup syntax, NOT Markdown. This is enforced by the jira-syntax skill and consumed by the jira-mcp skill.
+**Key Principle**: All Jira content (descriptions, comments) MUST use Jira wiki markup syntax, NOT Markdown. This is enforced by the jira-syntax skill.
 
 ## Architecture
 
-### Project Structure (v2.0.1+)
+### Project Structure (v3.0.0+)
 
 ```
 jira-skill/
 ├── skills/
-│   ├── jira-mcp/               # MCP communication skill (~130 lines SKILL.md)
-│   │   ├── SKILL.md            # Lean entry point with trigger descriptions
+│   ├── jira-communication/       # Script-based API operations
+│   │   ├── SKILL.md              # Skill entry point
+│   │   ├── scripts/
+│   │   │   ├── lib/              # Shared utilities (client, config, output)
+│   │   │   ├── core/             # Core operations (validate, issue, search, worklog)
+│   │   │   ├── workflow/         # Workflow operations (create, transition, comment, sprint, board)
+│   │   │   └── utility/          # Utility operations (fields, user, link)
 │   │   └── references/
-│   │       ├── jql-reference.md        # JQL syntax and examples (with TOC)
-│   │       ├── mcp-tools-guide.md      # Complete MCP tool documentation
-│   │       └── workflow-patterns.md    # Common operation sequences
-│   └── jira-syntax/            # Syntax validation skill (~80 lines SKILL.md)
-│       ├── SKILL.md            # Lean entry point with trigger descriptions
+│   │       └── migration-guide.md
+│   └── jira-syntax/              # Syntax validation skill
+│       ├── SKILL.md
 │       ├── templates/
-│       │   ├── bug-report-template.md
-│       │   └── feature-request-template.md
 │       ├── references/
-│       │   └── jira-syntax-quick-reference.md  # Complete syntax (with TOC)
 │       └── scripts/
-│           └── validate-jira-syntax.sh
 ├── .claude-plugin/
-│   └── plugin.json             # Plugin metadata with skills array
-├── archive/
-│   └── jira-unified/           # Old v1.x unified skill (archived)
-├── README.md                   # User-facing documentation
-├── CHANGELOG.md                # Version history
-└── MIGRATION.md                # Upgrade instructions
+│   └── plugin.json               # Plugin metadata (v3.0.0)
+├── README.md
+├── CHANGELOG.md
+└── MIGRATION.md
 ```
 
-### Skill Separation Rationale
+### Script-Based Architecture (v3.0.0)
 
-**Why Two Skills?**
+The v3.0.0 release replaces the MCP-based approach with lightweight Python scripts:
 
-1. **Separation of Concerns**: API operations (jira-mcp) vs syntax enforcement (jira-syntax)
-2. **Independent Activation**: Skills activate based on context (MCP operations vs formatting)
-3. **Offline Capability**: jira-syntax works offline for validation without MCP server
-4. **Modularity**: Clear boundaries between API communication and content formatting
+**Benefits**:
+- Zero MCP context overhead (~500 tokens vs ~8,000-12,000)
+- Fast startup (<1s vs 3-5s Docker spin-up)
+- No Docker dependency (uses `uv` for Python execution)
+- Full Jira Server/DC + Cloud support
 
-### Core Components
+**Script Categories**:
+- **Core** (`scripts/core/`): validate, issue, search, worklog
+- **Workflow** (`scripts/workflow/`): create, transition, comment, sprint, board
+- **Utility** (`scripts/utility/`): fields, user, link
 
-**jira-mcp Skill** (`skills/jira-mcp/SKILL.md`):
-* **SKILL.md**: Lean entry point (~130 lines) with comprehensive trigger description
-* **Description triggers**: JQL queries, issue creation/updates, comments, worklogs, transitions, linking, batch operations, sprint/board operations
-* **References**: JQL syntax (with TOC), MCP tools guide, workflow patterns
+### Shared Library (`scripts/lib/`)
 
-**jira-syntax Skill** (`skills/jira-syntax/SKILL.md`):
-* **SKILL.md**: Lean entry point (~80 lines) with comprehensive trigger description
-* **Description triggers**: Wiki markup formatting, Markdown-to-Jira conversion, templates, syntax validation, h2./h3. headings, {code:lang} blocks
-* **Templates**: Bug reports, feature requests
-* **References**: Complete Jira syntax documentation (with TOC)
-* **Scripts**: Automated syntax validation
-
-**Plugin Configuration** (`.claude-plugin/plugin.json`):
-* `skills` array declaring both skills with paths
-* MCP server configuration for mcp-atlassian
-* Plugin metadata and versioning
-
-### SKILL.md Best Practices
-
-Based on skill-creator framework guidelines:
-
-1. **Valid Frontmatter Fields**: Only `name` and `description` (NOT version, mcp_servers)
-2. **Description as Trigger**: Include "when to use" information in description field for proper skill activation
-3. **Lean Body**: Keep SKILL.md body concise (<500 lines), pointing to reference files
-4. **Progressive Disclosure**: Metadata (~100 words) → SKILL.md body → References (unlimited)
-5. **Reference TOCs**: Add Table of Contents to reference files >100 lines
-6. **No Duplication**: Don't repeat reference content in SKILL.md body
+All scripts share common utilities:
+- `client.py` - Jira client initialization with auth auto-detection
+- `config.py` - Environment configuration loading
+- `output.py` - Consistent output formatting (table, JSON, quiet)
 
 ## Development Workflow
 
+### When Modifying Scripts
+
+1. **Follow existing patterns**: All scripts use argparse with subcommands
+2. **Use shared lib**: Import from `lib/` for client, config, output
+3. **Support all output formats**: `--json`, `--quiet`, default table
+4. **Add --dry-run for write ops**: Preview changes without executing
+5. **Test against real Jira**: Verify both Cloud and Server/DC
+
+### When Adding New Scripts
+
+1. Place in appropriate directory (core/workflow/utility)
+2. Use PEP 723 inline dependencies
+3. Add PYTHONPATH manipulation for lib imports
+4. Follow existing script structure and naming
+5. Update SKILL.md and README.md
+
 ### When Modifying jira-syntax Skill
 
-1. **Validate Syntax**: Ensure all Jira wiki markup in templates follows official standards
+1. **Validate Syntax**: Ensure all Jira wiki markup follows official standards
 2. **Test in Jira**: Complex formatting should be verified in actual Jira instance
-3. **Update Checklist**: Templates include validation checklists - keep them current
-4. **Preserve Structure**: Templates follow established section patterns (h2. for main, h3. for sub)
-5. **Update References**: Keep `jira-syntax-quick-reference.md` comprehensive and accurate
+3. **Update References**: Keep `jira-syntax-quick-reference.md` accurate
 
-### When Modifying jira-mcp Skill
+## User Setup Requirements
 
-1. **MCP Tool Usage**: New features should leverage mcp-atlassian tools correctly
-2. **Update References**: Maintain `jql-reference.md`, `mcp-tools-guide.md`, `workflow-patterns.md`
-3. **Test MCP Operations**: Verify tool calls work against real Jira instance
-4. **Document Workflows**: Add new patterns to workflow-patterns.md
+Users need to create `~/.env.jira` with credentials:
 
-### When Updating Documentation
-
-1. **README.md**: User-facing documentation with installation and usage examples
-2. **SKILL.md files**: Technical reference for skill activation (update both as needed)
-3. **MIGRATION.md**: Document breaking changes and upgrade paths
-4. **plugin.json**: Update version numbers following SemVer
-
-## MCP Server Integration
-
-This skill **bundles its own MCP configuration** via `.mcp.json` - users do not need to manually configure the mcp-atlassian server.
-
-### Automatic MCP Configuration
-
-The skill includes `.mcp.json` which automatically configures the mcp-atlassian server using Docker:
-
-```json
-{
-  "mcp-atlassian": {
-    "command": "docker",
-    "args": ["run", "--rm", "-i", "--pull=always", "--env-file", "${JIRA_ENV_FILE}",
-             "ghcr.io/sooperset/mcp-atlassian:latest"],
-    "env": {
-      "JIRA_ENV_FILE": "${HOME}/.env.jira"
-    }
-  }
-}
+**For Jira Cloud**:
+```
+JIRA_URL=https://company.atlassian.net
+JIRA_USERNAME=your-email@example.com
+JIRA_API_TOKEN=your-api-token
 ```
 
-**Key Point**: No manual MCP server configuration required - the skill handles this automatically.
+**For Jira Server/DC**:
+```
+JIRA_URL=https://jira.yourcompany.com
+JIRA_PERSONAL_TOKEN=your-personal-access-token
+```
 
-### User Setup Requirements
+## Testing
 
-Users only need to create `~/.env.jira` with their credentials:
-* `JIRA_URL` - Jira instance URL (e.g., `https://company.atlassian.net`)
-* `JIRA_USERNAME` - User email (Cloud) or username (Server/DC)
-* `JIRA_API_TOKEN` - API token or Personal Access Token
-
-### Available MCP Tools
-
-All tools use the prefix `mcp__mcp-atlassian__jira_*` :
-* **Read**: `get_issue`,  `search`,  `get_project_issues`,  `get_transitions`,  `get_worklog`
-* **Write**: `create_issue`,  `batch_create_issues`,  `update_issue`,  `add_comment`,  `add_worklog`,  `transition_issue`
-* **Link**: `create_issue_link`,  `link_to_epic`,  `remove_issue_link`
-* **Attachments**: `download_attachments`
-
-## Testing and Validation
-
-### Syntax Validation
-
+### Validate Environment
 ```bash
-# Validate Jira syntax in a file or string
-./skills/jira-syntax/scripts/validate-jira-syntax.sh <file_or_text>
+cd skills/jira-communication
+uv run scripts/core/jira-validate.py --verbose
 ```
 
-### Manual Testing Workflow
-
-1. Ensure `~/.env.jira` is configured with valid credentials
-2. Use the skill - MCP server starts automatically via `.mcp.json`
-3. Test MCP tool calls through Claude Code
-4. Verify formatting renders correctly in Jira web interface
-5. Validate syntax using validation script
-
-## Marketplace Integration
-
-This skill is part of the Netresearch Claude Code Marketplace.
-
-### Plugin Metadata
-
-`.claude-plugin/plugin.json` defines marketplace properties:
-* name, version, description
-* category, keywords
-* author information
-
-File needs to follow plugin schema: <https://code.claude.com/docs/en/plugins-reference#plugin-manifest-schema>
-
-### Version Management
-
-Version follows SemVer format in `plugin.json`:
-
-```json
-{
-  "version": "2.0.1"
-}
+### Test Individual Scripts
+```bash
+uv run scripts/core/jira-search.py query "project = PROJ" --max-results 5
+uv run scripts/core/jira-issue.py get PROJ-123
+uv run scripts/utility/jira-user.py me
 ```
 
-**Note**: Version is managed ONLY in `plugin.json`, NOT in SKILL.md frontmatter. SKILL.md frontmatter should only contain `name` and `description`.
+### Test with Dry-Run
+```bash
+uv run scripts/workflow/jira-create.py issue PROJ "Test" --type Task --dry-run
+uv run scripts/workflow/jira-transition.py do PROJ-123 "Done" --dry-run
+```
+
+## Plugin Configuration
+
+`.claude-plugin/plugin.json` defines:
+- Plugin metadata (name, version, description)
+- Skills array with paths to both skills
+- No MCP server configuration (v3.0.0+)
+
+Version is managed ONLY in `plugin.json`, NOT in SKILL.md frontmatter.
 
 ## Key Constraints
 
 1. **Syntax Enforcement**: Never compromise on Jira wiki markup standards
-2. **MCP Dependency**: Skill requires mcp-atlassian to be configured
-3. **Template Fidelity**: Templates must match Jira's expected structure
-4. **Documentation Accuracy**: Syntax references must align with official Jira docs
+2. **Script Execution**: Run scripts from `skills/jira-communication/` directory
+3. **PYTHONPATH**: Scripts manipulate path for lib imports (don't change this pattern)
+4. **Auth Auto-Detection**: Scripts detect Cloud vs Server/DC based on env vars
 
 ## References
 
 * Official Jira Wiki Markup: <https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all>
-* mcp-atlassian GitHub: <https://github.com/sooperset/mcp-atlassian>
 * JQL Documentation: <https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/>
 * Claude Code Plugins: <https://code.claude.com/docs/en/plugins-reference>
+* uv Documentation: <https://docs.astral.sh/uv/>

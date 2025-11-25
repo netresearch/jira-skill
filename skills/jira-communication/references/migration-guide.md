@@ -193,6 +193,6 @@ uv run scripts/core/jira-issue.py get PROJ-123
 
 If you need to temporarily use the old MCP-based approach:
 
-1. The old skill is archived in `archive/jira-mcp/`
+1. Check out a previous version from git history (pre-v3.0.0)
 2. Re-add the MCP server configuration to your setup
 3. Note: This is not recommended for long-term use
