@@ -1,462 +1,233 @@
-# Jira Integration Plugin
+# Jira Skill for Claude Code
 
-Comprehensive Jira integration for Claude Code with two specialized skills: **jira-mcp** for API operations via mcp-atlassian MCP server, and **jira-syntax** for wiki markup validation and templates.
-
-## Overview
-
-This plugin enables seamless interaction with Jira through Claude Code with two complementary skills:
-
-- **jira-mcp**: Handles all Jira API operations (CRUD, search, transitions, linking, worklogs)
-- **jira-syntax**: Enforces Jira wiki markup standards with templates and validation
-
-Together, these skills ensure all Jira content follows official wiki markup standards while providing powerful API integration capabilities.
+Comprehensive Jira integration through lightweight Python scripts.
 
 ## Features
 
-### 🎯 jira-mcp Skill (API Operations)
-- **Issue Management**: Create, read, update, and search Jira issues via MCP
-- **JQL Queries**: Powerful searching with Jira Query Language
-- **Bulk Operations**: Create or update multiple issues efficiently
-- **Work Logging**: Track time spent with API-integrated entries
-- **Issue Linking**: Connect related issues (blocks, relates to, duplicates)
-- **Attachments**: Upload and download file attachments
-- **Transitions**: Move issues through workflow states
-- **Agile Support**: Sprint and board operations
-
-### 📝 jira-syntax Skill (Syntax & Templates)
-- **Syntax Enforcement**: Automatic Jira wiki markup validation and formatting
-- **Templates Included**:
-  - **Bug Report Template**: Comprehensive bug documentation with proper formatting
-  - **Feature Request Template**: Detailed feature proposals with acceptance criteria
-- **Validation Script**: Automated syntax checking before submission
-
-### 🎨 Jira Wiki Markup Support
-- Headings (h1-h6)
-- Text formatting (bold, italic, monospace, strikethrough)
-- Lists (bulleted, numbered, mixed)
-- Tables with headers
-- Code blocks with syntax highlighting
-- Panels and quotes
-- Colors and highlighting
-- Links (issues, users, external, attachments)
-- Special blocks (expand, noformat, quote)
-
-## How the Skills Work Together
-
-1. **jira-syntax** provides templates and validates formatting
-2. **jira-mcp** submits validated content to Jira via API
-3. Result: Properly formatted issues created in Jira
-
-**Example Workflow:**
-```
-User: "Create bug report for authentication failure"
-
-1. jira-syntax activates → provides bug-report-template.md
-2. User fills template
-3. jira-syntax validates syntax
-4. jira-mcp creates issue via MCP
-5. ✅ PROJ-456 created with perfect formatting
-```
+- **Zero MCP overhead** - Scripts invoked via Bash, no tool descriptions loaded
+- **Fast execution** - No Docker container spin-up
+- **Full API coverage** - All common Jira operations supported
+- **Jira Server/DC + Cloud** - Works with both deployment types
 
 ## Installation
 
-### Prerequisites
-
-1. **Docker**: Required for running the mcp-atlassian MCP server
-   - Install Docker Desktop: https://www.docker.com/products/docker-desktop
-   - Ensure Docker daemon is running
-
-2. **mcp-atlassian MCP Server**: This skill requires the mcp-atlassian MCP server
-   - Repository: https://github.com/sooperset/mcp-atlassian
-   - Runs automatically via Docker when using the skill
-
-3. **Jira Credentials**: You need one of:
-   - **Cloud**: API token from https://id.atlassian.com/manage-profile/security/api-tokens
-   - **Server/DC**: Personal Access Token from your Jira instance
-
-### MCP Server Configuration
-
-**Note**: The skill includes automatic MCP configuration via `.mcp.json` - you don't need to manually configure `~/.claude/mcp.json`.
-
-#### Quick Setup with Docker (Recommended)
-
-1. **Create Environment File** (`~/.env.jira`):
+1. **Install uv** (Python package runner):
    ```bash
-   # Create ~/.env.jira with your credentials:
-   JIRA_URL=https://yourcompany.atlassian.net
-   JIRA_USERNAME=your.email@company.com
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Configure credentials** in `~/.env.jira`:
+   ```
+   JIRA_URL=https://your-instance.atlassian.net
+   JIRA_USERNAME=your-email@example.com
    JIRA_API_TOKEN=your-api-token
    ```
 
-2. **Install Skill** (MCP server starts automatically):
+   For Jira Server/DC with Personal Access Token:
+   ```
+   JIRA_URL=https://jira.yourcompany.com
+   JIRA_PERSONAL_TOKEN=your-personal-access-token
+   ```
+
+3. **Validate setup**:
    ```bash
-   # The skill's bundled .mcp.json will automatically start the Docker container
-   # No manual MCP server setup needed!
+   uv run scripts/core/jira-validate.py --verbose
    ```
 
-#### Manual Configuration
-
-For manual setup without Docker:
+## Quick Start
 
 ```bash
-# For Jira Cloud
-export JIRA_URL="https://yourcompany.atlassian.net"
-export JIRA_USERNAME="your.email@company.com"
-export JIRA_API_TOKEN="your-api-token"
+# Search issues
+uv run scripts/core/jira-search.py query "project = PROJ AND status = 'In Progress'"
 
-# For Jira Server/Data Center
-export JIRA_URL="https://jira.yourcompany.com"
-export JIRA_USERNAME="your-username"
-export JIRA_API_TOKEN="your-personal-access-token"
+# Get issue details
+uv run scripts/core/jira-issue.py get PROJ-123
 
-# Optional: Filter to specific projects
-export JIRA_PROJECTS_FILTER="PROJ1,PROJ2,PROJ3"
+# Add worklog
+uv run scripts/core/jira-worklog.py add PROJ-123 "2h 30m" -c "Code review"
+
+# Create issue
+uv run scripts/workflow/jira-create.py issue PROJ "Fix bug" --type Bug --priority High
 ```
 
-**Note**: The MCP server runs automatically via Docker when you use the skill. No manual setup required!
+## Available Scripts
 
-### Install Plugin
+### Core Operations (scripts/core/)
+
+| Script | Commands | Usage |
+|--------|----------|-------|
+| `jira-validate.py` | (default) | Validate environment setup |
+| `jira-issue.py` | get, update | Get and update issues |
+| `jira-search.py` | query | JQL search |
+| `jira-worklog.py` | add, list | Time tracking |
+
+### Workflow Operations (scripts/workflow/)
+
+| Script | Commands | Usage |
+|--------|----------|-------|
+| `jira-create.py` | issue | Create new issues |
+| `jira-transition.py` | list, do | Change issue status |
+| `jira-comment.py` | add, list | Issue comments |
+| `jira-sprint.py` | list, issues, current | Sprint operations |
+| `jira-board.py` | list, issues | Board operations |
+
+### Utility Operations (scripts/utility/)
+
+| Script | Commands | Usage |
+|--------|----------|-------|
+| `jira-fields.py` | search, list | Find field IDs |
+| `jira-user.py` | me, get | User information |
+| `jira-link.py` | create, list-types | Issue linking |
+
+## Common Options
+
+All scripts support:
+
+- `--json` - Output as JSON
+- `--quiet` / `-q` - Minimal output
+- `--env-file PATH` - Custom environment file
+- `--debug` - Show detailed errors
+- `--help` - Show command help
+
+Write operations also support:
+
+- `--dry-run` - Preview changes without executing
+
+## Script Usage Examples
+
+### Search and Filter
 
 ```bash
-# Add marketplace (if not already added)
-/plugin marketplace add netresearch/claude-code-marketplace
+# Find open bugs in project
+uv run scripts/core/jira-search.py query "project = PROJ AND type = Bug AND status != Done"
 
-# Install Jira integration plugin (includes both skills)
-/plugin install jira-integration
+# Find my assigned issues
+uv run scripts/core/jira-search.py query "assignee = currentUser()"
+
+# Output as JSON for processing
+uv run scripts/core/jira-search.py query "project = PROJ" --json --max-results 100
 ```
 
-Both skills (`jira-mcp` and `jira-syntax`) are automatically available after installation.
+### Issue Management
 
-## Usage
+```bash
+# Get issue details
+uv run scripts/core/jira-issue.py get PROJ-123
 
-### Quick Start
+# Update issue fields (dry-run first)
+uv run scripts/core/jira-issue.py update PROJ-123 --labels "urgent,backend" --dry-run
 
-1. **Search for Issues**
-   ```
-   Search for all open bugs in project PROJ
-   → Uses: mcp__mcp-atlassian__jira_search with JQL
-   ```
-
-2. **Create Bug Report**
-   ```
-   Create a bug report for login issue
-   → Uses bug-report-template.md
-   → Enforces Jira wiki markup syntax
-   ```
-
-3. **Add Comment**
-   ```
-   Add status update comment to PROJ-123
-   → Automatically formats with h3 headings
-   → Uses proper Jira syntax for all content
-   ```
-
-### Common Workflows
-
-#### Creating Issues
-
-The skill automatically enforces Jira wiki markup:
-
-```
-Create feature request for bulk export functionality
-
-Result:
-✅ h2. headings for main sections
-✅ h3. headings for subsections
-✅ Numbered lists for acceptance criteria
-✅ Tables for metrics
-✅ Code blocks with syntax highlighting
-✅ Proper panel formatting for important notes
+# Create new issue
+uv run scripts/workflow/jira-create.py issue PROJ "Implement feature X" --type Story --priority Medium
 ```
 
-#### Searching Issues
+### Time Tracking
 
-Use natural language or JQL:
+```bash
+# Log time worked
+uv run scripts/core/jira-worklog.py add PROJ-123 "2h 30m" -c "Implemented core logic"
 
-```
-"Find high priority bugs assigned to me from last week"
-
-Converts to:
-JQL: "project = PROJ AND priority = High AND assignee = currentUser() AND created >= -7d"
-```
-
-#### Updating Issues
-
-```
-Update PROJ-123 description with technical details
-
-Result:
-✅ Preserves existing formatting
-✅ Adds new sections with proper syntax
-✅ Includes code blocks for technical content
-✅ Links to related issues correctly
+# View worklogs
+uv run scripts/core/jira-worklog.py list PROJ-123
 ```
 
-## Templates
+### Workflow Transitions
 
-### Bug Report (`skills/jira-syntax/templates/bug-report-template.md`)
+```bash
+# List available transitions
+uv run scripts/workflow/jira-transition.py list PROJ-123
 
-Comprehensive bug documentation structure:
-- Environment details
-- Steps to reproduce
-- Expected vs actual behavior
-- Error messages in panels
-- Screenshots and attachments
-- Related issues
-- Technical notes
+# Transition issue (dry-run first)
+uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
 
-### Feature Request (`skills/jira-syntax/templates/feature-request-template.md`)
-
-Detailed feature proposal format:
-- Business value and user impact
-- User stories
-- Acceptance criteria
-- Functional requirements (must/should/could have)
-- Non-functional requirements
-- Technical considerations
-- UI/UX mockups
-- Dependencies and open questions
-- Success metrics
-
-## References
-
-### Jira Syntax Reference
-Complete wiki markup syntax available in `skills/jira-syntax/references/jira-syntax-quick-reference.md`
-
-### JQL Reference
-Detailed JQL syntax and examples in `skills/jira-mcp/references/jql-reference.md`
-
-### MCP Tools Guide
-Complete tool documentation in `skills/jira-mcp/references/mcp-tools-guide.md`
-
-### Workflow Patterns
-Common operation sequences in `skills/jira-mcp/references/workflow-patterns.md`
-
-### Quick Reference
-
-```
-*bold*                      → Bold text
-_italic_                    → Italic text
-{{monospace}}               → Code/paths
-h2. Heading                 → Section heading
-* Bullet item               → Bulleted list
-# Numbered item             → Numbered list
-[PROJ-123]                  → Issue link
-[~username]                 → User mention
-{code:java}...{code}        → Code block
-||Header||                  → Table header
-|Cell|                      → Table cell
-{panel:title=X}...{panel}   → Highlighted panel
-{color:red}text{color}      → Colored text
+# Execute transition
+uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 ```
 
-## MCP Tools Used
+### Comments
 
-This skill leverages the following mcp-atlassian tools:
+```bash
+# Add comment
+uv run scripts/workflow/jira-comment.py add PROJ-123 "Investigation complete - root cause identified"
 
-### Read Operations
-- `jira_get_issue` - Retrieve issue details
-- `jira_search` - Search with JQL
-- `jira_get_project_issues` - List project issues
-- `jira_get_transitions` - Available status changes
-- `jira_get_worklog` - Time tracking entries
-- `jira_get_user_profile` - User information
-- `jira_search_fields` - Custom field discovery
+# List recent comments
+uv run scripts/workflow/jira-comment.py list PROJ-123 --limit 5
+```
 
-### Write Operations
-- `jira_create_issue` - Create new issue
-- `jira_batch_create_issues` - Bulk creation
-- `jira_update_issue` - Update fields
-- `jira_add_comment` - Add comments
-- `jira_add_worklog` - Log work time
-- `jira_transition_issue` - Change status
-- `jira_create_issue_link` - Link issues
-- `jira_link_to_epic` - Epic linking
+### Sprint & Board Operations
 
-### File Operations
-- `jira_download_attachments` - Download files
+```bash
+# List boards for project
+uv run scripts/workflow/jira-board.py list --project PROJ
 
-## Best Practices
+# Get board issues
+uv run scripts/workflow/jira-board.py issues 42
 
-### Always Use Proper Syntax
-- ✅ `h2. Heading` not `## Heading`
-- ✅ `*bold*` not `**bold**`
-- ✅ `{{code}}` not `` `code` ``
-- ✅ `[Label|url]` not `[Label](url)`
-- ✅ `{code:java}` not ``` ```java ```
+# List sprints
+uv run scripts/workflow/jira-sprint.py list 42 --state active
 
-### Structure Content
-- Use h2. for main sections
-- Use h3. for subsections
-- Use numbered lists for steps/criteria
-- Use tables for structured data
-- Use panels for important notices
+# Get sprint issues
+uv run scripts/workflow/jira-sprint.py issues 123
 
-### Include Context
-- Link to related issues with [PROJ-XXX]
-- Mention stakeholders with [~username]
-- Reference attachments with [^filename]
-- Add code examples in {code} blocks
+# Get current sprint
+uv run scripts/workflow/jira-sprint.py current 42
+```
 
-### Validate Before Submitting
-- Check heading format (h1.-h6. with space)
-- Verify list nesting (* vs ** vs ***)
-- Confirm code blocks have language specified
-- Ensure tables have proper header/cell syntax
-- Test links are formatted correctly
+### Utility Operations
+
+```bash
+# Search for custom fields
+uv run scripts/utility/jira-fields.py search "story points"
+
+# List all custom fields
+uv run scripts/utility/jira-fields.py list --type custom
+
+# Get current user info
+uv run scripts/utility/jira-user.py me
+
+# List available link types
+uv run scripts/utility/jira-link.py list-types
+
+# Create issue link
+uv run scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks" --dry-run
+```
+
+## Related Skills
+
+- **jira-syntax** - Jira wiki markup validation and templates (unchanged)
+
+## Migration
+
+Migrating from v2.x (MCP-based)? See [Migration Guide](skills/jira-communication/references/migration-guide.md).
 
 ## Troubleshooting
 
-### Syntax Not Rendering
+### "uv not found"
 
-**Problem**: Jira shows raw markup instead of formatted content
-
-**Solution**:
-- Verify you're using Jira wiki markup, not Markdown
-- Check for space after heading markers (`h2. ` not `h2.`)
-- Ensure code blocks use `{code:lang}` not ``` lang ```
-- Confirm tables use `||` for headers, `|` for cells
-
-### Authentication Issues
-
-**Problem**: MCP tools return authentication errors
-
-**Solution**:
-- Verify JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN are set
-- Test credentials in Jira web interface
-- Check API token hasn't expired
-- Ensure MCP server is running
-
-### Search Returns No Results
-
-**Problem**: JQL query finds no issues
-
-**Solution**:
-- Test JQL in Jira's search interface first
-- Check JIRA_PROJECTS_FILTER if set
-- Verify user has view permissions
-- Use simpler query to narrow down issue
-
-### Field Updates Fail
-
-**Problem**: Cannot update specific issue fields
-
-**Solution**:
-- Use `jira_search_fields` to find correct field names
-- Check field is editable for current issue type
-- Verify user has edit permissions
-- Ensure field value matches Jira schema
-
-## Examples
-
-### Create Bug with Full Context
-
-```javascript
-mcp__mcp-atlassian__jira_create_issue({
-  project_key: "PROJ",
-  summary: "Login timeout on large file uploads",
-  issue_type: "Bug",
-  description: `
-h2. Bug Description
-
-Users experience session timeouts when uploading files larger than 50MB through the admin interface.
-
-h3. Environment
-* *Browser:* Chrome 120, Firefox 115
-* *OS:* Windows 11, macOS 14
-* *Version:* 3.2.1
-* *Deployment:* Production
-
-h3. Steps to Reproduce
-# Login as administrator
-# Navigate to {{/admin/uploads}}
-# Select file > 50MB
-# Click *Upload* button
-# Wait 60 seconds
-# Observe session timeout error
-
-h3. Expected Behavior
-Large file uploads should complete without session timeout, or show progress indicator.
-
-h3. Actual Behavior
-After 60 seconds, user receives {{SessionExpiredException}} and must re-authenticate.
-
-{panel:title=Error Stack Trace|bgColor=#FFEBE9}
-{code:java}
-com.example.SessionExpiredException: Session expired after 60000ms
-    at com.example.auth.SessionManager.validateSession(SessionManager.java:145)
-    at com.example.upload.FileUploadServlet.doPost(FileUploadServlet.java:78)
-{code}
-{panel}
-
-h3. Impact
-* Affects 30% of admin users
-* Blocks large dataset imports
-* Workaround: Split files into smaller chunks
-
-h3. Suggested Fix
-Extend session timeout during active file uploads or implement resumable upload protocol.
-
-[~backend.lead] [~devops.engineer]
-`,
-  additional_fields: {
-    priority: { name: "High" },
-    labels: ["upload", "session", "timeout"],
-    components: [{ name: "File Upload" }]
-  }
-})
+Install uv:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Search and Batch Update
+### "Environment file not found"
 
-```javascript
-// 1. Search for issues
-const results = mcp__mcp-atlassian__jira_search({
-  jql: "project = PROJ AND status = 'In Review' AND updated < -14d",
-  fields: "summary,assignee,status"
-})
+Create `~/.env.jira` with your credentials.
 
-// 2. Batch update stale review tickets
-for (const issue of results.issues) {
-  mcp__mcp-atlassian__jira_add_comment({
-    issue_key: issue.key,
-    comment: `
-h3. Review Reminder
+### "Authentication failed"
 
-This ticket has been in review for over 2 weeks.
+1. Verify JIRA_URL is correct
+2. For Cloud: JIRA_USERNAME is your email
+3. For Server/DC: Use JIRA_PERSONAL_TOKEN instead
+4. Regenerate your API token if expired
 
-[~${issue.fields.assignee.name}] Please update the status or provide an ETA.
+### Import errors when running scripts
 
-*Next Action:* Move to {{In Progress}} or {{Done}} by end of week.
-`
-  })
-}
+Run scripts from the skill directory:
+```bash
+cd skills/jira-communication
+uv run scripts/core/jira-issue.py get PROJ-123
 ```
-
-## Contributing
-
-This skill is part of the Netresearch Claude Code Marketplace. To contribute:
-
-1. Fork the repository
-2. Make improvements to templates or documentation
-3. Ensure Jira syntax compliance
-4. Submit pull request
 
 ## License
 
-MIT License - See LICENSE file for details
-
-## Resources
-
-- [mcp-atlassian GitHub](https://github.com/sooperset/mcp-atlassian)
-- [Jira Wiki Markup Syntax](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
-- [JQL Reference](https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/)
-- [Jira REST API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/)
-- [Netresearch Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
-
-## Support
-
-For issues or questions:
-- MCP Server: https://github.com/sooperset/mcp-atlassian/issues
-- Skill Issues: Create issue in marketplace repository
-- Jira Syntax: Refer to official Atlassian documentation
+MIT
