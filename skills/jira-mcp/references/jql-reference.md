@@ -1,5 +1,20 @@
 # JQL (Jira Query Language) Reference
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Basic Syntax](#basic-syntax)
+- [Common Fields](#common-fields)
+- [Operators](#operators)
+- [Functions](#functions)
+- [Logical Operators](#logical-operators)
+- [Common Query Patterns](#common-query-patterns)
+- [Sorting](#sorting)
+- [Advanced Patterns](#advanced-patterns)
+- [Performance Tips](#performance-tips)
+- [Common Errors](#common-errors)
+- [Testing JQL Queries](#testing-jql-queries)
+
 ## Overview
 
 JQL is a powerful query language for searching issues in Jira. It uses a SQL-like syntax to filter and retrieve issues based on various criteria.

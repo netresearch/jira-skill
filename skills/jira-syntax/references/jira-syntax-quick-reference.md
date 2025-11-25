@@ -2,6 +2,24 @@
 
 Complete reference for Jira's wiki markup syntax to ensure proper formatting in tickets, comments, and descriptions.
 
+## Table of Contents
+
+- [Text Formatting](#text-formatting)
+- [Headings](#headings)
+- [Lists](#lists)
+- [Links](#links)
+- [Code Blocks](#code-blocks)
+- [Tables](#tables)
+- [Panels and Quotes](#panels-and-quotes)
+- [Colors](#colors)
+- [Special Blocks](#special-blocks)
+- [Line Breaks and Horizontal Rules](#line-breaks-and-horizontal-rules)
+- [Special Characters](#special-characters)
+- [Emoticons](#emoticons)
+- [Common Patterns](#common-patterns)
+- [Validation Checklist](#validation-checklist)
+- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+
 ## Text Formatting
 
 | Syntax | Output | Use Case |
