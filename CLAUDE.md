@@ -13,31 +13,33 @@ This is a Claude Code plugin providing comprehensive Jira integration through **
 
 ## Architecture
 
-### Project Structure (v2.0.0+)
+### Project Structure (v2.0.1+)
 
 ```
 jira-skill/
 ├── skills/
-│   ├── jira-mcp/               # MCP communication skill
-│   │   ├── SKILL.md            # MCP operations and API workflows
+│   ├── jira-mcp/               # MCP communication skill (~130 lines SKILL.md)
+│   │   ├── SKILL.md            # Lean entry point with trigger descriptions
 │   │   └── references/
-│   │       ├── jql-reference.md        # JQL syntax and examples
+│   │       ├── jql-reference.md        # JQL syntax and examples (with TOC)
 │   │       ├── mcp-tools-guide.md      # Complete MCP tool documentation
 │   │       └── workflow-patterns.md    # Common operation sequences
-│   └── jira-syntax/            # Syntax validation skill
-│       ├── SKILL.md            # Syntax validation workflows
+│   └── jira-syntax/            # Syntax validation skill (~80 lines SKILL.md)
+│       ├── SKILL.md            # Lean entry point with trigger descriptions
 │       ├── templates/
 │       │   ├── bug-report-template.md
 │       │   └── feature-request-template.md
 │       ├── references/
-│       │   └── jira-syntax-quick-reference.md
+│       │   └── jira-syntax-quick-reference.md  # Complete syntax (with TOC)
 │       └── scripts/
 │           └── validate-jira-syntax.sh
 ├── .claude-plugin/
-│   └── plugin.json             # Plugin metadata declaring both skills
+│   └── plugin.json             # Plugin metadata with skills array
 ├── archive/
 │   └── jira-unified/           # Old v1.x unified skill (archived)
-└── README.md                   # User-facing documentation
+├── README.md                   # User-facing documentation
+├── CHANGELOG.md                # Version history
+└── MIGRATION.md                # Upgrade instructions
 ```
 
 ### Skill Separation Rationale
@@ -52,24 +54,32 @@ jira-skill/
 ### Core Components
 
 **jira-mcp Skill** (`skills/jira-mcp/SKILL.md`):
-* MCP server configuration and tool workflows
-* JQL query patterns and examples
-* Issue CRUD operations
-* Workflow automation patterns
-* References: JQL syntax, MCP tools guide, workflow patterns
+* **SKILL.md**: Lean entry point (~130 lines) with comprehensive trigger description
+* **Description triggers**: JQL queries, issue creation/updates, comments, worklogs, transitions, linking, batch operations, sprint/board operations
+* **References**: JQL syntax (with TOC), MCP tools guide, workflow patterns
 
 **jira-syntax Skill** (`skills/jira-syntax/SKILL.md`):
-* Jira wiki markup syntax rules
-* Template provision and application
-* Syntax validation workflows
-* Templates: Bug reports, feature requests
-* References: Complete Jira syntax documentation
-* Scripts: Automated syntax checking
+* **SKILL.md**: Lean entry point (~80 lines) with comprehensive trigger description
+* **Description triggers**: Wiki markup formatting, Markdown-to-Jira conversion, templates, syntax validation, h2./h3. headings, {code:lang} blocks
+* **Templates**: Bug reports, feature requests
+* **References**: Complete Jira syntax documentation (with TOC)
+* **Scripts**: Automated syntax validation
 
 **Plugin Configuration** (`.claude-plugin/plugin.json`):
-* Declares both skills with paths
+* `skills` array declaring both skills with paths
 * MCP server configuration for mcp-atlassian
 * Plugin metadata and versioning
+
+### SKILL.md Best Practices
+
+Based on skill-creator framework guidelines:
+
+1. **Valid Frontmatter Fields**: Only `name` and `description` (NOT version, mcp_servers)
+2. **Description as Trigger**: Include "when to use" information in description field for proper skill activation
+3. **Lean Body**: Keep SKILL.md body concise (<500 lines), pointing to reference files
+4. **Progressive Disclosure**: Metadata (~100 words) → SKILL.md body → References (unlimited)
+5. **Reference TOCs**: Add Table of Contents to reference files >100 lines
+6. **No Duplication**: Don't repeat reference content in SKILL.md body
 
 ## Development Workflow
 
@@ -139,7 +149,7 @@ All tools use the prefix `mcp__mcp-atlassian__jira_*` :
 
 ```bash
 # Validate Jira syntax in a file or string
-./skills/jira/scripts/validate-jira-syntax.sh <file_or_text>
+./skills/jira-syntax/scripts/validate-jira-syntax.sh <file_or_text>
 ```
 
 ### Manual Testing Workflow
@@ -165,11 +175,15 @@ File needs to follow plugin schema: <https://code.claude.com/docs/en/plugins-ref
 
 ### Version Management
 
-Version follows SemVer format in SKILL.md frontmatter:
+Version follows SemVer format in `plugin.json`:
 
-```yaml
-version: "1.0.0"
+```json
+{
+  "version": "2.0.1"
+}
 ```
+
+**Note**: Version is managed ONLY in `plugin.json`, NOT in SKILL.md frontmatter. SKILL.md frontmatter should only contain `name` and `description`.
 
 ## Key Constraints
 

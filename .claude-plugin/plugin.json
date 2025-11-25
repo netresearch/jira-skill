@@ -1,7 +1,7 @@
 {
   "name": "jira-integration",
-  "version": "2.0.0",
-  "description": "Comprehensive Jira integration with two specialized skills: jira-mcp for API operations via mcp-atlassian MCP server, and jira-syntax for wiki markup validation and templates. Covers issue CRUD operations, JQL searching, project management, worklog management, attachment handling, issue linking, and enforced Jira wiki markup syntax standards.",
+  "version": "2.0.1",
+  "description": "Comprehensive Jira integration with two specialized skills: jira-mcp for API operations via mcp-atlassian MCP server, and jira-syntax for wiki markup validation and templates.",
   "repository": "https://github.com/netresearch/jira-skill",
   "license": "MIT",
   "author": {
@@ -14,12 +14,19 @@
     "mcp",
     "issue-tracking",
     "project-management",
-    "worklogs",
-    "attachments",
-    "issue-linking",
     "wiki-markup",
     "syntax-validation",
     "templates"
+  ],
+  "skills": [
+    {
+      "name": "jira-mcp",
+      "path": "skills/jira-mcp"
+    },
+    {
+      "name": "jira-syntax",
+      "path": "skills/jira-syntax"
+    }
   ],
   "mcpServers": {
     "mcp-atlassian": {

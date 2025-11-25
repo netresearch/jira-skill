@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2025-11-25
+
+### Fixed
+- **SKILL.md Frontmatter**: Removed invalid fields (`version`, `mcp_servers`) that are not recognized by Claude Code skill loading
+- **Skill Triggering**: Moved "when to use" information from SKILL.md body to `description` field for proper skill activation
+- **plugin.json Structure**: Added missing `skills` array declaration with proper paths to both skills
+
+### Improved
+- **Token Efficiency**: Reduced jira-mcp/SKILL.md from ~415 to ~129 lines (69% reduction)
+- **Token Efficiency**: Reduced jira-syntax/SKILL.md from ~243 to ~83 lines (66% reduction)
+- **Progressive Disclosure**: SKILL.md files now serve as lean entry points, directing to comprehensive reference files
+- **Navigation**: Added Table of Contents to `jql-reference.md` and `jira-syntax-quick-reference.md` for easier navigation
+
+### Changed
+- **Description Field**: Now includes comprehensive trigger patterns (10 triggers for jira-mcp, 8 for jira-syntax)
+- **SKILL.md Structure**: Follows skill-creator best practices with concise body pointing to references
+- **Reference Files**: Long reference files (>100 lines) now have TOCs for better discoverability
+
+### Documentation
+- Updated CLAUDE.md to reflect leaner skill architecture
+- Skills validated against skill-creator framework best practices
+
 ## [2.0.0] - 2024-11-07
 
 ### ⚠️ BREAKING CHANGES
@@ -119,7 +141,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/2.0.1...HEAD
+[2.0.1]: https://github.com/netresearch/jira-skill/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/netresearch/jira-skill/compare/1.0.3...2.0.0
 [1.0.3]: https://github.com/netresearch/jira-skill/compare/1.0.2...1.0.3
 [1.0.2]: https://github.com/netresearch/jira-skill/compare/1.0.1...1.0.2
