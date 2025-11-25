@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2025-11-25
+
+### BREAKING CHANGES
+
+- **Removed MCP server dependency**: The `mcp-atlassian` Docker-based MCP server is no longer used
+- **New invocation pattern**: All operations now use `uv run scripts/...` instead of MCP tool calls
+- **Skill renamed**: `jira-mcp` → `jira-communication`
+
+### Added
+
+- **Script-based architecture**: Lightweight Python scripts with PEP 723 inline dependencies
+- **Shared library** (`lib/`): Common utilities for client initialization, config, and output formatting
+- **Core scripts** (`scripts/core/`):
+  - `jira-validate.py` - Environment validation with actionable error messages
+  - `jira-worklog.py` - Time tracking (add, list)
+  - `jira-issue.py` - Issue operations (get, update)
+  - `jira-search.py` - JQL search queries
+- **Workflow scripts** (`scripts/workflow/`):
+  - `jira-create.py` - Issue creation with all common fields
+  - `jira-transition.py` - Status transitions with comments
+  - `jira-comment.py` - Comment operations
+  - `jira-sprint.py` - Sprint operations (list, issues, current)
+  - `jira-board.py` - Board operations (list, issues)
+- **Utility scripts** (`scripts/utility/`):
+  - `jira-fields.py` - Field search and listing
+  - `jira-user.py` - User information
+  - `jira-link.py` - Issue linking
+- **New features**:
+  - `--dry-run` flag for all write operations
+  - `--json`, `--quiet` output format options
+  - Actionable error messages with suggestions
+  - Auto-detection of Jira Cloud vs Server/DC
+
+### Changed
+
+- **Dependencies**: Now uses `uv`/`uvx` instead of Docker
+- **Context usage**: Reduced from ~8,000-12,000 tokens to ~500 tokens
+- **Startup time**: Reduced from 3-5s (Docker) to <1s
+
+### Removed
+
+- `mcp-atlassian` MCP server configuration
+- Docker dependency
+- Confluence operations (separate skill if needed)
+- Old `jira-mcp` skill (use git history for reference)
+
+### Migration
+
+See `skills/jira-communication/references/migration-guide.md` for detailed migration instructions from v2.x.
+
 ## [2.0.1] - 2025-11-25
 
 ### Fixed
@@ -141,7 +191,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/2.0.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/netresearch/jira-skill/compare/2.0.1...v3.0.0
 [2.0.1]: https://github.com/netresearch/jira-skill/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/netresearch/jira-skill/compare/1.0.3...2.0.0
 [1.0.3]: https://github.com/netresearch/jira-skill/compare/1.0.2...1.0.3
