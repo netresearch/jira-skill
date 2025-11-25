@@ -56,8 +56,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
 @click.argument('issue_key')
 @click.option('--fields', '-f', help='Comma-separated fields to return')
 @click.option('--expand', '-e', help='Fields to expand (changelog,transitions,renderedFields)')
+@click.option('--full', is_flag=True, help='Show full content without truncation')
+@click.option('--json', 'cmd_json', is_flag=True, help='Output as JSON')
+@click.option('--quiet', '-q', 'cmd_quiet', is_flag=True, help='Minimal output')
 @click.pass_context
-def get(ctx, issue_key: str, fields: str | None, expand: str | None):
+def get(ctx, issue_key: str, fields: str | None, expand: str | None,
+        full: bool, cmd_json: bool, cmd_quiet: bool):
     """Get issue details.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -76,18 +80,23 @@ def get(ctx, issue_key: str, fields: str | None, expand: str | None):
         # Build parameters
         params = {}
         if fields:
-            params['fields'] = fields.split(',')
+            # Jira API expects fields as comma-separated string, not list
+            params['fields'] = fields
         if expand:
             params['expand'] = expand
 
         issue = client.issue(issue_key, **params)
 
-        if ctx.obj['json']:
+        # Command-level flags override group-level flags
+        use_json = cmd_json or ctx.obj['json']
+        use_quiet = cmd_quiet or ctx.obj['quiet']
+
+        if use_json:
             format_output(issue, as_json=True)
-        elif ctx.obj['quiet']:
+        elif use_quiet:
             print(issue['key'])
         else:
-            _print_issue(issue)
+            _print_issue(issue, full=full, requested_fields=fields)
 
     except Exception as e:
         if ctx.obj['debug']:
@@ -96,53 +105,115 @@ def get(ctx, issue_key: str, fields: str | None, expand: str | None):
         sys.exit(1)
 
 
-def _print_issue(issue: dict) -> None:
-    """Pretty print issue details."""
+def _print_issue(issue: dict, full: bool = False, requested_fields: str | None = None) -> None:
+    """Pretty print issue details.
+
+    Args:
+        issue: The issue dict from Jira API
+        full: If True, don't truncate description
+        requested_fields: Comma-separated fields that were requested (affects output)
+    """
     fields = issue.get('fields', {})
+    requested = set(requested_fields.split(',')) if requested_fields else None
 
-    print(f"\n{issue['key']}: {fields.get('summary', 'No summary')}")
-    print("=" * 60)
+    def should_show(field_name: str) -> bool:
+        """Check if a field should be shown based on requested fields."""
+        if requested is None:
+            return True
+        return field_name in requested
 
-    # Status and type
-    status = fields.get('status', {}).get('name', 'Unknown')
-    issue_type = fields.get('issuetype', {}).get('name', 'Unknown')
-    priority = fields.get('priority', {}).get('name', 'None')
-    print(f"Type: {issue_type} | Status: {status} | Priority: {priority}")
+    def field_available(field_name: str) -> bool:
+        """Check if a field was returned by the API."""
+        return field_name in fields
 
-    # Assignee and reporter
-    assignee = fields.get('assignee', {})
-    reporter = fields.get('reporter', {})
-    assignee_name = assignee.get('displayName', 'Unassigned') if assignee else 'Unassigned'
-    reporter_name = reporter.get('displayName', 'Unknown') if reporter else 'Unknown'
-    print(f"Assignee: {assignee_name} | Reporter: {reporter_name}")
+    # Header with summary
+    if should_show('summary') or requested is None:
+        summary = fields.get('summary', 'No summary') if field_available('summary') else '[not requested]'
+        print(f"\n{issue['key']}: {summary}")
+        print("=" * 60)
+    else:
+        print(f"\n{issue['key']}")
+        print("=" * 60)
+
+    # Status, type, priority row - only show if any were requested or no filter
+    show_status_row = (requested is None or
+                       any(f in requested for f in ['status', 'issuetype', 'priority']))
+    if show_status_row:
+        parts = []
+        if should_show('issuetype') and field_available('issuetype'):
+            issue_type = fields.get('issuetype', {}).get('name', 'Unknown')
+            parts.append(f"Type: {issue_type}")
+        if should_show('status') and field_available('status'):
+            status = fields.get('status', {}).get('name', 'Unknown')
+            parts.append(f"Status: {status}")
+        if should_show('priority') and field_available('priority'):
+            priority = fields.get('priority', {}).get('name', 'None') if fields.get('priority') else 'None'
+            parts.append(f"Priority: {priority}")
+        if parts:
+            print(" | ".join(parts))
+
+    # Assignee and reporter row
+    show_people_row = (requested is None or
+                       any(f in requested for f in ['assignee', 'reporter']))
+    if show_people_row:
+        parts = []
+        if should_show('assignee') and field_available('assignee'):
+            assignee = fields.get('assignee', {})
+            assignee_name = assignee.get('displayName', 'Unassigned') if assignee else 'Unassigned'
+            parts.append(f"Assignee: {assignee_name}")
+        if should_show('reporter') and field_available('reporter'):
+            reporter = fields.get('reporter', {})
+            reporter_name = reporter.get('displayName', 'Unknown') if reporter else 'Unknown'
+            parts.append(f"Reporter: {reporter_name}")
+        if parts:
+            print(" | ".join(parts))
 
     # Labels
-    labels = fields.get('labels', [])
-    if labels:
-        print(f"Labels: {', '.join(labels)}")
+    if should_show('labels') and field_available('labels'):
+        labels = fields.get('labels', [])
+        if labels:
+            print(f"Labels: {', '.join(labels)}")
 
     # Description
-    description = fields.get('description')
-    if description:
-        print(f"\nDescription:")
-        # Handle both string and ADF format
-        if isinstance(description, str):
-            desc_text = description
-        elif isinstance(description, dict):
-            # ADF format - extract text content
-            desc_text = _extract_adf_text(description)
-        else:
-            desc_text = str(description)
+    if should_show('description') and field_available('description'):
+        description = fields.get('description')
+        if description:
+            print(f"\nDescription:")
+            # Handle both string and ADF format
+            if isinstance(description, str):
+                desc_text = description
+            elif isinstance(description, dict):
+                # ADF format - extract text content
+                desc_text = _extract_adf_text(description)
+            else:
+                desc_text = str(description)
 
-        # Truncate if too long
-        if len(desc_text) > 500:
-            desc_text = desc_text[:497] + "..."
-        print(f"  {desc_text}")
+            # Truncate if too long (unless --full flag)
+            max_len = 500
+            if not full and len(desc_text) > max_len:
+                # Find word boundary for clean truncation
+                truncated = desc_text[:max_len].rsplit(' ', 1)[0]
+                print(f"  {truncated}...")
+                print(f"  [truncated at {max_len} chars - use --full for complete content]")
+            else:
+                # Print full description, preserving line breaks
+                for line in desc_text.split('\n'):
+                    print(f"  {line}")
 
     # Dates
-    created = fields.get('created', '')[:10] if fields.get('created') else 'N/A'
-    updated = fields.get('updated', '')[:10] if fields.get('updated') else 'N/A'
-    print(f"\nCreated: {created} | Updated: {updated}")
+    show_dates_row = (requested is None or
+                      any(f in requested for f in ['created', 'updated']))
+    if show_dates_row:
+        parts = []
+        if should_show('created') and field_available('created'):
+            created = fields.get('created', '')[:10] if fields.get('created') else 'N/A'
+            parts.append(f"Created: {created}")
+        if should_show('updated') and field_available('updated'):
+            updated = fields.get('updated', '')[:10] if fields.get('updated') else 'N/A'
+            parts.append(f"Updated: {updated}")
+        if parts:
+            print(f"\n{' | '.join(parts)}")
+
     print()
 
 
