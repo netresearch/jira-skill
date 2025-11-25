@@ -3,7 +3,7 @@
 **Project**: Jira Skill Migration to Script-Based Architecture
 **PRD Version**: 1.2
 **Started**: 2025-11-25
-**Status**: Phase 1 Complete
+**Status**: Phase 2 Complete
 
 ---
 
@@ -12,7 +12,7 @@
 | Phase | Name | Status | Started | Completed | Verified |
 |-------|------|--------|---------|-----------|----------|
 | 1 | Foundation (P0 Scripts) | ✅ Complete | 2025-11-25 | 2025-11-25 | ✅ |
-| 2 | Workflow Expansion (P1) | ⏳ Pending | - | - | - |
+| 2 | Workflow Expansion (P1) | ✅ Complete | 2025-11-25 | 2025-11-25 | ✅ |
 | 3 | Completion (P2 + Polish) | ⏳ Pending | - | - | - |
 | 4 | Deprecation | ⏳ Pending | - | - | - |
 
@@ -70,20 +70,36 @@ Output formats verified:
 
 | Task | Description | Status | Commit |
 |------|-------------|--------|--------|
-| 2.1 | Implement `jira-create.py` | ⏳ Pending | - |
-| 2.2 | Implement `jira-transition.py` | ⏳ Pending | - |
-| 2.3 | Implement `jira-comment.py` | ⏳ Pending | - |
-| 2.4 | Implement `jira-sprint.py` | ⏳ Pending | - |
-| 2.5 | Implement `jira-board.py` | ⏳ Pending | - |
-| 2.6 | Integration testing | ⏳ Pending | - |
+| 2.1 | Implement `jira-create.py` | ✅ Complete | (pending) |
+| 2.2 | Implement `jira-transition.py` | ✅ Complete | (pending) |
+| 2.3 | Implement `jira-comment.py` | ✅ Complete | (pending) |
+| 2.4 | Implement `jira-sprint.py` | ✅ Complete | (pending) |
+| 2.5 | Implement `jira-board.py` | ✅ Complete | (pending) |
+| 2.6 | Integration testing | ✅ Complete | (pending) |
 
 ### Verification Results
 
 ```
-Phase 2 Verification: Not yet performed
+Phase 2 Verification: PASSED (2025-11-25)
+
+✓ jira-create.py issue HMKG "Test" --type Task --dry-run: Shows dry-run output correctly
+✓ jira-transition.py list NRFE-3925: Lists available transitions with To Status
+✓ jira-transition.py do NRFE-3925 "Approve" --dry-run: Shows dry-run with correct target status
+✓ jira-comment.py list NRFE-3925: Lists comments with date, author, and body
+✓ jira-board.py list --project HMKG: Lists 4 agile boards with ID, name, type
+✓ jira-sprint.py list 119 --state active: Lists active sprint with dates
+
+All 5 workflow scripts have working --help output.
+Write operations support --dry-run flag (D3).
+Fixed: Transition 'to' field handling for Server/DC (string) vs Cloud (dict) format.
 ```
 
 ### Notes
+
+- All scripts placed in `scripts/workflow/` directory as per architecture
+- Supports both Jira Cloud and Server/DC response formats
+- Agile API endpoints used for boards and sprints (rest/agile/1.0)
+- jira-transition.py handles both Cloud (dict) and Server/DC (string) `to` field formats
 
 ---
 
