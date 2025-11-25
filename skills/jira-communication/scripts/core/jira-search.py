@@ -28,15 +28,19 @@ from lib.output import format_output, format_table, error
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @click.group()
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@click.option('--quiet', '-q', is_flag=True, help='Minimal output (keys only)')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     """Jira search operations.
 
     Query Jira issues using JQL (Jira Query Language).
     """
     ctx.ensure_object(dict)
+    ctx.obj['json'] = output_json
+    ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
     try:
         ctx.obj['client'] = get_jira_client(env_file)
@@ -52,10 +56,8 @@ def cli(ctx, env_file: str | None, debug: bool):
 @click.option('--max-results', '-n', default=50, help='Maximum results to return')
 @click.option('--fields', '-f', default='key,summary,status,assignee,priority',
               help='Comma-separated fields to return')
-@click.option('--output', '-o', type=click.Choice(['table', 'json', 'keys']),
-              default='table', help='Output format')
 @click.pass_context
-def query(ctx, jql: str, max_results: int, fields: str, output: str):
+def query(ctx, jql: str, max_results: int, fields: str):
     """Search issues using JQL.
 
     JQL: Jira Query Language query string
@@ -66,9 +68,9 @@ def query(ctx, jql: str, max_results: int, fields: str, output: str):
 
       jira-search query "assignee = currentUser()" --max-results 20
 
-      jira-search query "updated >= -7d" --output json
+      jira-search --json query "updated >= -7d"
 
-      jira-search query "labels = urgent" --output keys
+      jira-search --quiet query "labels = urgent"
 
     Common JQL patterns:
 
@@ -90,11 +92,11 @@ def query(ctx, jql: str, max_results: int, fields: str, output: str):
         results = client.jql(jql, limit=max_results, fields=field_list)
         issues = results.get('issues', [])
 
-        if output == 'keys':
+        if ctx.obj['json']:
+            format_output(issues, as_json=True)
+        elif ctx.obj['quiet']:
             for issue in issues:
                 print(issue['key'])
-        elif output == 'json':
-            format_output(issues, as_json=True)
         else:
             # Table output
             if not issues:

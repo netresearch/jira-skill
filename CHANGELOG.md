@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2025-11-25
+
+### BREAKING CHANGES
+
+- **jira-search.py**: Replaced `--output` choice option with standard `--json` and `--quiet` flags
+  - `--output table` → default (no flags)
+  - `--output json` → `--json`
+  - `--output keys` → `--quiet`
+
+### Added
+
+- **jira-validate.py**: Added `--json` and `--quiet` options for consistent CLI interface
+- **jira-fields.py**: Added `--quiet` option (outputs field IDs only)
+- **jira-link.py**: Added `--quiet` option (outputs link type names only)
+
+### Fixed
+
+- All 12 scripts now consistently support `--help`, `--json`, and `--quiet` as documented in SKILL.md
+
 ## [3.0.0] - 2025-11-25
 
 ### BREAKING CHANGES
@@ -191,7 +210,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/netresearch/jira-skill/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/netresearch/jira-skill/compare/2.0.1...v3.0.0
 [2.0.1]: https://github.com/netresearch/jira-skill/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/netresearch/jira-skill/compare/1.0.3...2.0.0
