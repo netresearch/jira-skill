@@ -216,26 +216,22 @@ h4. Phase 3 - Full Release (Week 5+)
 *Target Release:* Q1 2025
 ```
 
-## Usage with MCP
+## Usage with jira-communication Skill
 
-```javascript
-mcp__mcp-atlassian__jira_create_issue({
-  project_key: "PROJ",
-  summary: "Bulk export functionality for multiple projects",
-  issue_type: "Story",
-  description: `
-h2. Feature Overview
+```bash
+# Create the feature request using the script
+uv run scripts/workflow/jira-create.py issue PROJ \
+  "Bulk export functionality for multiple projects" \
+  --type Story \
+  --priority High \
+  --labels feature-request,export,productivity \
+  --description-file feature-description.txt
 
-Implement bulk export functionality allowing users to export multiple projects...
-[Use full template content here]
-`,
-  additional_fields: {
-    priority: { name: "High" },
-    labels: ["feature-request", "export", "productivity"],
-    components: [{ name: "Data Export" }],
-    epic_link: "PROJ-100" // Link to parent epic
-  }
-})
+# Or with inline description (short version)
+uv run scripts/workflow/jira-create.py issue PROJ \
+  "Bulk export functionality for multiple projects" \
+  --type Story \
+  --priority High
 ```
 
 ## Checklist Before Submitting

@@ -129,25 +129,22 @@ Suggested fix: Add null check before calling {{reset()}} method.
 *Date:* 2025-11-06
 ```
 
-## Usage with MCP
+## Usage with jira-communication Skill
 
-```javascript
-mcp__mcp-atlassian__jira_create_issue({
-  project_key: "PROJ",
-  summary: "Login button unresponsive after failed authentication",
-  issue_type: "Bug",
-  description: `
-h2. Bug Description
+```bash
+# Create the bug report using the script
+uv run scripts/workflow/jira-create.py issue PROJ \
+  "Login button unresponsive after failed authentication" \
+  --type Bug \
+  --priority High \
+  --labels frontend,authentication,ux \
+  --description-file bug-description.txt
 
-Login button becomes unresponsive after failed authentication attempt...
-[Use full template content here]
-`,
-  additional_fields: {
-    priority: { name: "High" },
-    labels: ["frontend", "authentication", "ux"],
-    components: [{ name: "Login" }]
-  }
-})
+# Or with inline description (short version)
+uv run scripts/workflow/jira-create.py issue PROJ \
+  "Login button unresponsive after failed authentication" \
+  --type Bug \
+  --priority High
 ```
 
 ## Checklist Before Submitting
