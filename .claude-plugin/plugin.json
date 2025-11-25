@@ -1,7 +1,7 @@
 {
   "name": "jira-integration",
-  "version": "2.0.1",
-  "description": "Comprehensive Jira integration with two specialized skills: jira-mcp for API operations via mcp-atlassian MCP server, and jira-syntax for wiki markup validation and templates.",
+  "version": "3.0.0",
+  "description": "Comprehensive Jira integration with script-based architecture",
   "repository": "https://github.com/netresearch/jira-skill",
   "license": "MIT",
   "author": {
@@ -11,7 +11,6 @@
   "keywords": [
     "jira",
     "atlassian",
-    "mcp",
     "issue-tracking",
     "project-management",
     "wiki-markup",
@@ -20,26 +19,12 @@
   ],
   "skills": [
     {
-      "name": "jira-mcp",
-      "path": "skills/jira-mcp"
+      "name": "jira-communication",
+      "path": "skills/jira-communication"
     },
     {
       "name": "jira-syntax",
       "path": "skills/jira-syntax"
     }
-  ],
-  "mcpServers": {
-    "mcp-atlassian": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--pull=always",
-        "--env-file",
-        "${HOME}/.env.jira",
-        "ghcr.io/sooperset/mcp-atlassian:latest"
-      ]
-    }
-  }
+  ]
 }
