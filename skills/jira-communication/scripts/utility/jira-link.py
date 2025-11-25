@@ -29,16 +29,18 @@ from lib.output import format_output, format_table, success, error, warning
 
 @click.group()
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@click.option('--quiet', '-q', is_flag=True, help='Minimal output')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, output_json: bool, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     """Jira issue link operations.
 
     Create links between issues and list available link types.
     """
     ctx.ensure_object(dict)
     ctx.obj['json'] = output_json
+    ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
     try:
         ctx.obj['client'] = get_jira_client(env_file)
@@ -91,6 +93,8 @@ def create(ctx, from_key: str, to_key: str, link_type: str, dry_run: bool):
                 'type': link_type,
                 'created': True
             }, as_json=True)
+        elif ctx.obj['quiet']:
+            print('ok')
         else:
             success(f"Created link: {from_key} --[{link_type}]--> {to_key}")
 
@@ -119,6 +123,9 @@ def list_types(ctx):
 
         if ctx.obj['json']:
             format_output(link_types, as_json=True)
+        elif ctx.obj['quiet']:
+            for lt in link_types:
+                print(lt.get('name', ''))
         else:
             print("Available link types:\n")
             rows = []

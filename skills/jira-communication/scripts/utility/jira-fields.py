@@ -29,16 +29,18 @@ from lib.output import format_output, format_table, error
 
 @click.group()
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@click.option('--quiet', '-q', is_flag=True, help='Minimal output (field IDs only)')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, output_json: bool, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     """Jira field operations.
 
     Search and list Jira fields (including custom fields).
     """
     ctx.ensure_object(dict)
     ctx.obj['json'] = output_json
+    ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
     try:
         ctx.obj['client'] = get_jira_client(env_file)
@@ -84,6 +86,9 @@ def search(ctx, keyword: str, limit: int):
 
         if ctx.obj['json']:
             format_output(matching, as_json=True)
+        elif ctx.obj['quiet']:
+            for f in matching:
+                print(f.get('id', ''))
         else:
             if not matching:
                 print(f"No fields matching '{keyword}'")
@@ -137,6 +142,9 @@ def list_fields(ctx, field_type: str, limit: int):
 
         if ctx.obj['json']:
             format_output(fields, as_json=True)
+        elif ctx.obj['quiet']:
+            for f in fields:
+                print(f.get('id', ''))
         else:
             type_label = field_type if field_type != 'all' else 'all'
             print(f"Jira fields ({type_label}, {len(fields)} shown):\n")

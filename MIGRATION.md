@@ -1,3 +1,31 @@
+# Migration Guide
+
+## v3.0.0 → v3.0.1
+
+### Breaking Change: jira-search.py CLI Options
+
+The `--output` choice option in `jira-search.py` has been replaced with standard `--json` and `--quiet` flags for consistency with other scripts.
+
+#### Migration
+
+| Old Command | New Command |
+|-------------|-------------|
+| `jira-search query "..." --output table` | `jira-search query "..."` |
+| `jira-search query "..." --output json` | `jira-search --json query "..."` |
+| `jira-search query "..." --output keys` | `jira-search --quiet query "..."` |
+
+**Note**: The `--json` and `--quiet` flags are now group-level options (before the subcommand), not command-level options.
+
+### New CLI Options
+
+The following scripts now support `--json` and `--quiet` options:
+
+- `jira-validate.py` - `--json` outputs full validation result, `--quiet` outputs just "ok" or "error"
+- `jira-fields.py` - `--quiet` outputs field IDs only (one per line)
+- `jira-link.py` - `--quiet` outputs link type names only (one per line)
+
+---
+
 # Migration Guide: v1.x → v2.0.0
 
 ## Overview
@@ -212,3 +240,5 @@ For migration issues:
 
 - **v1.0.0 - v1.0.3**: Unified skill architecture
 - **v2.0.0**: Two-skill architecture (jira-mcp + jira-syntax)
+- **v3.0.0**: Script-based architecture (jira-communication + jira-syntax)
+- **v3.0.1**: CLI consistency - all scripts support `--json` and `--quiet`
