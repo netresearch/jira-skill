@@ -116,12 +116,33 @@ def get(ctx, identifier: str):
             except Exception:
                 pass
 
-        # Try by username or email
+        # Try by username directly (Server/DC)
+        if not user:
+            try:
+                user = client.user(username=identifier)
+            except Exception:
+                pass
+
+        # Try user search API (works for email on Server/DC)
+        if not user:
+            try:
+                users = client.get('rest/api/2/user/search', params={'username': identifier})
+                if users and isinstance(users, list) and len(users) > 0:
+                    user = users[0]
+            except Exception:
+                pass
+
+        # Try user search as fallback (Cloud)
         if not user:
             try:
                 users = client.user_find_by_user_string(query=identifier)
-                if users:
-                    user = users[0]
+                if users and isinstance(users, list) and len(users) > 0:
+                    found = users[0]
+                    if isinstance(found, dict):
+                        user = found
+                    elif isinstance(found, str) and not found.startswith('Username'):
+                        # It's a username string, fetch full object
+                        user = client.user(username=found)
             except Exception:
                 pass
 
