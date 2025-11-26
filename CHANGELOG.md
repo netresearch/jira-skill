@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2025-11-26
+
+### Added
+
+- **composer.json**: Composer-based skill package distribution via `netresearch/agent-jira-skill`
+- **references/jql-quick-reference.md**: Validated JQL syntax reference (validated against official docs)
+- **references/troubleshooting.md**: Setup and error guidance for common issues
+- **Environment variable fallback**: `~/.env.jira` is now optional when `JIRA_URL` and auth env vars are directly set (file takes priority if present)
+
+### Fixed
+
+- **jira-worklog.py**: Auto-normalize `--started` timestamp format (handles ISO8601 without timezone)
+- **jira-worklog.py**: Use correct atlassian-python-api method for adding worklogs
+- **jira-user.py**: Resolve user lookup on Jira Server/DC with multi-fallback approach (direct username, REST API search, Cloud-compatible fallback)
+- **jira-issue.py**: Add missing `--json`, `--quiet`, `--full` flags to `get` subcommand
+- **jira-issue.py**: Fix `--fields` parameter to pass string instead of list to Jira API
+- **jira-issue.py**: Add truncation notice with `--full` option for complete content retrieval
+
+### Improved
+
+- **SKILL.md**: Enhanced description with explicit 11-point capability list
+- **Cross-references**: Added references to jira-syntax skill for content formatting
+- **Workflow examples**: Added common workflow patterns with prominent flag ordering warning
+
+### Documentation
+
+- CLI flag ordering requirement documented in SKILL.md
+- Cleaned up outdated documentation files
+
 ## [3.0.1] - 2025-11-25
 
 ### BREAKING CHANGES
@@ -210,7 +239,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.0.2...HEAD
+[3.0.2]: https://github.com/netresearch/jira-skill/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/netresearch/jira-skill/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/netresearch/jira-skill/compare/2.0.1...v3.0.0
 [2.0.1]: https://github.com/netresearch/jira-skill/compare/2.0.0...2.0.1
