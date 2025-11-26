@@ -10,7 +10,7 @@
 
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared library import (TR1.1.1 - PYTHONPATH approach)
@@ -77,7 +77,7 @@ def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str 
     client = ctx.obj['client']
 
     try:
-        # Build worklog data
+        # Build worklog data for JSON API
         worklog_data = {
             'timeSpent': time_spent,
         }
@@ -87,9 +87,12 @@ def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str 
 
         if started:
             worklog_data['started'] = started
+        else:
+            # Default to current UTC time in Jira format
+            worklog_data['started'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000+0000')
 
-        # Add worklog via REST API
-        result = client.issue_add_worklog(issue_key, time_spent, comment=comment, started=started)
+        # Add worklog via REST API (using issue_add_json_worklog which accepts timeSpent string)
+        result = client.issue_add_json_worklog(issue_key, worklog_data)
 
         if ctx.obj['quiet']:
             print(result.get('id', 'ok'))
