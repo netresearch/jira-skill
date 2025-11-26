@@ -1,6 +1,13 @@
 ---
 name: jira-communication
-description: Jira API operations via Python CLI scripts. Use when working with Jira issues, worklogs, sprints, transitions, comments, or searching with JQL. Supports both Jira Cloud and Server/Data Center.
+description: >
+  Jira API operations via Python CLI scripts. Use when Claude needs to:
+  (1) Search issues with JQL queries, (2) Get or update issue details,
+  (3) Create new issues, (4) Transition issue status (e.g., "To Do" → "Done"),
+  (5) Add comments, (6) Log work time (worklogs), (7) List sprints and sprint issues,
+  (8) List boards and board issues, (9) Create or list issue links,
+  (10) Discover available Jira fields, (11) Get user profile information.
+  Supports both Jira Cloud and Server/Data Center with automatic auth detection.
 ---
 
 # Jira Communication
@@ -13,7 +20,8 @@ Standalone CLI scripts for Jira operations using `uv run`.
 - **Don't read scripts** - use `<script>.py --help` to understand options
 - **Validate first**: Run `jira-validate.py` before other operations
 - **Dry-run writes**: Use `--dry-run` for create/update/transition operations
-- Requires `~/.env.jira` with credentials (see `jira-validate.py --help`)
+- **Credentials**: Via `~/.env.jira` file or environment variables (see Authentication)
+- **Content formatting**: Use **jira-syntax** skill for descriptions/comments (Jira wiki markup, NOT Markdown)
 
 ## Available Scripts
 
@@ -34,13 +42,13 @@ Standalone CLI scripts for Jira operations using `uv run`.
 ### Workflow Operations
 
 #### `scripts/workflow/jira-create.py`
-**When to use:** Create new issues
+**When to use:** Create new issues (use **jira-syntax** skill for description content)
 
 #### `scripts/workflow/jira-transition.py`
 **When to use:** Change issue status (e.g., "In Progress" → "Done")
 
 #### `scripts/workflow/jira-comment.py`
-**When to use:** Add comments to issues
+**When to use:** Add comments to issues (use **jira-syntax** skill for formatting)
 
 #### `scripts/workflow/jira-sprint.py`
 **When to use:** List sprints or sprint issues
@@ -59,22 +67,73 @@ Standalone CLI scripts for Jira operations using `uv run`.
 #### `scripts/utility/jira-link.py`
 **When to use:** Create or list issue links
 
-## Quick Start
+## ⚠️ Flag Ordering (Critical)
 
-All scripts support `--help`, `--json`, and `--quiet`.
-
-**Important:** Global flags (`--json`, `--quiet`, `--debug`) must be placed **before** the subcommand:
+Global flags **MUST** come **before** the subcommand:
 
 ```bash
-# Correct flag placement
-uv run scripts/core/jira-issue.py --help
+# ✓ Correct
 uv run scripts/core/jira-issue.py --json get PROJ-123
-uv run scripts/core/jira-search.py --quiet query "project = PROJ"
 
-# Wrong - will fail with "No such option"
-# uv run scripts/core/jira-issue.py get PROJ-123 --json
+# ✗ Wrong - fails with "No such option"
+uv run scripts/core/jira-issue.py get PROJ-123 --json
 ```
+
+## Quick Start
+
+All scripts support `--help`, `--json`, `--quiet`, and `--debug`.
+
+```bash
+# Validate setup first
+uv run scripts/core/jira-validate.py --verbose
+
+# Search issues
+uv run scripts/core/jira-search.py query "project = PROJ AND status = Open"
+
+# Get issue details
+uv run scripts/core/jira-issue.py get PROJ-123
+
+# Transition with dry-run
+uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
+```
+
+## Common Workflows
+
+### Find my open issues and get details
+```bash
+uv run scripts/core/jira-search.py --json query "assignee = currentUser() AND status != Done"
+```
+
+### Log 2 hours of work
+```bash
+uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Implemented feature X"
+```
+
+### Create and transition an issue
+```bash
+uv run scripts/workflow/jira-create.py issue PROJ "Fix login bug" --type Bug
+uv run scripts/workflow/jira-transition.py do PROJ-124 "In Progress"
+```
+
+## Related Skills
+
+**jira-syntax**: Use for formatting descriptions and comments. Jira uses wiki markup, NOT Markdown.
+- `*bold*` not `**bold**`
+- `h2. Heading` not `## Heading`
+- `{code:python}...{code}` not triple backticks
+
+## References
+
+- **JQL syntax**: See [references/jql-quick-reference.md](references/jql-quick-reference.md)
+- **Troubleshooting**: See [references/troubleshooting.md](references/troubleshooting.md)
 
 ## Authentication
 
-Requires `~/.env.jira` - run `jira-validate.py --help` for setup details.
+Configuration loaded in priority order:
+1. `~/.env.jira` file (if exists)
+2. Environment variables (fallback for missing values)
+
+**Jira Cloud**: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`
+**Jira Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
+
+Run `jira-validate.py --verbose` to verify setup. See [references/troubleshooting.md](references/troubleshooting.md) for detailed setup.
