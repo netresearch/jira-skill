@@ -61,11 +61,18 @@ Standalone CLI scripts for Jira operations using `uv run`.
 
 ## Quick Start
 
-All scripts support `--help`, `--json`, and `--quiet`:
+All scripts support `--help`, `--json`, and `--quiet`.
+
+**Important:** Global flags (`--json`, `--quiet`, `--debug`) must be placed **before** the subcommand:
 
 ```bash
+# Correct flag placement
 uv run scripts/core/jira-issue.py --help
-uv run scripts/core/jira-issue.py get PROJ-123 --json
+uv run scripts/core/jira-issue.py --json get PROJ-123
+uv run scripts/core/jira-search.py --quiet query "project = PROJ"
+
+# Wrong - will fail with "No such option"
+# uv run scripts/core/jira-issue.py get PROJ-123 --json
 ```
 
 ## Authentication
