@@ -16,3 +16,13 @@
 
 # OS Files
 Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment/credentials
+.env
+.env.*
+!.env.example

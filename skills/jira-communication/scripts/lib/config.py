@@ -18,48 +18,44 @@ ALL_VARS = [REQUIRED_URL] + CLOUD_VARS + SERVER_VARS + OPTIONAL_VARS
 
 
 def load_env(env_file: Optional[str] = None) -> dict:
-    """Load environment variables from file.
+    """Load configuration from file with environment variable fallback.
+
+    Priority order:
+    1. Explicit env_file parameter (must exist if specified)
+    2. ~/.env.jira (if exists)
+    3. Environment variables (fallback for missing values)
 
     Supports two authentication modes:
     - Cloud: JIRA_URL + JIRA_USERNAME + JIRA_API_TOKEN
     - Server/DC: JIRA_URL + JIRA_PERSONAL_TOKEN
 
     Args:
-        env_file: Path to environment file. Defaults to ~/.env.jira
+        env_file: Path to environment file. If specified, file must exist.
 
     Returns:
         Dictionary of configuration values
 
     Raises:
-        FileNotFoundError: If env file doesn't exist
-        ValueError: If required variables are missing
+        FileNotFoundError: If explicit env_file doesn't exist
     """
+    config = {}
     path = Path(env_file) if env_file else DEFAULT_ENV_FILE
 
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Environment file not found: {path}\n\n"
-            f"  Create {path} with one of the following configurations:\n\n"
-            f"  For Jira Cloud:\n"
-            f"    JIRA_URL=https://your-company.atlassian.net\n"
-            f"    JIRA_USERNAME=your-email@example.com\n"
-            f"    JIRA_API_TOKEN=your-api-token\n\n"
-            f"  For Jira Server/Data Center:\n"
-            f"    JIRA_URL=https://jira.your-company.com\n"
-            f"    JIRA_PERSONAL_TOKEN=your-personal-access-token\n"
-        )
+    # Load from file if it exists (or raise if explicitly specified but missing)
+    if path.exists():
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, _, value = line.partition('=')
+                    config[key.strip()] = value.strip().strip('"').strip("'")
+    elif env_file:
+        # Explicit file was specified but doesn't exist
+        raise FileNotFoundError(f"Environment file not found: {path}")
 
-    config = {}
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, _, value = line.partition('=')
-                config[key.strip()] = value.strip().strip('"').strip("'")
-
-    # Also check environment variables (override file)
+    # Fill in missing values from environment variables
     for var in ALL_VARS:
-        if var in os.environ:
+        if var not in config and var in os.environ:
             config[var] = os.environ[var]
 
     return config
