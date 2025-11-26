@@ -1,6 +1,6 @@
 {
   "name": "jira-integration",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Comprehensive Jira integration with script-based architecture",
   "repository": "https://github.com/netresearch/jira-skill",
   "license": "MIT",
