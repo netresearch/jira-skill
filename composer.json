@@ -1,0 +1,23 @@
+{
+  "name": "netresearch/agent-jira-skill",
+  "description": "Claude Code skills for Jira API operations and wiki markup syntax",
+  "type": "ai-agent-skill",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Netresearch DTT GmbH",
+      "email": "plugins@netresearch.de",
+      "homepage": "https://www.netresearch.de/",
+      "role": "Manufacturer"
+    }
+  ],
+  "require": {
+    "netresearch/composer-agent-skill-plugin": "*"
+  },
+  "extra": {
+    "ai-agent-skill": [
+      "skills/jira-communication/SKILL.md",
+      "skills/jira-syntax/SKILL.md"
+    ]
+  }
+}
