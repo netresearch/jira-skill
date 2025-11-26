@@ -20,9 +20,53 @@ _lib_path = _script_dir.parent / "lib"
 if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
+import re
 import click
 from lib.client import get_jira_client
 from lib.output import format_output, success, error
+
+
+def normalize_iso_timestamp(timestamp: str) -> str:
+    """Normalize ISO timestamp to Jira's required format.
+
+    Jira requires: YYYY-MM-DDTHH:MM:SS.sss+ZZZZ (e.g., 2025-01-15T09:00:00.000+0100)
+
+    Accepts various formats:
+      - 2025-01-15T09:00:00 (adds local timezone)
+      - 2025-01-15T09:00 (adds seconds and local timezone)
+      - 2025-01-15 (adds time 00:00:00 and local timezone)
+      - 2025-01-15T09:00:00+01:00 (converts timezone format)
+      - 2025-01-15T09:00:00.000+0100 (pass through)
+    """
+    # Already in Jira format (has milliseconds and compact timezone)
+    if re.match(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{4}$', timestamp):
+        return timestamp
+
+    # Get local timezone offset
+    local_tz = datetime.now().astimezone().strftime('%z')  # e.g., +0100
+
+    # Date only: 2025-01-15
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', timestamp):
+        return f"{timestamp}T00:00:00.000{local_tz}"
+
+    # Has timezone with colon: 2025-01-15T09:00:00+01:00
+    tz_match = re.search(r'([+-])(\d{2}):(\d{2})$', timestamp)
+    if tz_match:
+        tz_compact = f"{tz_match.group(1)}{tz_match.group(2)}{tz_match.group(3)}"
+        timestamp = timestamp[:tz_match.start()]
+    else:
+        tz_compact = local_tz
+
+    # No seconds: 2025-01-15T09:00
+    if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$', timestamp):
+        timestamp = f"{timestamp}:00"
+
+    # Has seconds but no milliseconds: 2025-01-15T09:00:00
+    if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$', timestamp):
+        return f"{timestamp}.000{tz_compact}"
+
+    # Fallback: return as-is (let Jira API handle/reject it)
+    return timestamp
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -59,7 +103,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
 @click.argument('issue_key')
 @click.argument('time_spent')
 @click.option('--comment', '-c', help='Worklog comment')
-@click.option('--started', help='Start time (ISO format, default: now)')
+@click.option('--started', help='Start time (ISO format: YYYY-MM-DD, YYYY-MM-DDTHH:MM, or YYYY-MM-DDTHH:MM:SS; default: now)')
 @click.pass_context
 def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str | None):
     """Add worklog entry to an issue.
@@ -86,10 +130,10 @@ def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str 
             worklog_data['comment'] = comment
 
         if started:
-            worklog_data['started'] = started
+            worklog_data['started'] = normalize_iso_timestamp(started)
         else:
-            # Default to current UTC time in Jira format
-            worklog_data['started'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000+0000')
+            # Default to current time in local timezone (Jira format)
+            worklog_data['started'] = datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S.000%z')
 
         # Add worklog via REST API (using issue_add_json_worklog which accepts timeSpent string)
         result = client.issue_add_json_worklog(issue_key, worklog_data)
