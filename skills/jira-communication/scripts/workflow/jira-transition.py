@@ -189,7 +189,18 @@ def do_transition(ctx, issue_key: str, status_name: str,
         # Perform transition - API uses target status name (not transition name/ID)
         # set_issue_status handles the transition ID lookup internally
         target_status = _get_to_status(matching)
-        client.set_issue_status(issue_key, target_status, fields=fields if fields else None)
+
+        # Build update dict for comment if provided
+        update = None
+        if comment:
+            update = {"comment": [{"add": {"body": comment}}]}
+
+        client.set_issue_status(
+            issue_key,
+            target_status,
+            fields=fields if fields else None,
+            update=update
+        )
 
         if ctx.obj['quiet']:
             print(issue_key)
