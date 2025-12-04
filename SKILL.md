@@ -1,6 +1,6 @@
 ---
 name: jira-integration
-description: "Comprehensive Jira integration through lightweight Python scripts. Use when searching issues (JQL), getting/updating issue details, creating issues, transitioning status, adding comments, logging worklogs, managing sprints and boards, creating issue links, or formatting Jira wiki markup. Supports both Jira Cloud and Server/Data Center with automatic authentication detection. Zero MCP overhead - scripts invoked via Bash for fast execution."
+description: "Comprehensive Jira integration through lightweight Python scripts. Use when searching issues (JQL), getting/updating issue details, creating issues, transitioning status, adding comments, logging worklogs, managing sprints and boards, creating issue links, or formatting Jira wiki markup. Supports both Jira Cloud and Server/Data Center with automatic authentication detection. By Netresearch."
 ---
 
 # Jira Integration Skill
