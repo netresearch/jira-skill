@@ -231,3 +231,11 @@ uv run scripts/core/jira-issue.py get PROJ-123
 ## License
 
 MIT
+
+## Credits
+
+Developed and maintained by [Netresearch DTT GmbH](https://www.netresearch.de/).
+
+---
+
+**Made with ❤️ for Open Source by [Netresearch](https://www.netresearch.de/)**
