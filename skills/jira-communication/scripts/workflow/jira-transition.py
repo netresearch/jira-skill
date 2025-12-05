@@ -186,12 +186,20 @@ def do_transition(ctx, issue_key: str, status_name: str,
         if resolution:
             fields['resolution'] = {'name': resolution}
 
-        # Perform transition
-        client.issue_transition(
+        # Perform transition - API uses target status name (not transition name/ID)
+        # set_issue_status handles the transition ID lookup internally
+        target_status = _get_to_status(matching)
+
+        # Build update dict for comment if provided
+        update = None
+        if comment:
+            update = {"comment": [{"add": {"body": comment}}]}
+
+        client.set_issue_status(
             issue_key,
-            matching['id'],
+            target_status,
             fields=fields if fields else None,
-            comment=comment
+            update=update
         )
 
         if ctx.obj['quiet']:
