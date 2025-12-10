@@ -99,8 +99,9 @@ def add(ctx, issue_key: str, comment_text: str):
 @cli.command('list')
 @click.argument('issue_key')
 @click.option('--limit', '-n', default=10, help='Max comments to show')
+@click.option('--truncate', type=int, metavar='N', help='Truncate comment body to N characters')
 @click.pass_context
-def list_comments(ctx, issue_key: str, limit: int):
+def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
     """List comments on an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -140,12 +141,12 @@ def list_comments(ctx, issue_key: str, limit: int):
                     if isinstance(body, dict):
                         body = _extract_text(body)
 
-                    # Truncate long comments
-                    if len(body) > 200:
-                        body = body[:197] + "..."
+                    # Truncate if requested
+                    if truncate and len(body) > truncate:
+                        body = body[:truncate-3] + "..."
 
                     print(f"  [{created}] {author}:")
-                    for line in body.split('\n')[:5]:
+                    for line in body.split('\n'):
                         print(f"    {line}")
                     print()
 

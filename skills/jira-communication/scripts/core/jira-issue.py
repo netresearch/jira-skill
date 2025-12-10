@@ -56,12 +56,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
 @click.argument('issue_key')
 @click.option('--fields', '-f', help='Comma-separated fields to return')
 @click.option('--expand', '-e', help='Fields to expand (changelog,transitions,renderedFields)')
-@click.option('--full', is_flag=True, help='Show full content without truncation')
+@click.option('--truncate', type=int, metavar='N', help='Truncate description to N characters')
 @click.option('--json', 'cmd_json', is_flag=True, help='Output as JSON')
 @click.option('--quiet', '-q', 'cmd_quiet', is_flag=True, help='Minimal output')
 @click.pass_context
 def get(ctx, issue_key: str, fields: str | None, expand: str | None,
-        full: bool, cmd_json: bool, cmd_quiet: bool):
+        truncate: int | None, cmd_json: bool, cmd_quiet: bool):
     """Get issue details.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -96,7 +96,7 @@ def get(ctx, issue_key: str, fields: str | None, expand: str | None,
         elif use_quiet:
             print(issue['key'])
         else:
-            _print_issue(issue, full=full, requested_fields=fields)
+            _print_issue(issue, truncate=truncate, requested_fields=fields)
 
     except Exception as e:
         if ctx.obj['debug']:
@@ -105,12 +105,12 @@ def get(ctx, issue_key: str, fields: str | None, expand: str | None,
         sys.exit(1)
 
 
-def _print_issue(issue: dict, full: bool = False, requested_fields: str | None = None) -> None:
+def _print_issue(issue: dict, truncate: int | None = None, requested_fields: str | None = None) -> None:
     """Pretty print issue details.
 
     Args:
         issue: The issue dict from Jira API
-        full: If True, don't truncate description
+        truncate: If set, truncate description to this many characters
         requested_fields: Comma-separated fields that were requested (affects output)
     """
     fields = issue.get('fields', {})
@@ -188,13 +188,12 @@ def _print_issue(issue: dict, full: bool = False, requested_fields: str | None =
             else:
                 desc_text = str(description)
 
-            # Truncate if too long (unless --full flag)
-            max_len = 500
-            if not full and len(desc_text) > max_len:
+            # Truncate if requested
+            if truncate and len(desc_text) > truncate:
                 # Find word boundary for clean truncation
-                truncated = desc_text[:max_len].rsplit(' ', 1)[0]
+                truncated = desc_text[:truncate].rsplit(' ', 1)[0]
                 print(f"  {truncated}...")
-                print(f"  [truncated at {max_len} chars - use --full for complete content]")
+                print(f"  [truncated at {truncate} chars]")
             else:
                 # Print full description, preserving line breaks
                 for line in desc_text.split('\n'):

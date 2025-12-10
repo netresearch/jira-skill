@@ -158,8 +158,9 @@ def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str 
 @cli.command('list')
 @click.argument('issue_key')
 @click.option('--limit', '-n', default=10, help='Max entries to show')
+@click.option('--truncate', type=int, metavar='N', help='Truncate comments to N characters')
 @click.pass_context
-def list_worklogs(ctx, issue_key: str, limit: int):
+def list_worklogs(ctx, issue_key: str, limit: int, truncate: int | None):
     """List worklog entries for an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -197,9 +198,9 @@ def list_worklogs(ctx, issue_key: str, limit: int):
 
                     print(f"  [{started}] {author}: {time_spent}")
                     if comment:
-                        # Truncate long comments
-                        if len(comment) > 60:
-                            comment = comment[:57] + "..."
+                        # Truncate if requested
+                        if truncate and len(comment) > truncate:
+                            comment = comment[:truncate-3] + "..."
                         print(f"           {comment}")
 
     except Exception as e:
