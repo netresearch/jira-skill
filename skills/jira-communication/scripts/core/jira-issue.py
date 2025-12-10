@@ -213,6 +213,18 @@ def _print_issue(issue: dict, truncate: int | None = None, requested_fields: str
         if parts:
             print(f"\n{' | '.join(parts)}")
 
+    # Attachments
+    if should_show('attachment') and field_available('attachment'):
+        attachments = fields.get('attachment', [])
+        if attachments:
+            print("\n" + "=" * 60)
+            print("ATTACHMENTS")
+            print("=" * 60)
+            for att in attachments:
+                filename = att.get('filename', 'Unknown')
+                url = att.get('content', '')
+                print(f"  • {filename} - {url}")
+
     print()
 
 
