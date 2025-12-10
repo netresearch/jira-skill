@@ -134,7 +134,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
                 print(f"Comments on {issue_key} ({len(comments)} shown):\n")
                 for c in comments:
                     author = c.get('author', {}).get('displayName', 'Unknown')
-                    created = c.get('created', '')[:10] if c.get('created') else 'N/A'
+                    created = c.get('created', '')[:16].replace('T', ' ') if c.get('created') else 'N/A'
                     body = c.get('body', '')
 
                     # Handle ADF format
@@ -145,9 +145,11 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
                     if truncate and len(body) > truncate:
                         body = body[:truncate-3] + "..."
 
-                    print(f"  [{created}] {author}:")
+                    print("-" * 80)
+                    print(f"[{created}] {author}:")
+                    print()
                     for line in body.split('\n'):
-                        print(f"    {line}")
+                        print(line)
                     print()
 
     except Exception as e:
