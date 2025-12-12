@@ -56,8 +56,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
 @click.option('--max-results', '-n', default=50, help='Maximum results to return')
 @click.option('--fields', '-f', default='key,summary,status,assignee,priority',
               help='Comma-separated fields to return')
+@click.option('--truncate', type=int, metavar='N', help='Truncate field values to N characters')
 @click.pass_context
-def query(ctx, jql: str, max_results: int, fields: str):
+def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
     """Search issues using JQL.
 
     JQL: Jira Query Language query string
@@ -102,7 +103,7 @@ def query(ctx, jql: str, max_results: int, fields: str):
             if not issues:
                 print("No issues found")
             else:
-                _print_results_table(issues, field_list)
+                _print_results_table(issues, field_list, truncate=truncate)
                 print(f"\n({len(issues)} issue{'s' if len(issues) != 1 else ''} found)")
 
     except Exception as e:
@@ -112,8 +113,14 @@ def query(ctx, jql: str, max_results: int, fields: str):
         sys.exit(1)
 
 
-def _print_results_table(issues: list, fields: list) -> None:
-    """Print search results as a table."""
+def _print_results_table(issues: list, fields: list, truncate: int | None = None) -> None:
+    """Print search results as a table.
+
+    Args:
+        issues: List of issue dicts from Jira API
+        fields: List of field names to display
+        truncate: If set, truncate field values to this many characters
+    """
     # Build table data
     rows = []
     for issue in issues:
@@ -145,9 +152,9 @@ def _print_results_table(issues: list, fields: list) -> None:
             else:
                 value = str(value)
 
-            # Truncate long values
-            if len(str(value)) > 40:
-                value = str(value)[:37] + '...'
+            # Truncate if requested
+            if truncate and len(str(value)) > truncate:
+                value = str(value)[:truncate-3] + '...'
 
             row[field] = value
 
