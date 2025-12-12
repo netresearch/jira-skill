@@ -6,7 +6,8 @@ description: >
   (3) Create new issues, (4) Transition issue status (e.g., "To Do" → "Done"),
   (5) Add comments, (6) Log work time (worklogs), (7) List sprints and sprint issues,
   (8) List boards and board issues, (9) Create or list issue links,
-  (10) Discover available Jira fields, (11) Get user profile information.
+  (10) Discover available Jira fields, (11) Get user profile information,
+  (12) Download attachments from issues.
   Supports both Jira Cloud and Server/Data Center with automatic auth detection.
 ---
 
@@ -38,6 +39,9 @@ Standalone CLI scripts for Jira operations using `uv run`.
 
 #### `scripts/core/jira-worklog.py`
 **When to use:** Add or list time tracking entries
+
+#### `scripts/core/jira-attachment.py`
+**When to use:** Download attachments from Jira issues
 
 ### Workflow Operations
 
@@ -113,6 +117,15 @@ uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Implemented featu
 ```bash
 uv run scripts/workflow/jira-create.py issue PROJ "Fix login bug" --type Bug
 uv run scripts/workflow/jira-transition.py do PROJ-124 "In Progress"
+```
+
+### Download an attachment
+```bash
+# Get issue with attachments listed
+uv run scripts/core/jira-issue.py get PROJ-123
+
+# Download attachment using URL from issue output
+uv run scripts/core/jira-attachment.py download /rest/api/2/attachment/content/12345 ./file.pdf
 ```
 
 ## Related Skills
