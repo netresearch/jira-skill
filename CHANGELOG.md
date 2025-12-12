@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2025-12-12
+
+### Added
+
+- **Attachment support**: Download and list issue attachments via `jira-issue.py`
+- **Output improvements**: Enhanced table formatting and field display (#4)
+
+### Fixed
+
+- **jira-transition.py**: Use `set_issue_status` for Jira Server/DC compatibility
+- **jira-comment.py**: Restore comment support via `update` parameter
+- **Consistency improvements**: Standardized output formatting across scripts
+
+### Documentation
+
+- **AGENTS.md**: Adopt [agents.md](https://agents.md) convention for AI agent instructions
+  - Root AGENTS.md with global rules and SKILL.md conventions
+  - Scoped AGENTS.md files for jira-communication and jira-syntax skills
+  - CLAUDE.md now symlinks to AGENTS.md for backward compatibility
+- **Branding**: Added Netresearch attribution to README.md and SKILL.md
+
 ## [3.0.2] - 2025-11-26
 
 ### Added
@@ -239,7 +260,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.0.2...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/netresearch/jira-skill/compare/v3.0.2...v3.1.0
 [3.0.2]: https://github.com/netresearch/jira-skill/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/netresearch/jira-skill/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/netresearch/jira-skill/compare/2.0.1...v3.0.0
