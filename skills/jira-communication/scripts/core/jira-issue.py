@@ -57,11 +57,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
 @click.option('--fields', '-f', help='Comma-separated fields to return')
 @click.option('--expand', '-e', help='Fields to expand (changelog,transitions,renderedFields)')
 @click.option('--truncate', type=int, metavar='N', help='Truncate description to N characters')
+@click.option('--full', is_flag=True, help='[DEPRECATED] Show full content (now default behavior)')
 @click.option('--json', 'cmd_json', is_flag=True, help='Output as JSON')
 @click.option('--quiet', '-q', 'cmd_quiet', is_flag=True, help='Minimal output')
 @click.pass_context
 def get(ctx, issue_key: str, fields: str | None, expand: str | None,
-        truncate: int | None, cmd_json: bool, cmd_quiet: bool):
+        truncate: int | None, full: bool, cmd_json: bool, cmd_quiet: bool):
     """Get issue details.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -75,6 +76,10 @@ def get(ctx, issue_key: str, fields: str | None, expand: str | None,
       jira-issue get PROJ-123 --expand changelog,transitions
     """
     client = ctx.obj['client']
+
+    # Warn about deprecated --full flag
+    if full:
+        warning("--full is deprecated (full content is now shown by default). Use --truncate N to limit output.")
 
     try:
         # Build parameters

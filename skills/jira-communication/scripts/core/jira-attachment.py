@@ -26,22 +26,27 @@ from lib.client import get_jira_client
 from lib.config import load_env
 from lib.output import success, error
 
-CHUNK_SIZE = 1048576  # 1 MB
+# Chunk size for streaming large file downloads (1 MB)
+CHUNK_SIZE = 1048576
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @click.group()
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@click.option('--quiet', '-q', is_flag=True, help='Minimal output')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     """Jira attachment operations.
 
     Download attachments from Jira issues.
     """
     ctx.ensure_object(dict)
+    ctx.obj['json'] = output_json
+    ctx.obj['quiet'] = quiet
     ctx.obj['env_file'] = env_file
     ctx.obj['debug'] = debug
 
@@ -112,7 +117,13 @@ def download(ctx, attachment_url: str, output_file: str):
             for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                 f.write(chunk)
 
-        success(f"Downloaded to: {output_file}")
+        if ctx.obj['quiet']:
+            print(output_file)
+        elif ctx.obj['json']:
+            import json
+            print(json.dumps({'status': 'success', 'file': output_file}))
+        else:
+            success(f"Downloaded to: {output_file}")
 
     except KeyError as e:
         if ctx.obj['debug']:
