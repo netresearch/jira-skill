@@ -1,12 +1,12 @@
 {
   "name": "netresearch/agent-jira-skill",
-  "description": "Claude Code skills for Jira API operations and wiki markup syntax",
+  "description": "Netresearch AI skill for Jira API operations and wiki markup syntax",
   "type": "ai-agent-skill",
   "license": "MIT",
   "authors": [
     {
       "name": "Netresearch DTT GmbH",
-      "email": "plugins@netresearch.de",
+      "email": "info@netresearch.de",
       "homepage": "https://www.netresearch.de/",
       "role": "Manufacturer"
     }
