@@ -112,7 +112,11 @@ def get_jira_client(env_file: Optional[str] = None) -> Jira:
 
     # Auto-detect if not specified
     if 'JIRA_CLOUD' not in config:
-        is_cloud = '.atlassian.net' in url.lower()
+        # Strict check: must end with .atlassian.net (not just contain it)
+        # This prevents bypass via malicious domains like attacker-atlassian.net.evil.com
+        from urllib.parse import urlparse
+        netloc = urlparse(url).netloc.lower()
+        is_cloud = netloc == 'atlassian.net' or netloc.endswith('.atlassian.net')
 
     try:
         if auth_mode == 'pat':

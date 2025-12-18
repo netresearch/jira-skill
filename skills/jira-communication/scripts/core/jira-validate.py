@@ -234,7 +234,11 @@ def main(output_json: bool, quiet: bool, verbose: bool, project: str | None,
         sys.exit(EXIT_CONFIG_ERROR)
 
     result['url'] = config['JIRA_URL']
-    result['server_type'] = 'cloud' if 'atlassian.net' in config['JIRA_URL'] else 'server'
+    # Strict check: must end with .atlassian.net (not just contain it)
+    from urllib.parse import urlparse
+    netloc = urlparse(config['JIRA_URL']).netloc.lower()
+    is_cloud = netloc == 'atlassian.net' or netloc.endswith('.atlassian.net')
+    result['server_type'] = 'cloud' if is_cloud else 'server'
     auth_mode = get_auth_mode(config)
     result['auth_mode'] = auth_mode
     if auth_mode == 'basic':
