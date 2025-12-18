@@ -1,19 +1,48 @@
 ---
 name: jira-communication
 description: >
-  Jira API operations via Python CLI scripts. Use when Claude needs to:
+  Jira API operations via Python CLI scripts. AUTOMATICALLY TRIGGER when user
+  mentions Jira URLs (https://jira.*/browse/*, https://*.atlassian.net/browse/*),
+  issue keys (PROJ-123), or asks about Jira issues. Use when Claude needs to:
   (1) Search issues with JQL queries, (2) Get or update issue details,
   (3) Create new issues, (4) Transition issue status (e.g., "To Do" → "Done"),
   (5) Add comments, (6) Log work time (worklogs), (7) List sprints and sprint issues,
   (8) List boards and board issues, (9) Create or list issue links,
   (10) Discover available Jira fields, (11) Get user profile information,
   (12) Download attachments from issues.
+  If authentication fails, offer interactive credential setup via jira-setup.py.
   Supports both Jira Cloud and Server/Data Center with automatic auth detection.
 ---
 
 # Jira Communication
 
 Standalone CLI scripts for Jira operations using `uv run`.
+
+## Auto-Trigger Patterns
+
+This skill MUST be automatically triggered when the user mentions:
+- **Jira URLs**: `https://jira.*/browse/*`, `https://*.atlassian.net/browse/*`
+- **Issue keys**: Pattern like `PROJ-123`, `NRS-4167`, `ABC-1`
+- **Jira operations**: "Jira issue", "Jira ticket", "search Jira", etc.
+
+When triggered by a URL like `https://jira.example.com/browse/PROJ-123`:
+1. Extract the issue key (e.g., `PROJ-123`) from the URL
+2. Run `jira-issue.py get PROJ-123` to fetch details
+3. If auth fails → offer interactive setup (see below)
+
+## Authentication Failure Handling
+
+**IMPORTANT**: When authentication fails, DO NOT just show the error. Instead:
+
+1. **Detect the failure** - Look for "Missing required variable" or auth errors
+2. **Offer interactive setup** - Ask user: "Would you like me to help configure Jira credentials?"
+3. **If yes** - Run: `uv run scripts/core/jira-setup.py`
+4. **Guide the user** - The script will interactively:
+   - Ask for Jira URL
+   - Detect Cloud vs Server/DC
+   - Prompt for credentials (API token or PAT)
+   - Validate before saving
+   - Create `~/.env.jira` with proper permissions
 
 ## Instructions
 
@@ -27,6 +56,9 @@ Standalone CLI scripts for Jira operations using `uv run`.
 ## Available Scripts
 
 ### Core Operations
+
+#### `scripts/core/jira-setup.py`
+**When to use:** Interactive credential configuration when auth fails or no credentials exist
 
 #### `scripts/core/jira-validate.py`
 **When to use:** Verify Jira connection and credentials

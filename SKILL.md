@@ -1,11 +1,37 @@
 ---
 name: jira-integration
-description: "Comprehensive Jira integration through lightweight Python scripts. Use when searching issues (JQL), getting/updating issue details, creating issues, transitioning status, adding comments, logging worklogs, managing sprints and boards, creating issue links, or formatting Jira wiki markup. Supports both Jira Cloud and Server/Data Center with automatic authentication detection. By Netresearch."
+description: "Comprehensive Jira integration through lightweight Python scripts. AUTOMATICALLY TRIGGER when user mentions Jira URLs like 'https://jira.*/browse/*', 'https://*.atlassian.net/browse/*', or issue keys like 'PROJ-123'. Use when searching issues (JQL), getting/updating issue details, creating issues, transitioning status, adding comments, logging worklogs, managing sprints and boards, creating issue links, or formatting Jira wiki markup. If authentication fails, offer to configure credentials interactively. Supports both Jira Cloud and Server/Data Center with automatic authentication detection. By Netresearch."
 ---
 
 # Jira Integration Skill
 
 Comprehensive Jira integration through lightweight Python CLI scripts.
+
+## Auto-Trigger Patterns
+
+**AUTOMATICALLY ACTIVATE** when user mentions:
+- **Jira URLs**: `https://jira.*/browse/*`, `https://*.atlassian.net/browse/*`, `https://*/jira/browse/*`
+- **Issue keys**: Pattern like `PROJ-123`, `NRS-4167`, `ABC-1` (uppercase letters + hyphen + numbers)
+- **Keywords**: "Jira issue", "Jira ticket", "search Jira", "open this ticket"
+
+**Example triggers:**
+- "I want to work on https://jira.netresearch.de/browse/NRS-4167" → Extract NRS-4167, fetch issue
+- "What's the status of PROJ-123?" → Fetch issue PROJ-123
+- "Search Jira for my open issues" → Run JQL search
+
+## Authentication Failure Handling
+
+**CRITICAL**: When authentication fails, DO NOT just display the error. Instead:
+
+1. **Detect failure** - Look for "Missing required variable", "Configuration errors", or 401/403 responses
+2. **Offer help** - Ask: "Jira credentials aren't configured. Would you like me to help set them up?"
+3. **Run interactive setup** - Execute: `uv run skills/jira-communication/scripts/core/jira-setup.py`
+4. **The script will**:
+   - Prompt for Jira URL
+   - Auto-detect Cloud vs Server/DC
+   - Ask for credentials (API token or Personal Access Token)
+   - Validate credentials before saving
+   - Create `~/.env.jira` with secure permissions (600)
 
 ## When to Use This Skill
 
@@ -84,6 +110,7 @@ uv run scripts/workflow/jira-transition.py PROJ-123 "In Progress"
 ### Core Operations
 | Script | Purpose |
 |--------|---------|
+| `jira-setup.py` | **Interactive credential setup** (run when auth fails) |
 | `jira-validate.py` | Verify connection and credentials |
 | `jira-issue.py` | Get or update issue details |
 | `jira-search.py` | Search with JQL queries |
