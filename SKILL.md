@@ -123,3 +123,8 @@ uv run scripts/workflow/jira-transition.py PROJ-123 "In Progress"
 | `[PROJ-123]` | Issue link |
 
 See `skills/jira-syntax/SKILL.md` for complete syntax guide.
+
+---
+
+> **Contributing:** Improvements to this skill should be submitted to the source repository:
+> https://github.com/netresearch/jira-skill
