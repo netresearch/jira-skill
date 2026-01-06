@@ -18,13 +18,7 @@
     "templates"
   ],
   "skills": [
-    {
-      "name": "jira-communication",
-      "path": "skills/jira-communication"
-    },
-    {
-      "name": "jira-syntax",
-      "path": "skills/jira-syntax"
-    }
+    "./skills/jira-communication",
+    "./skills/jira-syntax"
   ]
 }
