@@ -80,11 +80,11 @@ def create(ctx, from_key: str, to_key: str, link_type: str, dry_run: bool):
         return
 
     try:
-        client.create_issue_link(
-            type=link_type,
-            inwardIssue=to_key,
-            outwardIssue=from_key
-        )
+        client.create_issue_link({
+            "type": {"name": link_type},
+            "inwardIssue": {"key": to_key},
+            "outwardIssue": {"key": from_key}
+        })
 
         if ctx.obj['json']:
             format_output({
