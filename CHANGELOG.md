@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.3] - 2026-01-06
+
+### Added
+
+- **Agent Skills branding**: Cross-platform compatibility improvements (#6)
+
+### Fixed
+
+- **plugin.json**: Update skills schema to path strings format (breaking schema change)
+
+### Changed
+
+- **Author metadata**: Remove email from author nodes, add URL to plugin.json
+- **Documentation**: Add source repository footer for contributions
+
+## [3.1.2] - 2025-12-19
+
+### Added
+
+- **Auto-trigger**: Automatic activation on Jira URLs and interactive auth setup
+- **CAPTCHA detection**: Challenge detection for Jira Server/DC authentication
+
+### Fixed
+
+- **Security**: Address security issues identified by CodeQL scan
+- **skill-creator**: Apply skill-creator best practices to SKILL.md files
+
+## [3.1.1] - 2025-12-15
+
+### Fixed
+
+- **composer.json**: Add Netresearch to description, update email
+
 ## [3.1.0] - 2025-12-12
 
 ### Added
@@ -260,7 +293,10 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.1.3...HEAD
+[3.1.3]: https://github.com/netresearch/jira-skill/compare/v3.1.2...v3.1.3
+[3.1.2]: https://github.com/netresearch/jira-skill/compare/v3.1.1...v3.1.2
+[3.1.1]: https://github.com/netresearch/jira-skill/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/netresearch/jira-skill/compare/v3.0.2...v3.1.0
 [3.0.2]: https://github.com/netresearch/jira-skill/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/netresearch/jira-skill/compare/v3.0.0...v3.0.1
