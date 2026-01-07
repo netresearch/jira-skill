@@ -16,169 +16,69 @@ description: >
 
 # Jira Communication
 
-Standalone CLI scripts for Jira operations using `uv run`.
+CLI scripts for Jira operations using `uv run`. All scripts support `--help`, `--json`, `--quiet`, `--debug`.
 
-## Auto-Trigger Patterns
+## Auto-Trigger
 
-This skill MUST be automatically triggered when the user mentions:
+Trigger when user mentions:
 - **Jira URLs**: `https://jira.*/browse/*`, `https://*.atlassian.net/browse/*`
-- **Issue keys**: Pattern like `PROJ-123`, `NRS-4167`, `ABC-1`
-- **Jira operations**: "Jira issue", "Jira ticket", "search Jira", etc.
+- **Issue keys**: `PROJ-123`, `NRS-4167`
 
-When triggered by a URL like `https://jira.example.com/browse/PROJ-123`:
-1. Extract the issue key (e.g., `PROJ-123`) from the URL
-2. Run `jira-issue.py get PROJ-123` to fetch details
-3. If auth fails → offer interactive setup (see below)
+When triggered by URL → extract issue key → run `jira-issue.py get PROJ-123`
 
-## Authentication Failure Handling
+## Auth Failure Handling
 
-**IMPORTANT**: When authentication fails, DO NOT just show the error. Instead:
+When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credential setup)
 
-1. **Detect the failure** - Look for "Missing required variable" or auth errors
-2. **Offer interactive setup** - Ask user: "Would you like me to help configure Jira credentials?"
-3. **If yes** - Run: `uv run scripts/core/jira-setup.py`
-4. **Guide the user** - The script will interactively:
-   - Ask for Jira URL
-   - Detect Cloud vs Server/DC
-   - Prompt for credentials (API token or PAT)
-   - Validate before saving
-   - Create `~/.env.jira` with proper permissions
+## Scripts
 
-## Instructions
+| Script | Purpose |
+|--------|---------|
+| `scripts/core/jira-setup.py` | Interactive credential config |
+| `scripts/core/jira-validate.py` | Verify connection |
+| `scripts/core/jira-issue.py` | Get/update issue details |
+| `scripts/core/jira-search.py` | Search with JQL |
+| `scripts/core/jira-worklog.py` | Time tracking |
+| `scripts/core/jira-attachment.py` | Download attachments |
+| `scripts/workflow/jira-create.py` | Create issues |
+| `scripts/workflow/jira-transition.py` | Change status |
+| `scripts/workflow/jira-comment.py` | Add comments |
+| `scripts/workflow/jira-sprint.py` | List sprints |
+| `scripts/workflow/jira-board.py` | List boards |
+| `scripts/utility/jira-user.py` | User info |
+| `scripts/utility/jira-fields.py` | Search fields |
+| `scripts/utility/jira-link.py` | Issue links |
 
-- **Default to `--json` flag** when processing data programmatically
-- **Don't read scripts** - use `<script>.py --help` to understand options
-- **Validate first**: Run `jira-validate.py` before other operations
-- **Dry-run writes**: Use `--dry-run` for create/update/transition operations
-- **Credentials**: Via `~/.env.jira` file or environment variables (see Authentication)
-- **Content formatting**: Use **jira-syntax** skill for descriptions/comments (Jira wiki markup, NOT Markdown)
+## Critical: Flag Ordering
 
-## Available Scripts
-
-### Core Operations
-
-#### `scripts/core/jira-setup.py`
-**When to use:** Interactive credential configuration when auth fails or no credentials exist
-
-#### `scripts/core/jira-validate.py`
-**When to use:** Verify Jira connection and credentials
-
-#### `scripts/core/jira-issue.py`
-**When to use:** Get or update issue details
-
-#### `scripts/core/jira-search.py`
-**When to use:** Search issues with JQL queries
-
-#### `scripts/core/jira-worklog.py`
-**When to use:** Add or list time tracking entries
-
-#### `scripts/core/jira-attachment.py`
-**When to use:** Download attachments from Jira issues
-
-### Workflow Operations
-
-#### `scripts/workflow/jira-create.py`
-**When to use:** Create new issues (use **jira-syntax** skill for description content)
-
-#### `scripts/workflow/jira-transition.py`
-**When to use:** Change issue status (e.g., "In Progress" → "Done")
-
-#### `scripts/workflow/jira-comment.py`
-**When to use:** Add comments to issues (use **jira-syntax** skill for formatting)
-
-#### `scripts/workflow/jira-sprint.py`
-**When to use:** List sprints or sprint issues
-
-#### `scripts/workflow/jira-board.py`
-**When to use:** List boards or board issues
-
-### Utility Operations
-
-#### `scripts/utility/jira-user.py`
-**When to use:** Get user profile information
-
-#### `scripts/utility/jira-fields.py`
-**When to use:** Search available Jira fields
-
-#### `scripts/utility/jira-link.py`
-**When to use:** Create or list issue links
-
-## ⚠️ Flag Ordering (Critical)
-
-Global flags **MUST** come **before** the subcommand:
-
+Global flags **MUST** come **before** subcommand:
 ```bash
-# ✓ Correct
-uv run scripts/core/jira-issue.py --json get PROJ-123
-
-# ✗ Wrong - fails with "No such option"
-uv run scripts/core/jira-issue.py get PROJ-123 --json
+# Correct:  uv run scripts/core/jira-issue.py --json get PROJ-123
+# Wrong:    uv run scripts/core/jira-issue.py get PROJ-123 --json
 ```
 
-## Quick Start
-
-All scripts support `--help`, `--json`, `--quiet`, and `--debug`.
+## Quick Examples
 
 ```bash
-# Validate setup first
 uv run scripts/core/jira-validate.py --verbose
-
-# Search issues
-uv run scripts/core/jira-search.py query "project = PROJ AND status = Open"
-
-# Get issue details
+uv run scripts/core/jira-search.py query "assignee = currentUser()"
 uv run scripts/core/jira-issue.py get PROJ-123
-
-# Transition with dry-run
+uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
-```
-
-## Common Workflows
-
-### Find my open issues and get details
-```bash
-uv run scripts/core/jira-search.py --json query "assignee = currentUser() AND status != Done"
-```
-
-### Log 2 hours of work
-```bash
-uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Implemented feature X"
-```
-
-### Create and transition an issue
-```bash
-uv run scripts/workflow/jira-create.py issue PROJ "Fix login bug" --type Bug
-uv run scripts/workflow/jira-transition.py do PROJ-124 "In Progress"
-```
-
-### Download an attachment
-```bash
-# Get issue with attachments listed
-uv run scripts/core/jira-issue.py get PROJ-123
-
-# Download attachment using URL from issue output
-uv run scripts/core/jira-attachment.py download /rest/api/2/attachment/content/12345 ./file.pdf
 ```
 
 ## Related Skills
 
-**jira-syntax**: Use for formatting descriptions and comments. Jira uses wiki markup, NOT Markdown.
-- `*bold*` not `**bold**`
-- `h2. Heading` not `## Heading`
-- `{code:python}...{code}` not triple backticks
+**jira-syntax**: For descriptions/comments. Jira uses wiki markup, NOT Markdown.
 
 ## References
 
-- **JQL syntax**: See [references/jql-quick-reference.md](references/jql-quick-reference.md)
-- **Troubleshooting**: See [references/troubleshooting.md](references/troubleshooting.md)
+- `references/jql-quick-reference.md` - JQL syntax
+- `references/troubleshooting.md` - Setup and auth issues
 
 ## Authentication
 
-Configuration loaded in priority order:
-1. `~/.env.jira` file (if exists)
-2. Environment variables (fallback for missing values)
+**Cloud**: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`
+**Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
 
-**Jira Cloud**: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`
-**Jira Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
-
-Run `jira-validate.py --verbose` to verify setup. See [references/troubleshooting.md](references/troubleshooting.md) for detailed setup.
+Config via `~/.env.jira` or env vars. Run `jira-validate.py --verbose` to verify.
