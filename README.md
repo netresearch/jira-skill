@@ -49,6 +49,8 @@ This is an **Agent Skill** following the [open standard](https://agentskills.io)
 
 ## Quick Start
 
+> **Note:** Run commands from `skills/jira-communication/`, or prefix paths with `skills/jira-communication/` from the repo root.
+
 ```bash
 # Search issues
 uv run scripts/core/jira-search.py query "project = PROJ AND status = 'In Progress'"
@@ -69,10 +71,12 @@ uv run scripts/workflow/jira-create.py issue PROJ "Fix bug" --type Bug --priorit
 
 | Script | Commands | Usage |
 |--------|----------|-------|
+| `jira-setup.py` | (default) | Interactive credential setup |
 | `jira-validate.py` | (default) | Validate environment setup |
 | `jira-issue.py` | get, update | Get and update issues |
 | `jira-search.py` | query | JQL search |
 | `jira-worklog.py` | add, list | Time tracking |
+| `jira-attachment.py` | download | Download issue attachments |
 
 ### Workflow Operations (scripts/workflow/)
 
@@ -208,10 +212,6 @@ uv run scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks" --d
 ## Related Skills
 
 - **jira-syntax** - Jira wiki markup validation and templates (unchanged)
-
-## Migration
-
-Migrating from v2.x (MCP-based)? See [Migration Guide](skills/jira-communication/references/migration-guide.md).
 
 ## Troubleshooting
 
