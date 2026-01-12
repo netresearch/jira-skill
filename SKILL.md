@@ -7,6 +7,8 @@ description: "Agent Skill: Comprehensive Jira integration through lightweight Py
 
 Comprehensive Jira integration through lightweight Python CLI scripts.
 
+> **Note:** Run scripts from `skills/jira-communication/`, or use full paths from repo root.
+
 ## Auto-Trigger Patterns
 
 **AUTOMATICALLY ACTIVATE** when user mentions:
@@ -39,13 +41,14 @@ Comprehensive Jira integration through lightweight Python CLI scripts.
 | `jira-issue.py` | Get/update issue details |
 | `jira-search.py` | Search with JQL |
 | `jira-worklog.py` | Time tracking |
-| `jira-comment.py` | Comments |
+| `jira-attachment.py` | Download attachments |
 
 ### Workflow Operations
 | Script | Purpose |
 |--------|---------|
 | `jira-create.py` | Create issues |
 | `jira-transition.py` | Change status |
+| `jira-comment.py` | Comments |
 | `jira-link.py` | Issue links |
 | `jira-sprint.py` | Sprint management |
 | `jira-board.py` | Board operations |
