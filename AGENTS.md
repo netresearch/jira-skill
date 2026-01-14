@@ -1,4 +1,4 @@
-<!-- Managed by agent: keep sections & order; edit content, not structure. Last updated: 2025-12-12 -->
+<!-- Managed by agent: keep sections & order; edit content, not structure. Last updated: 2026-01-14 -->
 
 # AGENTS.md (root)
 
@@ -21,6 +21,17 @@ Claude Code plugin with two skills. See SKILL.md in each skill directory for usa
 # Verify scripts still work
 uv run skills/jira-communication/scripts/core/jira-validate.py --help
 ```
+
+## Release workflow
+
+1. Check commits since last release: `git log --oneline v<last>..HEAD`
+2. Backfill any missing CHANGELOG entries
+3. Update CHANGELOG.md with new version entry
+4. Bump version in `.claude-plugin/plugin.json`
+5. Commit: `git commit -m "chore: release v<version>"`
+6. Tag: `git tag v<version>`
+7. Push: `git push origin main --tags`
+8. Create GitHub release: `gh release create v<version>` (notes from CHANGELOG)
 
 ## Index of scoped AGENTS.md
 
