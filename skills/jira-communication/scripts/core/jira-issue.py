@@ -293,11 +293,22 @@ def update(ctx, issue_key: str, summary: str | None, priority: str | None,
         update_fields['labels'] = [l.strip() for l in labels.split(',')]
 
     if assignee:
-        # Handle different assignee formats
-        if '@' in assignee:
-            update_fields['assignee'] = {'emailAddress': assignee}
+        if ':' in assignee and len(assignee) > 20:
+            update_fields['assignee'] = {'accountId': assignee}
+        elif '@' in assignee:
+            users = client.user_find_by_user_string(query=assignee)
+            if users:
+                update_fields['assignee'] = {'accountId': users[0]['accountId']}
+            else:
+                error(f"User not found: {assignee}")
+                sys.exit(1)
         else:
-            update_fields['assignee'] = {'name': assignee}
+            users = client.user_find_by_user_string(query=assignee)
+            if users:
+                update_fields['assignee'] = {'accountId': users[0]['accountId']}
+            else:
+                error(f"User not found: {assignee}")
+                sys.exit(1)
 
     if fields_json:
         try:
