@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.6] - 2026-01-14
+
+### Fixed
+
+- **jira-issue.py**: Use `accountId` for assignee updates on Jira Cloud (#9)
+- **jira-link.py**: Use correct API format for `create_issue_link`
+- **Documentation**: Add working directory note and fix script tables (#8)
+
+## [3.1.5] - 2026-01-07
+
+### Changed
+
+- **SKILL.md**: Reduce size for context efficiency
+
+## [3.1.4] - 2026-01-07
+
+### Changed
+
+- **jira-communication SKILL.md**: Reduce size for context efficiency
+
 ## [3.1.3] - 2026-01-06
 
 ### Added
