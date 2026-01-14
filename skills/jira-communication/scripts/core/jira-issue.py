@@ -9,8 +9,17 @@
 """Jira issue operations - get and update issue details."""
 
 import json
+import re
 import sys
 from pathlib import Path
+
+ACCOUNT_ID_PATTERN = re.compile(r'^[a-zA-Z0-9:\-]+$')
+LEGACY_ACCOUNT_ID_PATTERN = re.compile(r'^[a-f0-9]{24}$')
+
+def is_account_id(s: str) -> bool:
+    if ':' in s:
+        return bool(ACCOUNT_ID_PATTERN.match(s))
+    return bool(LEGACY_ACCOUNT_ID_PATTERN.match(s))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared library import (TR1.1.1 - PYTHONPATH approach)
@@ -293,15 +302,8 @@ def update(ctx, issue_key: str, summary: str | None, priority: str | None,
         update_fields['labels'] = [l.strip() for l in labels.split(',')]
 
     if assignee:
-        if ':' in assignee and len(assignee) > 20:
+        if is_account_id(assignee):
             update_fields['assignee'] = {'accountId': assignee}
-        elif '@' in assignee:
-            users = client.user_find_by_user_string(query=assignee)
-            if users:
-                update_fields['assignee'] = {'accountId': users[0]['accountId']}
-            else:
-                error(f"User not found: {assignee}")
-                sys.exit(1)
         else:
             users = client.user_find_by_user_string(query=assignee)
             if users:
