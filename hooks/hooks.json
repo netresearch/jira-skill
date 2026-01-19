@@ -1,0 +1,16 @@
+{
+  "description": "Jira integration hooks for automatic issue detection and context",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/detect_jira_issues.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
