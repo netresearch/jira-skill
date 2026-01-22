@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build full plugin package
+        run: |
+          mkdir -p dist
+          zip -r "dist/jira-integration-plugin-${{ steps.version.outputs.VERSION }}.zip" . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "dist/*" \
+            -x "*.pyc" \
+            -x "__pycache__/*" \
+            -x ".DS_Store"
+
+      - name: Build jira-communication skill package
+        run: |
+          SKILL_DIR="skills/jira-communication"
+          TEMP_DIR=$(mktemp -d)
+
+          # Copy skill contents to temp dir (flat structure for Claude Desktop)
+          cp "$SKILL_DIR/SKILL.md" "$TEMP_DIR/"
+          cp -r "$SKILL_DIR/scripts" "$TEMP_DIR/"
+          cp -r "$SKILL_DIR/references" "$TEMP_DIR/"
+          cp LICENSE "$TEMP_DIR/"
+
+          # Create ZIP from temp dir
+          cd "$TEMP_DIR"
+          zip -r "$GITHUB_WORKSPACE/dist/jira-communication-skill-${{ steps.version.outputs.VERSION }}.zip" .
+          cd -
+          rm -rf "$TEMP_DIR"
+
+      - name: Build jira-syntax skill package
+        run: |
+          SKILL_DIR="skills/jira-syntax"
+          TEMP_DIR=$(mktemp -d)
+
+          # Copy skill contents to temp dir (flat structure for Claude Desktop)
+          cp "$SKILL_DIR/SKILL.md" "$TEMP_DIR/"
+          cp -r "$SKILL_DIR/scripts" "$TEMP_DIR/"
+          cp -r "$SKILL_DIR/templates" "$TEMP_DIR/"
+          cp -r "$SKILL_DIR/references" "$TEMP_DIR/"
+          cp LICENSE "$TEMP_DIR/"
+
+          # Create ZIP from temp dir
+          cd "$TEMP_DIR"
+          zip -r "$GITHUB_WORKSPACE/dist/jira-syntax-skill-${{ steps.version.outputs.VERSION }}.zip" .
+          cd -
+          rm -rf "$TEMP_DIR"
+
+      - name: List packages
+        run: ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/jira-integration-plugin-${{ steps.version.outputs.VERSION }}.zip
+            dist/jira-communication-skill-${{ steps.version.outputs.VERSION }}.zip
+            dist/jira-syntax-skill-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true
+          body: |
+            ## Downloads
+
+            | Package | Description |
+            |---------|-------------|
+            | `jira-integration-plugin-${{ steps.version.outputs.VERSION }}.zip` | Full plugin with both skills (for multi-skill compatible tools) |
+            | `jira-communication-skill-${{ steps.version.outputs.VERSION }}.zip` | Jira API operations skill (Claude Desktop compatible) |
+            | `jira-syntax-skill-${{ steps.version.outputs.VERSION }}.zip` | Jira wiki markup syntax skill (Claude Desktop compatible) |
+
+            **Claude Desktop users**: Download the individual skill packages (`jira-communication-skill` or `jira-syntax-skill`).

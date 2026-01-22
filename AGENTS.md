@@ -1,4 +1,4 @@
-<!-- Managed by agent: keep sections & order; edit content, not structure. Last updated: 2026-01-14 -->
+<!-- Managed by agent: keep sections & order; edit content, not structure. Last updated: 2026-01-22 -->
 
 # AGENTS.md (root)
 
@@ -24,6 +24,15 @@ uv run skills/jira-communication/scripts/core/jira-validate.py --help
 
 ## Release workflow
 
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On tag push, it creates 3 packages:
+
+| Package | Description |
+|---------|-------------|
+| `jira-integration-plugin-vX.X.X.zip` | Full plugin (multi-skill compatible tools) |
+| `jira-communication-skill-vX.X.X.zip` | Standalone skill (Claude Desktop compatible) |
+| `jira-syntax-skill-vX.X.X.zip` | Standalone skill (Claude Desktop compatible) |
+
+**Steps:**
 1. Check commits since last release: `git log --oneline v<last>..HEAD`
 2. Backfill any missing CHANGELOG entries
 3. Update CHANGELOG.md with new version entry
@@ -31,7 +40,8 @@ uv run skills/jira-communication/scripts/core/jira-validate.py --help
 5. Commit: `git commit -m "chore: release v<version>"`
 6. Tag: `git tag v<version>`
 7. Push: `git push origin main --tags`
-8. Create GitHub release: `gh release create v<version>` (notes from CHANGELOG)
+
+The GitHub Action automatically creates the release with all 3 download packages.
 
 ## Index of scoped AGENTS.md
 
