@@ -1,10 +1,19 @@
-# Jira Skill for Claude Code
+# Jira Integration Plugin for Claude Code
 
-Comprehensive Jira integration through lightweight Python scripts.
+A Claude Code plugin providing comprehensive Jira integration through two specialized skills.
 
-## 🔌 Compatibility
+## Plugin Structure
 
-This is an **Agent Skill** following the [open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use.
+| Skill | Purpose |
+|-------|---------|
+| `jira-communication` | API operations via Python CLI scripts |
+| `jira-syntax` | Wiki markup syntax, templates, validation |
+
+Each skill has its own `SKILL.md` with trigger conditions and usage instructions. Claude Code auto-discovers and activates skills based on context.
+
+## 🔌 Skill Compatibility
+
+The skills contained in this plugin follow the [Agent Skills open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use.
 
 **Supported Platforms:**
 - ✅ Claude Code (Anthropic)
@@ -23,6 +32,36 @@ This is an **Agent Skill** following the [open standard](https://agentskills.io)
 - **Jira Server/DC + Cloud** - Works with both deployment types
 
 ## Installation
+
+### Download Options
+
+Each release provides multiple packages to match your AI agent platform:
+
+| Package | Use Case |
+|---------|----------|
+| `jira-integration-plugin-vX.X.X.zip` | **Full plugin** - Platforms supporting multi-skill plugins |
+| `jira-communication-skill-vX.X.X.zip` | **Standalone skill** - Platforms requiring single SKILL.md per package |
+| `jira-syntax-skill-vX.X.X.zip` | **Standalone skill** - Wiki markup only (no API scripts) |
+
+Download from [Releases](https://github.com/netresearch/jira-skill/releases).
+
+### Installation
+
+Skills follow the [Agent Skills specification](https://agentskills.io/specification). Installation varies by platform:
+
+**Multi-skill platforms** (e.g., Claude Code CLI):
+```bash
+# Install the full plugin containing both skills
+claude plugins install path/to/jira-integration-plugin-vX.X.X.zip
+```
+
+**Single-skill platforms** (e.g., Claude Desktop, Cursor, GitHub Copilot):
+1. Download the standalone skill ZIP (`jira-communication-skill-*.zip` or `jira-syntax-skill-*.zip`)
+2. Import via your platform's skill/extension management
+
+Refer to your AI agent's documentation for specific installation instructions.
+
+### Prerequisites
 
 1. **Install uv** (Python package runner):
    ```bash
