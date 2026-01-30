@@ -1,6 +1,7 @@
 ---
-name: "jira-syntax"
+name: jira-syntax
 description: "Jira wiki markup syntax validation, templates, and formatting guidance. Use when: (1) Writing Jira issue descriptions or comments, (2) Converting Markdown to Jira wiki markup, (3) Requesting bug report or feature request templates, (4) Validating Jira syntax before submission, (5) Keywords like 'jira format', 'wiki markup', 'jira syntax', 'format for jira', (6) Ensuring content uses h2./h3. headings instead of Markdown ##, (7) Checking code blocks use {code:lang} not triple backticks, (8) Any task involving Jira text formatting"
+allowed-tools: Bash(scripts/validate-jira-syntax.sh:*) Read
 ---
 
 # Jira Syntax Validation Skill
