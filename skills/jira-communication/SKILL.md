@@ -12,6 +12,7 @@ description: >
   (12) Download attachments from issues.
   If authentication fails, offer interactive credential setup via jira-setup.py.
   Supports both Jira Cloud and Server/Data Center with automatic auth detection.
+allowed-tools: Bash(uv run scripts/*:*) Read
 ---
 
 # Jira Communication
