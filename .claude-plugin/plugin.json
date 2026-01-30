@@ -1,6 +1,6 @@
 {
   "name": "jira-integration",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "description": "Comprehensive Jira integration with auto-detection of issue keys",
   "repository": "https://github.com/netresearch/jira-skill",
   "license": "MIT",
