@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-01-30
+
+### Added
+
+- **allowed-tools field** (experimental): Pre-approved tool permissions per Agent Skills spec
+  - jira-communication: `Bash(uv run scripts/*:*) Read`
+  - jira-syntax: `Bash(scripts/validate-jira-syntax.sh:*) Read`
+  - See: https://agentskills.io/specification#allowed-tools-field
+- **GitHub Actions release workflow**: Automated package building on tag push (#11)
+  - `jira-integration-plugin-*.zip` - Full plugin for multi-skill platforms
+  - `jira-communication-skill-*.zip` - Standalone skill for Claude Desktop
+  - `jira-syntax-skill-*.zip` - Standalone skill for Claude Desktop
+
+### Changed
+
+- **README.md**: Clarify this is a plugin containing skills, not a standalone skill
+- **README.md**: Add installation options for plugin vs individual skill packages
+- **README.md**: Reference Agent Skills specification for cross-platform compatibility
+- Remove root-level SKILL.md (redundant for plugin architecture)
+
+## [3.2.1] - 2026-01-22
+
+### Fixed
+
+- **hooks.json**: Remove duplicate hooks declaration (#12)
+
+## [3.2.0] - 2026-01-22
+
+### Added
+
+- **UserPromptSubmit hook**: Auto-detect Jira issue keys in user prompts (#10)
+- **AGENTS.md**: Document release workflow
+
 ## [3.1.6] - 2026-01-14
 
 ### Fixed
@@ -313,7 +346,13 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.1.3...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/netresearch/jira-skill/compare/v3.2.1...v3.3.0
+[3.2.1]: https://github.com/netresearch/jira-skill/compare/v3.2.0...v3.2.1
+[3.2.0]: https://github.com/netresearch/jira-skill/compare/v3.1.6...v3.2.0
+[3.1.6]: https://github.com/netresearch/jira-skill/compare/v3.1.5...v3.1.6
+[3.1.5]: https://github.com/netresearch/jira-skill/compare/v3.1.4...v3.1.5
+[3.1.4]: https://github.com/netresearch/jira-skill/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/netresearch/jira-skill/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/netresearch/jira-skill/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/netresearch/jira-skill/compare/v3.1.0...v3.1.1
