@@ -10,79 +10,91 @@ permissions:
 
 jobs:
   release:
+    name: Create Release
     runs-on: ubuntu-latest
+
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: echo "version=${{GITHUB_REF#refs/tags/}}" >> $GITHUB_OUTPUT
 
-      - name: Build full plugin package
+      - name: Create jira-communication skill package
         run: |
-          mkdir -p dist
-          zip -r "dist/jira-integration-plugin-${{ steps.version.outputs.VERSION }}.zip" . \
-            -x ".git/*" \
-            -x ".github/*" \
-            -x "dist/*" \
-            -x "*.pyc" \
-            -x "__pycache__/*" \
-            -x ".DS_Store"
-
-      - name: Build jira-communication skill package
+          mkdir -p dist-jira-communication-skill
+          cp skills/jira-communication/SKILL.md dist-jira-communication-skill/
+          cp LICENSE dist-jira-communication-skill/
+          [ -d "skills/jira-communication/references" ] && cp -r skills/jira-communication/references dist-jira-communication-skill/
+          [ -d "skills/jira-communication/scripts" ] && cp -r skills/jira-communication/scripts dist-jira-communication-skill/
+          [ -d "skills/jira-communication/assets" ] && cp -r skills/jira-communication/assets dist-jira-communication-skill/
+          [ -d "skills/jira-communication/templates" ] && cp -r skills/jira-communication/templates dist-jira-communication-skill/
+          [ -d "skills/jira-communication/examples" ] && cp -r skills/jira-communication/examples dist-jira-communication-skill/
+          [ -f "skills/jira-communication/checkpoints.yaml" ] && cp skills/jira-communication/checkpoints.yaml dist-jira-communication-skill/
+          cd dist-jira-communication-skill
+          zip -r ../jira-communication-skill-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../jira-communication-skill-${{ steps.version.outputs.version }}.tar.gz .
+      - name: Create jira-syntax skill package
         run: |
-          SKILL_DIR="skills/jira-communication"
-          TEMP_DIR=$(mktemp -d)
+          mkdir -p dist-jira-syntax-skill
+          cp skills/jira-syntax/SKILL.md dist-jira-syntax-skill/
+          cp LICENSE dist-jira-syntax-skill/
+          [ -d "skills/jira-syntax/references" ] && cp -r skills/jira-syntax/references dist-jira-syntax-skill/
+          [ -d "skills/jira-syntax/scripts" ] && cp -r skills/jira-syntax/scripts dist-jira-syntax-skill/
+          [ -d "skills/jira-syntax/assets" ] && cp -r skills/jira-syntax/assets dist-jira-syntax-skill/
+          [ -d "skills/jira-syntax/templates" ] && cp -r skills/jira-syntax/templates dist-jira-syntax-skill/
+          [ -d "skills/jira-syntax/examples" ] && cp -r skills/jira-syntax/examples dist-jira-syntax-skill/
+          [ -f "skills/jira-syntax/checkpoints.yaml" ] && cp skills/jira-syntax/checkpoints.yaml dist-jira-syntax-skill/
+          cd dist-jira-syntax-skill
+          zip -r ../jira-syntax-skill-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../jira-syntax-skill-${{ steps.version.outputs.version }}.tar.gz .
 
-          # Copy skill contents to temp dir (flat structure for Claude Desktop)
-          cp "$SKILL_DIR/SKILL.md" "$TEMP_DIR/"
-          cp -r "$SKILL_DIR/scripts" "$TEMP_DIR/"
-          cp -r "$SKILL_DIR/references" "$TEMP_DIR/"
-          cp LICENSE "$TEMP_DIR/"
-
-          # Create ZIP from temp dir
-          cd "$TEMP_DIR"
-          zip -r "$GITHUB_WORKSPACE/dist/jira-communication-skill-${{ steps.version.outputs.VERSION }}.zip" .
-          cd -
-          rm -rf "$TEMP_DIR"
-
-      - name: Build jira-syntax skill package
+      - name: Create jira-integration plugin package
         run: |
-          SKILL_DIR="skills/jira-syntax"
-          TEMP_DIR=$(mktemp -d)
-
-          # Copy skill contents to temp dir (flat structure for Claude Desktop)
-          cp "$SKILL_DIR/SKILL.md" "$TEMP_DIR/"
-          cp -r "$SKILL_DIR/scripts" "$TEMP_DIR/"
-          cp -r "$SKILL_DIR/templates" "$TEMP_DIR/"
-          cp -r "$SKILL_DIR/references" "$TEMP_DIR/"
-          cp LICENSE "$TEMP_DIR/"
-
-          # Create ZIP from temp dir
-          cd "$TEMP_DIR"
-          zip -r "$GITHUB_WORKSPACE/dist/jira-syntax-skill-${{ steps.version.outputs.VERSION }}.zip" .
-          cd -
-          rm -rf "$TEMP_DIR"
-
-      - name: List packages
-        run: ls -la dist/
+          mkdir -p dist-plugin
+          # Include jira-communication skill files
+          mkdir -p dist-plugin/skills/jira-communication
+          cp skills/jira-communication/SKILL.md dist-plugin/skills/jira-communication/
+          [ -d "skills/jira-communication/references" ] && cp -r skills/jira-communication/references dist-plugin/skills/jira-communication/
+          [ -d "skills/jira-communication/scripts" ] && cp -r skills/jira-communication/scripts dist-plugin/skills/jira-communication/
+          [ -d "skills/jira-communication/assets" ] && cp -r skills/jira-communication/assets dist-plugin/skills/jira-communication/
+          [ -d "skills/jira-communication/templates" ] && cp -r skills/jira-communication/templates dist-plugin/skills/jira-communication/
+          [ -d "skills/jira-communication/examples" ] && cp -r skills/jira-communication/examples dist-plugin/skills/jira-communication/
+          [ -f "skills/jira-communication/checkpoints.yaml" ] && cp skills/jira-communication/checkpoints.yaml dist-plugin/skills/jira-communication/
+          # Include jira-syntax skill files
+          mkdir -p dist-plugin/skills/jira-syntax
+          cp skills/jira-syntax/SKILL.md dist-plugin/skills/jira-syntax/
+          [ -d "skills/jira-syntax/references" ] && cp -r skills/jira-syntax/references dist-plugin/skills/jira-syntax/
+          [ -d "skills/jira-syntax/scripts" ] && cp -r skills/jira-syntax/scripts dist-plugin/skills/jira-syntax/
+          [ -d "skills/jira-syntax/assets" ] && cp -r skills/jira-syntax/assets dist-plugin/skills/jira-syntax/
+          [ -d "skills/jira-syntax/templates" ] && cp -r skills/jira-syntax/templates dist-plugin/skills/jira-syntax/
+          [ -d "skills/jira-syntax/examples" ] && cp -r skills/jira-syntax/examples dist-plugin/skills/jira-syntax/
+          [ -f "skills/jira-syntax/checkpoints.yaml" ] && cp skills/jira-syntax/checkpoints.yaml dist-plugin/skills/jira-syntax/
+          cp LICENSE dist-plugin/
+          # Include plugin manifest
+          [ -d ".claude-plugin" ] && cp -r .claude-plugin dist-plugin/
+          [ -d "hooks" ] && cp -r hooks dist-plugin/
+          [ -d "scripts" ] && cp -r scripts dist-plugin/ && find dist-plugin/scripts -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+          cd dist-plugin
+          zip -r ../jira-integration-plugin-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../jira-integration-plugin-${{ steps.version.outputs.version }}.tar.gz .
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           files: |
-            dist/jira-integration-plugin-${{ steps.version.outputs.VERSION }}.zip
-            dist/jira-communication-skill-${{ steps.version.outputs.VERSION }}.zip
-            dist/jira-syntax-skill-${{ steps.version.outputs.VERSION }}.zip
+            jira-communication-skill-${{ steps.version.outputs.version }}.zip
+            jira-communication-skill-${{ steps.version.outputs.version }}.tar.gz
+            jira-syntax-skill-${{ steps.version.outputs.version }}.zip
+            jira-syntax-skill-${{ steps.version.outputs.version }}.tar.gz
+            jira-integration-plugin-${{ steps.version.outputs.version }}.zip
+            jira-integration-plugin-${{ steps.version.outputs.version }}.tar.gz
           generate_release_notes: true
-          body: |
-            ## Downloads
-
-            | Package | Description |
-            |---------|-------------|
-            | `jira-integration-plugin-${{ steps.version.outputs.VERSION }}.zip` | Full plugin with both skills (for multi-skill compatible tools) |
-            | `jira-communication-skill-${{ steps.version.outputs.VERSION }}.zip` | Jira API operations skill (Claude Desktop compatible) |
-            | `jira-syntax-skill-${{ steps.version.outputs.VERSION }}.zip` | Jira wiki markup syntax skill (Claude Desktop compatible) |
-
-            **Claude Desktop users**: Download the individual skill packages (`jira-communication-skill` or `jira-syntax-skill`).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
