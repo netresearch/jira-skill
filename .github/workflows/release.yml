@@ -24,7 +24,7 @@ jobs:
 
       - name: Get version from tag
         id: version
-        run: echo "version=${{GITHUB_REF#refs/tags/}}" >> $GITHUB_OUTPUT
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Create jira-communication skill package
         run: |
