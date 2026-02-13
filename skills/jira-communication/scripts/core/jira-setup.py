@@ -2,16 +2,16 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0",
-#     "click>=8.1.0",
-#     "requests>=2.28.0",
+#     "atlassian-python-api>=3.41.0,<4",
+#     "click>=8.1.0,<9",
+#     "requests>=2.31.0,<3",
 # ]
 # ///
 """Interactive Jira credential setup - configure authentication interactively."""
 
+import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared library import (TR1.1.1 - PYTHONPATH approach)
@@ -21,11 +21,14 @@ _lib_path = _script_dir.parent / "lib"
 if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
+import json
+
 import click
 import requests
 from atlassian import Jira
-from lib.config import DEFAULT_ENV_FILE
-from lib.output import success, error, warning
+from lib.client import JIRA_TIMEOUT, _sanitize_error
+from lib.config import DEFAULT_ENV_FILE, PROFILES_FILE, is_cloud_url, load_env
+from lib.output import error, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exit Codes
@@ -44,13 +47,7 @@ def detect_jira_type(url: str) -> str:
     Returns:
         'cloud' for Atlassian Cloud, 'server' for Server/DC
     """
-    parsed = urlparse(url)
-    netloc = parsed.netloc.lower()
-    # Strict check: domain must be exactly atlassian.net or end with .atlassian.net
-    # This prevents bypass via malicious domains like attacker-atlassian.net.evil.com
-    if netloc == 'atlassian.net' or netloc.endswith('.atlassian.net'):
-        return 'cloud'
-    return 'server'
+    return 'cloud' if is_cloud_url(url) else 'server'
 
 
 def validate_url(url: str) -> tuple[bool, str]:
@@ -67,13 +64,23 @@ def validate_url(url: str) -> tuple[bool, str]:
 
     try:
         response = requests.head(url, timeout=10, allow_redirects=True)
-        if response.status_code < 500:
-            return True, f"Server reachable (status: {response.status_code})"
-        return False, f"Server error (status: {response.status_code})"
+        status = response.status_code
+        # 405 = HEAD not allowed — fall back to GET
+        if status == 405:
+            response = requests.get(url, timeout=10, allow_redirects=True, stream=True)
+            response.close()
+            status = response.status_code
+        if status < 400:
+            return True, f"Server reachable (status: {status})"
+        if status in (401, 403):
+            return True, f"Server reachable, authentication required (status: {status})"
+        if status < 500:
+            return False, f"Client error when contacting server (status: {status})"
+        return False, f"Server error (status: {status})"
     except requests.exceptions.Timeout:
         return False, "Connection timeout - server did not respond"
     except requests.exceptions.ConnectionError as e:
-        return False, f"Connection failed: {e}"
+        return False, f"Connection failed: {_sanitize_error(str(e))}"
 
 
 def validate_credentials(url: str, auth_type: str, **kwargs) -> tuple[bool, str]:
@@ -93,21 +100,35 @@ def validate_credentials(url: str, auth_type: str, **kwargs) -> tuple[bool, str]
                 url=url,
                 username=kwargs['username'],
                 password=kwargs['api_token'],
-                cloud=True
+                cloud=True,
+                timeout=JIRA_TIMEOUT,
             )
         else:
             client = Jira(
                 url=url,
-                token=kwargs['personal_token']
+                token=kwargs['personal_token'],
+                timeout=JIRA_TIMEOUT,
             )
 
         user = client.myself()
-        display_name = user.get('displayName', user.get('name', 'Unknown'))
-        email = user.get('emailAddress', '')
+        if isinstance(user, dict):
+            display_name = user.get('displayName', user.get('name', 'Unknown'))
+            email = user.get('emailAddress', '')
+        else:
+            user_str = str(user) if user else ''
+            # Detect HTML response (2FA/Secure Login intercept)
+            if user_str.lstrip().startswith(('<!DOCTYPE', '<html', '<HTML')):
+                return False, (
+                    "Two-factor authentication (2FA/Secure Login) intercepted the API call. "
+                    "Your PAT may not bypass 2FA on this instance. "
+                    "Check Jira admin settings or create a new PAT with API access."
+                )
+            display_name = user_str or 'Unknown'
+            email = ''
         return True, f"{display_name}" + (f" ({email})" if email else "")
 
     except Exception as e:
-        error_msg = str(e)
+        error_msg = _sanitize_error(str(e))
         if '401' in error_msg or 'Unauthorized' in error_msg:
             return False, "Authentication failed - invalid credentials"
         if '403' in error_msg or 'Forbidden' in error_msg:
@@ -140,8 +161,85 @@ def write_env_file(path: Path, config: dict) -> None:
 
     lines.append("")
 
-    path.write_text("\n".join(lines))
-    path.chmod(0o600)  # Restrict permissions
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write("\n".join(lines))
+    os.chmod(path, 0o600)
+
+
+def write_profile(profile_name: str, profile_data: dict) -> None:
+    """Write or update a profile in ~/.jira/profiles.json.
+
+    Args:
+        profile_name: Name for the profile
+        profile_data: Profile configuration dict (url, auth, token/credentials, projects)
+    """
+    profiles_dir = PROFILES_FILE.parent
+
+    # Load existing or create new
+    if PROFILES_FILE.exists():
+        try:
+            data = json.loads(PROFILES_FILE.read_text())
+        except json.JSONDecodeError:
+            warning(f"{PROFILES_FILE} is corrupted. Creating backup and starting fresh.")
+            PROFILES_FILE.replace(PROFILES_FILE.with_suffix('.json.bak'))
+            data = {'version': 1, 'profiles': {}}
+        else:
+            # Validate structure: must be a dict with a 'profiles' dict
+            if not isinstance(data, dict) or not isinstance(data.get('profiles'), dict):
+                warning(f"{PROFILES_FILE} has invalid structure. Creating backup and starting fresh.")
+                PROFILES_FILE.replace(PROFILES_FILE.with_suffix('.json.bak'))
+                data = {'version': 1, 'profiles': {}}
+    else:
+        profiles_dir.mkdir(parents=True, exist_ok=True)
+        data = {'version': 1, 'profiles': {}}
+
+    # Update profile
+    data['profiles'][profile_name] = profile_data
+
+    # Set default if first profile
+    if 'default' not in data or not data['default']:
+        data['default'] = profile_name
+
+    # Write with restricted permissions from creation (no race condition)
+    fd = os.open(PROFILES_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(json.dumps(data, indent=2) + '\n')
+    os.chmod(PROFILES_FILE, 0o600)
+
+
+def migrate_env_to_profile() -> None:
+    """Migrate ~/.env.jira to ~/.jira/profiles.json."""
+    if not DEFAULT_ENV_FILE.exists():
+        error(f"No env file found at {DEFAULT_ENV_FILE}")
+        sys.exit(EXIT_VALIDATION_FAILED)
+
+    if PROFILES_FILE.exists():
+        click.echo(f"⚠ Profiles file already exists: {PROFILES_FILE}")
+        if not click.confirm("Add legacy config as 'default' profile?", default=False):
+            click.echo("\nMigration cancelled.")
+            sys.exit(EXIT_USER_ABORT)
+
+    config = load_env()
+
+    url = config.get('JIRA_URL', '')
+    profile_data = {'url': url}
+
+    if config.get('JIRA_PERSONAL_TOKEN'):
+        profile_data['auth'] = 'pat'
+        profile_data['token'] = config['JIRA_PERSONAL_TOKEN']
+    else:
+        profile_data['auth'] = 'cloud'
+        profile_data['username'] = config.get('JIRA_USERNAME', '')
+        profile_data['api_token'] = config.get('JIRA_API_TOKEN', '')
+
+    profile_data['projects'] = []
+
+    write_profile('default', profile_data)
+    success(f"Migrated {DEFAULT_ENV_FILE} → {PROFILES_FILE} (profile: 'default')")
+    click.echo()
+    click.echo("You can now add project keys to the profile:")
+    click.echo(f'  Edit {PROFILES_FILE} and add project keys to "projects": []')
 
 
 @click.command()
@@ -152,41 +250,64 @@ def write_env_file(path: Path, config: dict) -> None:
               help=f'Output file path (default: {DEFAULT_ENV_FILE})')
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing file without prompting')
 @click.option('--test-only', is_flag=True, help='Test credentials without saving')
-def main(url: str | None, jira_type: str, output: str, force: bool, test_only: bool):
+@click.option('--profile', '-P', help='Save as named profile in ~/.jira/profiles.json')
+@click.option('--projects', help='Comma-separated project keys for the profile')
+@click.option('--migrate', is_flag=True, help='Migrate ~/.env.jira to profiles.json')
+def main(url: str | None, jira_type: str, output: str, force: bool, test_only: bool,
+         profile: str | None, projects: str | None, migrate: bool):
     """Interactive Jira credential setup.
 
     Guides you through configuring Jira authentication credentials
-    and validates them before saving to ~/.env.jira.
+    and validates them before saving to ~/.env.jira or ~/.jira/profiles.json.
 
     Supports both Jira Cloud (username + API token) and
     Jira Server/Data Center (Personal Access Token).
 
     \b
     Examples:
-      # Interactive setup
+      # Interactive setup (legacy env file)
       uv run scripts/core/jira-setup.py
+
+      # Setup as named profile
+      uv run scripts/core/jira-setup.py --profile mkk --url https://jira.example.com
 
       # Pre-fill URL
       uv run scripts/core/jira-setup.py --url https://company.atlassian.net
 
       # Test credentials without saving
       uv run scripts/core/jira-setup.py --test-only
+
+      # Migrate existing .env.jira to profiles.json
+      uv run scripts/core/jira-setup.py --migrate
     """
-    click.echo()
-    click.echo("=" * 60)
-    click.echo("  Jira Credential Setup")
-    click.echo("=" * 60)
-    click.echo()
-
-    output_path = Path(output)
-
-    # Check for existing file
-    if output_path.exists() and not force and not test_only:
-        click.echo(f"⚠ Configuration file already exists: {output_path}")
-        if not click.confirm("Do you want to overwrite it?", default=False):
-            click.echo("\nSetup cancelled.")
-            sys.exit(EXIT_USER_ABORT)
+    # Handle migration mode
+    if migrate:
         click.echo()
+        click.echo("=" * 60)
+        click.echo("  Migrate ~/.env.jira → ~/.jira/profiles.json")
+        click.echo("=" * 60)
+        click.echo()
+        migrate_env_to_profile()
+        sys.exit(EXIT_SUCCESS)
+
+    click.echo()
+    click.echo("=" * 60)
+    if profile:
+        click.echo(f"  Jira Profile Setup: {profile}")
+    else:
+        click.echo("  Jira Credential Setup")
+    click.echo("=" * 60)
+    click.echo()
+
+    # For non-profile mode, check existing env file
+    if not profile:
+        output_path = Path(output)
+        if output_path.exists() and not force and not test_only:
+            click.echo(f"⚠ Configuration file already exists: {output_path}")
+            if not click.confirm("Do you want to overwrite it?", default=False):
+                click.echo("\nSetup cancelled.")
+                sys.exit(EXIT_USER_ABORT)
+            click.echo()
 
     # Step 1: Get Jira URL
     click.echo("Step 1: Jira Instance URL")
@@ -202,6 +323,10 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
         click.echo()
         url = click.prompt("Jira URL", type=str).strip().rstrip('/')
 
+    # Warn about non-HTTPS URLs
+    if url.startswith('http://') and not url.startswith('http://localhost'):
+        warning("Using HTTP without TLS. Credentials will be transmitted in plaintext.")
+
     # Validate URL
     click.echo()
     click.echo("Validating URL...", nl=False)
@@ -209,7 +334,7 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
     if url_ok:
         click.echo(f" ✓ {url_msg}")
     else:
-        click.echo(f" ✗")
+        click.echo(" ✗")
         error(f"URL validation failed: {url_msg}")
         sys.exit(EXIT_VALIDATION_FAILED)
 
@@ -279,10 +404,10 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
                                                   personal_token=personal_token)
 
     if cred_ok:
-        click.echo(f" ✓")
+        click.echo(" ✓")
         success(f"Authenticated as: {cred_msg}")
     else:
-        click.echo(f" ✗")
+        click.echo(" ✗")
         error(f"Authentication failed: {cred_msg}")
 
         if jira_type == 'cloud':
@@ -313,21 +438,69 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
     click.echo("Step 4: Save Configuration")
     click.echo("-" * 40)
 
-    click.echo(f"Configuration will be saved to: {output_path}")
-    click.echo("File permissions will be set to 600 (owner read/write only)")
+    if profile:
+        # Profile mode: save to ~/.jira/profiles.json
+        click.echo(f"Profile '{profile}' will be saved to: {PROFILES_FILE}")
+        click.echo("File permissions will be set to 600 (owner read/write only)")
 
-    if click.confirm("Save configuration?", default=True):
-        write_env_file(output_path, config)
-        click.echo()
-        click.echo("=" * 60)
-        success(f"Configuration saved to {output_path}")
-        click.echo()
-        click.echo("You can now use the Jira CLI scripts:")
-        click.echo("  uv run scripts/core/jira-validate.py --verbose")
-        click.echo("  uv run scripts/core/jira-issue.py get PROJ-123")
+        # Get project keys
+        project_list = []
+        if projects:
+            project_list = [p.strip() for p in projects.split(',') if p.strip()]
+        else:
+            click.echo()
+            proj_input = click.prompt(
+                "Project keys (comma-separated, e.g. WEB,INFRA)",
+                type=str, default='', show_default=False
+            ).strip()
+            if proj_input:
+                project_list = [p.strip() for p in proj_input.split(',') if p.strip()]
+
+        if click.confirm("Save profile?", default=True):
+            profile_data = {'url': url}
+
+            if jira_type == 'cloud':
+                profile_data['auth'] = 'cloud'
+                profile_data['username'] = config['JIRA_USERNAME']
+                profile_data['api_token'] = config['JIRA_API_TOKEN']
+            else:
+                profile_data['auth'] = 'pat'
+                profile_data['token'] = config['JIRA_PERSONAL_TOKEN']
+
+            if project_list:
+                profile_data['projects'] = project_list
+
+            write_profile(profile, profile_data)
+            click.echo()
+            click.echo("=" * 60)
+            success(f"Profile '{profile}' saved to {PROFILES_FILE}")
+            click.echo()
+            click.echo("You can now use the Jira CLI scripts:")
+            click.echo(f"  uv run scripts/core/jira-validate.py --profile {profile} --verbose")
+            click.echo(f"  uv run scripts/core/jira-issue.py --profile {profile} get PROJ-123")
+            if project_list:
+                click.echo(f"\n  Auto-resolution enabled for projects: {', '.join(project_list)}")
+        else:
+            click.echo("\nProfile not saved.")
+            sys.exit(EXIT_USER_ABORT)
     else:
-        click.echo("\nConfiguration not saved.")
-        sys.exit(EXIT_USER_ABORT)
+        # Legacy mode: save to env file
+        output_path = Path(output)
+        click.echo(f"Configuration will be saved to: {output_path}")
+        click.echo("File permissions will be set to 600 (owner read/write only)")
+
+        if click.confirm("Save configuration?", default=True):
+            write_env_file(output_path, config)
+            click.echo()
+            click.echo("=" * 60)
+            success(f"Configuration saved to {output_path}")
+            click.echo()
+            click.echo("You can now use the Jira CLI scripts:")
+            click.echo("  uv run scripts/core/jira-validate.py --verbose")
+            click.echo("  uv run scripts/core/jira-issue.py get PROJ-123")
+        else:
+            click.echo("\nConfiguration not saved.")
+            sys.exit(EXIT_USER_ABORT)
 
     sys.exit(EXIT_SUCCESS)
 

@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0",
-#     "click>=8.1.0",
+#     "atlassian-python-api>=3.41.0,<4",
+#     "click>=8.1.0,<9",
 # ]
 # ///
 """Jira comment operations - add and list issue comments."""
@@ -20,8 +20,8 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import get_jira_client
-from lib.output import format_output, success, error
+from lib.client import LazyJiraClient
+from lib.output import error, extract_adf_text, format_output, success
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -32,9 +32,10 @@ from lib.output import format_output, success, error
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
 @click.option('--quiet', '-q', is_flag=True, help='Minimal output')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
+@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira comment operations.
 
     Add and list comments on Jira issues.
@@ -44,13 +45,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     ctx.obj['json'] = output_json
     ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
-    try:
-        ctx.obj['client'] = get_jira_client(env_file)
-    except Exception as e:
-        if debug:
-            raise
-        error(str(e))
-        sys.exit(1)
+    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
@@ -76,6 +71,7 @@ def add(ctx, issue_key: str, comment_text: str):
 
       jira-comment add PROJ-123 "See {code}config.py{code} for details"
     """
+    ctx.obj['client'].with_context(issue_key=issue_key)
     client = ctx.obj['client']
 
     try:
@@ -112,6 +108,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
 
       jira-comment list PROJ-123 --limit 5 --json
     """
+    ctx.obj['client'].with_context(issue_key=issue_key)
     client = ctx.obj['client']
 
     try:
@@ -139,7 +136,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
 
                     # Handle ADF format
                     if isinstance(body, dict):
-                        body = _extract_text(body)
+                        body = extract_adf_text(body)
 
                     # Truncate if requested
                     if truncate and len(body) > truncate:
@@ -157,23 +154,6 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
             raise
         error(f"Failed to get comments for {issue_key}: {e}")
         sys.exit(1)
-
-
-def _extract_text(adf: dict) -> str:
-    """Extract plain text from Atlassian Document Format."""
-    if not isinstance(adf, dict):
-        return str(adf)
-
-    text_parts = []
-    for block in adf.get('content', []):
-        if block.get('type') == 'paragraph':
-            for item in block.get('content', []):
-                if item.get('type') == 'text':
-                    text_parts.append(item.get('text', ''))
-        elif block.get('type') == 'text':
-            text_parts.append(block.get('text', ''))
-
-    return ' '.join(text_parts)
 
 
 if __name__ == '__main__':
