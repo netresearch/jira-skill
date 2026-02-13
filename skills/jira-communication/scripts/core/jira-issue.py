@@ -2,24 +2,15 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0",
-#     "click>=8.1.0",
+#     "atlassian-python-api>=3.41.0,<4",
+#     "click>=8.1.0,<9",
 # ]
 # ///
 """Jira issue operations - get and update issue details."""
 
 import json
-import re
 import sys
 from pathlib import Path
-
-ACCOUNT_ID_PATTERN = re.compile(r'^[a-zA-Z0-9:\-]+$')
-LEGACY_ACCOUNT_ID_PATTERN = re.compile(r'^[a-f0-9]{24}$')
-
-def is_account_id(s: str) -> bool:
-    if ':' in s:
-        return bool(ACCOUNT_ID_PATTERN.match(s))
-    return bool(LEGACY_ACCOUNT_ID_PATTERN.match(s))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared library import (TR1.1.1 - PYTHONPATH approach)
@@ -30,8 +21,8 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import get_jira_client
-from lib.output import format_output, success, error, warning
+from lib.client import LazyJiraClient, is_account_id
+from lib.output import error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -41,9 +32,10 @@ from lib.output import format_output, success, error, warning
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
 @click.option('--quiet', '-q', is_flag=True, help='Minimal output')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
+@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue operations.
 
     Get and update Jira issue details.
@@ -52,13 +44,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     ctx.obj['json'] = output_json
     ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
-    try:
-        ctx.obj['client'] = get_jira_client(env_file)
-    except Exception as e:
-        if debug:
-            raise
-        error(str(e))
-        sys.exit(1)
+    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
@@ -84,6 +70,7 @@ def get(ctx, issue_key: str, fields: str | None, expand: str | None,
 
       jira-issue get PROJ-123 --expand changelog,transitions
     """
+    ctx.obj['client'].with_context(issue_key=issue_key)
     client = ctx.obj['client']
 
     # Warn about deprecated --full flag
@@ -192,13 +179,13 @@ def _print_issue(issue: dict, truncate: int | None = None, requested_fields: str
     if should_show('description') and field_available('description'):
         description = fields.get('description')
         if description:
-            print(f"\nDescription:")
+            print("\nDescription:")
             # Handle both string and ADF format
             if isinstance(description, str):
                 desc_text = description
             elif isinstance(description, dict):
                 # ADF format - extract text content
-                desc_text = _extract_adf_text(description)
+                desc_text = extract_adf_text(description)
             else:
                 desc_text = str(description)
 
@@ -242,25 +229,6 @@ def _print_issue(issue: dict, truncate: int | None = None, requested_fields: str
     print()
 
 
-def _extract_adf_text(adf: dict) -> str:
-    """Extract plain text from Atlassian Document Format."""
-    if not isinstance(adf, dict):
-        return str(adf)
-
-    text_parts = []
-    content = adf.get('content', [])
-
-    for block in content:
-        if block.get('type') == 'paragraph':
-            for item in block.get('content', []):
-                if item.get('type') == 'text':
-                    text_parts.append(item.get('text', ''))
-        elif block.get('type') == 'text':
-            text_parts.append(block.get('text', ''))
-
-    return ' '.join(text_parts)
-
-
 @cli.command()
 @click.argument('issue_key')
 @click.option('--summary', '-s', help='New summary')
@@ -287,6 +255,7 @@ def update(ctx, issue_key: str, summary: str | None, priority: str | None,
 
       jira-issue update PROJ-123 --summary "Test" --dry-run
     """
+    ctx.obj['client'].with_context(issue_key=issue_key)
     client = ctx.obj['client']
 
     # Build update payload
@@ -307,7 +276,11 @@ def update(ctx, issue_key: str, summary: str | None, priority: str | None,
         else:
             users = client.user_find_by_user_string(query=assignee)
             if users:
-                update_fields['assignee'] = {'accountId': users[0]['accountId']}
+                user = users[0] if isinstance(users[0], dict) else {'name': users[0]}
+                if 'accountId' in user:
+                    update_fields['assignee'] = {'accountId': user['accountId']}
+                else:
+                    update_fields['assignee'] = {'name': user.get('name', user.get('key', assignee))}
             else:
                 error(f"User not found: {assignee}")
                 sys.exit(1)
