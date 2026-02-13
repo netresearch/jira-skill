@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0",
-#     "click>=8.1.0",
+#     "atlassian-python-api>=3.41.0,<4",
+#     "click>=8.1.0,<9",
 # ]
 # ///
 """Jira user operations - get user information."""
@@ -20,8 +20,8 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import get_jira_client
-from lib.output import format_output, error
+from lib.client import LazyJiraClient, is_account_id
+from lib.output import error, format_output
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -31,9 +31,10 @@ from lib.output import format_output, error
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
 @click.option('--quiet', '-q', is_flag=True, help='Minimal output')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
+@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira user operations.
 
     Get information about Jira users.
@@ -42,13 +43,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     ctx.obj['json'] = output_json
     ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
-    try:
-        ctx.obj['client'] = get_jira_client(env_file)
-    except Exception as e:
-        if debug:
-            raise
-        error(str(e))
-        sys.exit(1)
+    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
@@ -105,23 +100,27 @@ def get(ctx, identifier: str):
     """
     client = ctx.obj['client']
 
+    debug = ctx.obj['debug']
+
     try:
         # Try different methods to find user
         user = None
 
         # Try by account ID first (Cloud)
-        if identifier.startswith('5') and len(identifier) > 20:
+        if is_account_id(identifier):
             try:
                 user = client.user(account_id=identifier)
-            except Exception:
-                pass
+            except Exception as e:
+                if debug:
+                    print(f"  [debug] account_id lookup failed: {e}", file=sys.stderr)
 
         # Try by username directly (Server/DC)
         if not user:
             try:
                 user = client.user(username=identifier)
-            except Exception:
-                pass
+            except Exception as e:
+                if debug:
+                    print(f"  [debug] username lookup failed: {e}", file=sys.stderr)
 
         # Try user search API (works for email on Server/DC)
         if not user:
@@ -129,8 +128,9 @@ def get(ctx, identifier: str):
                 users = client.get('rest/api/2/user/search', params={'username': identifier})
                 if users and isinstance(users, list) and len(users) > 0:
                     user = users[0]
-            except Exception:
-                pass
+            except Exception as e:
+                if debug:
+                    print(f"  [debug] user/search API failed: {e}", file=sys.stderr)
 
         # Try user search as fallback (Cloud)
         if not user:
@@ -143,8 +143,9 @@ def get(ctx, identifier: str):
                     elif isinstance(found, str) and not found.startswith('Username'):
                         # It's a username string, fetch full object
                         user = client.user(username=found)
-            except Exception:
-                pass
+            except Exception as e:
+                if debug:
+                    print(f"  [debug] user_find_by_user_string failed: {e}", file=sys.stderr)
 
         if not user:
             error(f"User not found: {identifier}")
