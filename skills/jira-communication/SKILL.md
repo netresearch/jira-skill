@@ -1,6 +1,6 @@
 ---
 name: jira-communication
-description: "Use when interacting with Jira issues - searching, creating, updating, transitioning, commenting, logging work, or downloading attachments. Auto-triggers on Jira URLs and issue keys (PROJ-123)."
+description: "Use when interacting with Jira issues - searching, creating, updating, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123)."
 allowed-tools: Bash(uv run scripts/*:*) Read
 ---
 
