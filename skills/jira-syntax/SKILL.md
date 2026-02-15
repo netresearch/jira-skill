@@ -1,6 +1,6 @@
 ---
 name: jira-syntax
-description: "Use when writing Jira descriptions or comments, converting Markdown to Jira wiki markup, or validating Jira syntax before submission."
+description: "Use when writing Jira descriptions or comments, converting Markdown to Jira wiki markup, using templates (bug reports, feature requests), or validating Jira syntax before submission."
 allowed-tools: Bash(scripts/validate-jira-syntax.sh:*) Read
 ---
 
