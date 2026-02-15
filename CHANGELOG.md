@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-profile support**: Work with multiple Jira instances via `~/.jira/profiles.json` (#15)
+  - New config format `~/.jira/profiles.json` with named profiles and project mappings
+  - Automatic profile resolution: URL host matching, project key mapping, directory context
+  - `--profile`/`-P` flag added to all 14 CLI scripts
+  - `jira-setup.py --profile NAME`: Create/update named profiles interactively
+  - `jira-setup.py --migrate`: Convert existing `~/.env.jira` to profiles.json
+  - `jira-validate.py --profile NAME`: Validate specific profile
+  - `jira-validate.py --all-profiles`: Validate all profiles with status table
+  - `.jira-profile` file support for per-directory profile selection
+  - Hook script detects and suggests profiles from issue keys and URLs
+  - Full backwards compatibility: `~/.env.jira` continues to work as fallback
+- **New library functions** in `scripts/lib/config.py`:
+  - `load_profiles()`: Load and validate profiles.json
+  - `resolve_profile()`: Priority-based profile resolution algorithm
+  - `profile_to_config()`: Convert profile to env-style config dict
+  - `load_config()`: Unified loader combining profiles and legacy env files
+
 ## [3.3.0] - 2026-01-30
 
 ### Added
@@ -346,7 +365,7 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.3.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.3.1...HEAD
 [3.3.0]: https://github.com/netresearch/jira-skill/compare/v3.2.1...v3.3.0
 [3.2.1]: https://github.com/netresearch/jira-skill/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/netresearch/jira-skill/compare/v3.1.6...v3.2.0

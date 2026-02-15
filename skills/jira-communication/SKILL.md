@@ -72,3 +72,39 @@ uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
 **Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
 
 Config via `~/.env.jira` or env vars. Run `jira-validate.py --verbose` to verify.
+
+## Multi-Profile Support
+
+When `~/.jira/profiles.json` exists, multiple Jira instances are supported.
+
+**Profile resolution** (automatic, priority order):
+1. `--env-file PATH` → legacy single-file behavior
+2. `--profile NAME` flag → use named profile directly
+3. Full Jira URL in input → match host to profile
+4. Issue key (e.g., WEB-1381) → match project prefix to profile
+5. `.jira-profile` file in working directory → use named profile
+6. Default profile from profiles.json
+7. Fallback to `~/.env.jira`
+
+**When triggered by URL** → extract host → match profile automatically:
+```bash
+# User mentions https://jira.meine-krankenkasse.de/browse/WEB-1381
+# Profile "mkk" is automatically resolved from URL host match
+uv run scripts/core/jira-issue.py get WEB-1381
+```
+
+**When triggered by issue key only** → check project mapping automatically:
+```bash
+# WEB is mapped to "mkk" profile → automatically resolved
+uv run scripts/core/jira-issue.py get WEB-1381
+```
+
+**If ambiguous** → ask user which profile to use.
+
+**Profile management**:
+```bash
+uv run scripts/core/jira-setup.py --profile mkk                    # Create profile
+uv run scripts/core/jira-validate.py --profile mkk --verbose        # Validate profile
+uv run scripts/core/jira-validate.py --all-profiles                 # Validate all
+uv run scripts/core/jira-setup.py --migrate                         # Migrate .env.jira
+```

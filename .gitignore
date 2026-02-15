@@ -21,6 +21,10 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 *$py.class
+.venv/
+
+# uv
+uv.lock
 
 # Environment/credentials
 .env

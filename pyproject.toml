@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "I"]
+ignore = ["E402", "E501", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+"skills/jira-communication/scripts/core/*.py" = ["UP007"]
+"skills/jira-communication/scripts/workflow/*.py" = ["UP007"]
+"skills/jira-communication/scripts/utility/*.py" = ["UP007"]
+"scripts/*.py" = ["UP007"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B404"]
