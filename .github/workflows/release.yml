@@ -22,6 +22,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - name: Validate plugin.json matches tag
+        env:
+          TAG_VERSION: ${{ github.ref_name }}
+        run: |
+          PLUGIN_VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          TAG_BARE="${TAG_VERSION#v}"
+          if [[ "${TAG_BARE}" != "${PLUGIN_VERSION}" ]]; then
+            echo "::error file=.claude-plugin/plugin.json::Tag ${TAG_VERSION} does not match plugin.json version ${PLUGIN_VERSION}"
+            exit 1
+          fi
+          echo "Version validated: ${TAG_VERSION} matches plugin.json ${PLUGIN_VERSION}"
+
       - name: Get version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
