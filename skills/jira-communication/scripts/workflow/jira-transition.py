@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0",
-#     "click>=8.1.0",
+#     "atlassian-python-api>=3.41.0,<4",
+#     "click>=8.1.0,<9",
 # ]
 # ///
 """Jira issue transitions - list available transitions and change issue status."""
@@ -20,8 +20,8 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import get_jira_client
-from lib.output import format_output, format_table, success, error, warning
+from lib.client import LazyJiraClient
+from lib.output import error, format_output, format_table, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helper Functions
@@ -49,9 +49,10 @@ def _get_to_status(transition: dict) -> str:
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
 @click.option('--quiet', '-q', is_flag=True, help='Minimal output')
 @click.option('--env-file', type=click.Path(), help='Environment file path')
+@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
 @click.option('--debug', is_flag=True, help='Show debug information on errors')
 @click.pass_context
-def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
+def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue transitions.
 
     List available transitions and change issue status.
@@ -60,13 +61,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, debug: bool):
     ctx.obj['json'] = output_json
     ctx.obj['quiet'] = quiet
     ctx.obj['debug'] = debug
-    try:
-        ctx.obj['client'] = get_jira_client(env_file)
-    except Exception as e:
-        if debug:
-            raise
-        error(str(e))
-        sys.exit(1)
+    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command('list')
@@ -83,6 +78,7 @@ def list_transitions(ctx, issue_key: str):
 
       jira-transition list PROJ-123
     """
+    ctx.obj['client'].with_context(issue_key=issue_key)
     client = ctx.obj['client']
 
     try:
@@ -145,6 +141,7 @@ def do_transition(ctx, issue_key: str, status_name: str,
 
       jira-transition do PROJ-123 "In Review" --dry-run
     """
+    ctx.obj['client'].with_context(issue_key=issue_key)
     client = ctx.obj['client']
 
     try:

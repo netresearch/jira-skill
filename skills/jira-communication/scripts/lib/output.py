@@ -2,7 +2,7 @@
 
 import json
 import sys
-from typing import Any, Optional
+from typing import Any
 
 # === INLINE_START: output ===
 
@@ -19,7 +19,7 @@ def format_json(data: Any, indent: int = 2) -> str:
     return json.dumps(data, indent=indent, default=str)
 
 
-def format_table(data: list, columns: Optional[list] = None) -> str:
+def format_table(data: list, columns: list | None = None) -> str:
     """Format list of dicts as ASCII table.
 
     Args:
@@ -113,7 +113,7 @@ def _print_dict(data: dict, indent: int = 0) -> None:
             print(f"{prefix}{key}: {value}")
 
 
-def error(message: str, suggestion: Optional[str] = None) -> None:
+def error(message: str, suggestion: str | None = None) -> None:
     """Print error message with optional suggestion.
 
     Args:
@@ -133,5 +133,37 @@ def success(message: str) -> None:
 def warning(message: str) -> None:
     """Print warning message."""
     print(f"⚠ {message}", file=sys.stderr)
+
+
+def extract_adf_text(adf) -> str:
+    """Extract plain text from Atlassian Document Format.
+
+    Recursively traverses all ADF node types (paragraphs, headings, lists,
+    code blocks, blockquotes, tables, etc.) to extract text content.
+
+    Args:
+        adf: ADF dictionary or any other value
+
+    Returns:
+        Extracted plain text string
+    """
+    if not isinstance(adf, dict):
+        return str(adf)
+
+    parts = _extract_text_recursive(adf)
+    return ' '.join(parts)
+
+
+def _extract_text_recursive(node) -> list:
+    """Recursively extract text from any ADF node."""
+    parts = []
+    if isinstance(node, dict):
+        if node.get('type') == 'text':
+            text = node.get('text', '')
+            if text:
+                parts.append(text)
+        for child in node.get('content', []):
+            parts.extend(_extract_text_recursive(child))
+    return parts
 
 # === INLINE_END: output ===

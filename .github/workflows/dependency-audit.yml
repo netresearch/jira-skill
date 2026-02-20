@@ -1,0 +1,48 @@
+name: Dependency Audit
+
+on:
+    schedule:
+        - cron: '0 8 * * 1'  # Weekly Monday 08:00 UTC
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    audit:
+        runs-on: ubuntu-latest
+
+        steps:
+            - id: checkout
+              name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+            - id: setup_uv
+              name: Install uv
+              uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+              with:
+                  enable-cache: true
+
+            - id: audit
+              name: Audit PEP 723 inline dependencies
+              run: |
+                  # Collect unique dependencies from PEP 723 inline script metadata
+                  python3 -c "
+                  import re, pathlib, json
+                  deps = set()
+                  for f in pathlib.Path('skills/jira-communication/scripts').rglob('*.py'):
+                      content = f.read_text()
+                      # Match PEP 723 dependencies block
+                      m = re.search(r'# dependencies = \[(.+?)\]', content, re.DOTALL)
+                      if m:
+                          for dm in re.finditer(r'\"([^\"]+)\"', m.group(1)):
+                              deps.add(dm.group(1))
+                  # Write as requirements format (one per line)
+                  pathlib.Path('/tmp/requirements-audit.txt').write_text(
+                      '\n'.join(sorted(deps)) + '\n'
+                  )
+                  print('Dependencies to audit:')
+                  for d in sorted(deps):
+                      print(f'  {d}')
+                  "
+                  uv run --with pip-audit pip-audit -r /tmp/requirements-audit.txt --desc

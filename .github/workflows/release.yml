@@ -6,21 +6,24 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e  # v2.14.2
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Validate plugin.json matches tag
         env:
@@ -97,8 +100,11 @@ jobs:
           zip -r ../jira-integration-plugin-${{ steps.version.outputs.version }}.zip .
           tar -czvf ../jira-integration-plugin-${{ steps.version.outputs.version }}.tar.gz .
 
+      - name: Generate checksums
+        run: sha256sum *.zip *.tar.gz > SHA256SUMS.txt
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           files: |
             jira-communication-skill-${{ steps.version.outputs.version }}.zip
@@ -107,6 +113,7 @@ jobs:
             jira-syntax-skill-${{ steps.version.outputs.version }}.tar.gz
             jira-integration-plugin-${{ steps.version.outputs.version }}.zip
             jira-integration-plugin-${{ steps.version.outputs.version }}.tar.gz
+            SHA256SUMS.txt
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
