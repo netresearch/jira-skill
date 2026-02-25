@@ -11,9 +11,7 @@ sys.path.insert(0, str(_scripts_path))
 
 # Import jira-attachment.py (hyphenated filename requires importlib)
 _core_path = _scripts_path / "core"
-_spec = importlib.util.spec_from_file_location(
-    "jira_attachment", _core_path / "jira-attachment.py"
-)
+_spec = importlib.util.spec_from_file_location("jira_attachment", _core_path / "jira-attachment.py")
 jira_attachment = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(jira_attachment)
 
@@ -21,6 +19,7 @@ _spec.loader.exec_module(jira_attachment)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: SSRF protection — validate_attachment_url()
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestValidateAttachmentUrl:
     """Attachment URLs must be validated against the configured JIRA_URL host."""
@@ -84,6 +83,7 @@ class TestValidateAttachmentUrl:
 # Tests: Path traversal protection — validate_output_path()
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestValidateOutputPath:
     """Output path must be validated against path traversal attacks."""
 
@@ -95,16 +95,12 @@ class TestValidateOutputPath:
     def test_subdirectory_accepted(self, tmp_path):
         sub = tmp_path / "downloads"
         sub.mkdir()
-        result = jira_attachment.validate_output_path(
-            str(sub / "report.pdf"), str(tmp_path)
-        )
+        result = jira_attachment.validate_output_path(str(sub / "report.pdf"), str(tmp_path))
         assert result is not None
 
     def test_traversal_rejected(self, tmp_path):
         """Path traversal via ../ must be rejected."""
-        result = jira_attachment.validate_output_path(
-            "../../etc/cron.d/evil", str(tmp_path)
-        )
+        result = jira_attachment.validate_output_path("../../etc/cron.d/evil", str(tmp_path))
         assert result is None
 
     def test_absolute_path_outside_cwd_rejected(self, tmp_path):
@@ -127,7 +123,5 @@ class TestValidateOutputPath:
         payload.touch()
 
         # The output path resolves to sibling dir — must be rejected
-        result = jira_attachment.validate_output_path(
-            str(payload), str(tmp_path)
-        )
+        result = jira_attachment.validate_output_path(str(payload), str(tmp_path))
         assert result is None

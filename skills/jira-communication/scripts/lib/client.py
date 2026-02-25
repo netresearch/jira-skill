@@ -17,8 +17,8 @@ JIRA_TIMEOUT = 30
 # Account ID detection (Jira Cloud)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ACCOUNT_ID_PATTERN = re.compile(r'^[a-zA-Z0-9:\-]+$')
-LEGACY_ACCOUNT_ID_PATTERN = re.compile(r'^[a-f0-9]{24}$')
+ACCOUNT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9:\-]+$")
+LEGACY_ACCOUNT_ID_PATTERN = re.compile(r"^[a-f0-9]{24}$")
 
 
 def is_account_id(s: str) -> bool:
@@ -30,9 +30,10 @@ def is_account_id(s: str) -> bool:
     """
     if not s:
         return False
-    if ':' in s:
+    if ":" in s:
         return bool(ACCOUNT_ID_PATTERN.match(s))
     return bool(LEGACY_ACCOUNT_ID_PATTERN.match(s))
+
 
 # === INLINE_START: client ===
 
@@ -89,7 +90,7 @@ def _check_captcha_challenge(response: Response, jira_url: str) -> None:
         f"    2. Log in and complete the CAPTCHA challenge\n"
         f"    3. Retry this command\n\n"
         f"  This typically happens after several failed login attempts.",
-        login_url=login_url
+        login_url=login_url,
     )
 
 
@@ -132,11 +133,11 @@ class LazyJiraClient:
     """
 
     def __init__(self, env_file: str | None = None, profile: str | None = None):
-        object.__setattr__(self, '_env_file', env_file)
-        object.__setattr__(self, '_profile', profile)
-        object.__setattr__(self, '_issue_key', None)
-        object.__setattr__(self, '_url', None)
-        object.__setattr__(self, '_client', None)
+        object.__setattr__(self, "_env_file", env_file)
+        object.__setattr__(self, "_profile", profile)
+        object.__setattr__(self, "_issue_key", None)
+        object.__setattr__(self, "_url", None)
+        object.__setattr__(self, "_client", None)
 
     def with_context(self, issue_key: str | None = None, url: str | None = None):
         """Set resolution context for automatic profile matching.
@@ -147,31 +148,32 @@ class LazyJiraClient:
         If *issue_key* looks like a URL (starts with http(s)://), it is
         also used as *url* for host-based profile resolution.
         """
-        if object.__getattribute__(self, '_client') is None:
+        if object.__getattribute__(self, "_client") is None:
             if issue_key is not None:
-                object.__setattr__(self, '_issue_key', issue_key)
+                object.__setattr__(self, "_issue_key", issue_key)
                 # Detect URL passed as issue_key → enable host-based resolution
-                if url is None and issue_key.startswith(('http://', 'https://')):
-                    object.__setattr__(self, '_url', issue_key)
+                if url is None and issue_key.startswith(("http://", "https://")):
+                    object.__setattr__(self, "_url", issue_key)
             if url is not None:
-                object.__setattr__(self, '_url', url)
+                object.__setattr__(self, "_url", url)
         return self
 
     def __getattr__(self, name):
-        client = object.__getattribute__(self, '_client')
+        client = object.__getattribute__(self, "_client")
         if client is None:
             client = get_jira_client(
-                env_file=object.__getattribute__(self, '_env_file'),
-                profile=object.__getattribute__(self, '_profile'),
-                issue_key=object.__getattribute__(self, '_issue_key'),
-                url=object.__getattribute__(self, '_url'),
+                env_file=object.__getattribute__(self, "_env_file"),
+                profile=object.__getattribute__(self, "_profile"),
+                issue_key=object.__getattribute__(self, "_issue_key"),
+                url=object.__getattribute__(self, "_url"),
             )
-            object.__setattr__(self, '_client', client)
+            object.__setattr__(self, "_client", client)
         return getattr(client, name)
 
 
-def get_jira_client(env_file: str | None = None, profile: str | None = None,
-                    issue_key: str | None = None, url: str | None = None) -> Jira:
+def get_jira_client(
+    env_file: str | None = None, profile: str | None = None, issue_key: str | None = None, url: str | None = None
+) -> Jira:
     """Initialize and return a Jira client.
 
     Supports two authentication modes:
@@ -201,20 +203,20 @@ def get_jira_client(env_file: str | None = None, profile: str | None = None,
     if errors:
         raise ValueError("Configuration errors:\n  " + "\n  ".join(errors))
 
-    jira_url = config['JIRA_URL']
+    jira_url = config["JIRA_URL"]
     auth_mode = get_auth_mode(config)
 
     # Determine if Cloud or Server/DC
-    is_cloud = config.get('JIRA_CLOUD', '').lower() == 'true'
-    if 'JIRA_CLOUD' not in config:
+    is_cloud = config.get("JIRA_CLOUD", "").lower() == "true"
+    if "JIRA_CLOUD" not in config:
         is_cloud = is_cloud_url(jira_url)
 
     try:
-        if auth_mode == 'pat':
+        if auth_mode == "pat":
             # Server/DC with Personal Access Token
             client = Jira(
                 url=jira_url,
-                token=config['JIRA_PERSONAL_TOKEN'],
+                token=config["JIRA_PERSONAL_TOKEN"],
                 cloud=is_cloud,
                 timeout=JIRA_TIMEOUT,
             )
@@ -222,8 +224,8 @@ def get_jira_client(env_file: str | None = None, profile: str | None = None,
             # Cloud with username + API token
             client = Jira(
                 url=jira_url,
-                username=config['JIRA_USERNAME'],
-                password=config['JIRA_API_TOKEN'],
+                username=config["JIRA_USERNAME"],
+                password=config["JIRA_API_TOKEN"],
                 cloud=is_cloud,
                 timeout=JIRA_TIMEOUT,
             )
@@ -235,8 +237,8 @@ def get_jira_client(env_file: str | None = None, profile: str | None = None,
             status_forcelist=[429, 502, 503, 504],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
-        client._session.mount('https://', adapter)
-        client._session.mount('http://', adapter)
+        client._session.mount("https://", adapter)
+        client._session.mount("http://", adapter)
 
         # Patch session to detect CAPTCHA challenges (primarily for Server/DC)
         _patch_session_for_captcha(client, jira_url)
@@ -248,7 +250,7 @@ def get_jira_client(env_file: str | None = None, profile: str | None = None,
     except Exception as e:
         # Sanitize error message to prevent credential leakage
         error_msg = _sanitize_error(str(e))
-        if auth_mode == 'pat':
+        if auth_mode == "pat":
             raise ConnectionError(
                 f"Failed to connect to Jira at {jira_url}\n\n"
                 f"  Error: {error_msg}\n\n"
@@ -276,17 +278,18 @@ def _sanitize_error(message: str) -> str:
     # Redact values following sensitive keys (e.g., "token=abc123" → "token=***")
     # First handle "Authorization: <scheme> <token>" as a single unit
     sanitized = re.sub(
-        r'(authorization:\s*)\S+(?:\s+\S+)?',
-        r'\1***',
+        r"(authorization:\s*)\S+(?:\s+\S+)?",
+        r"\1***",
         message,
         flags=re.IGNORECASE,
     )
     sanitized = re.sub(
-        r'(bearer |basic |token=|password=|api_token=|api_key=|secret=|access_token=|private_token=|apikey=|auth_token=)\S+',
-        r'\1***',
+        r"(bearer |basic |token=|password=|api_token=|api_key=|secret=|access_token=|private_token=|apikey=|auth_token=)\S+",
+        r"\1***",
         sanitized,
         flags=re.IGNORECASE,
     )
     return sanitized
+
 
 # === INLINE_END: client ===

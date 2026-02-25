@@ -14,169 +14,119 @@ from lib.output import extract_adf_text
 # Tests: extract_adf_text()
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestExtractAdfText:
     """extract_adf_text() must extract plain text from Atlassian Document Format."""
 
     def test_paragraph_with_text(self):
-        adf = {
-            'type': 'doc',
-            'content': [
-                {
-                    'type': 'paragraph',
-                    'content': [
-                        {'type': 'text', 'text': 'Hello world'}
-                    ]
-                }
-            ]
-        }
-        assert extract_adf_text(adf) == 'Hello world'
+        adf = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Hello world"}]}]}
+        assert extract_adf_text(adf) == "Hello world"
 
     def test_multiple_paragraphs(self):
         adf = {
-            'type': 'doc',
-            'content': [
-                {
-                    'type': 'paragraph',
-                    'content': [{'type': 'text', 'text': 'First'}]
-                },
-                {
-                    'type': 'paragraph',
-                    'content': [{'type': 'text', 'text': 'Second'}]
-                }
-            ]
+            "type": "doc",
+            "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "First"}]},
+                {"type": "paragraph", "content": [{"type": "text", "text": "Second"}]},
+            ],
         }
-        assert extract_adf_text(adf) == 'First Second'
+        assert extract_adf_text(adf) == "First Second"
 
     def test_text_block(self):
-        adf = {
-            'type': 'doc',
-            'content': [
-                {'type': 'text', 'text': 'Direct text'}
-            ]
-        }
-        assert extract_adf_text(adf) == 'Direct text'
+        adf = {"type": "doc", "content": [{"type": "text", "text": "Direct text"}]}
+        assert extract_adf_text(adf) == "Direct text"
 
     def test_empty_content(self):
-        adf = {'type': 'doc', 'content': []}
-        assert extract_adf_text(adf) == ''
+        adf = {"type": "doc", "content": []}
+        assert extract_adf_text(adf) == ""
 
     def test_non_dict_returns_string(self):
-        assert extract_adf_text('plain string') == 'plain string'
+        assert extract_adf_text("plain string") == "plain string"
 
     def test_no_content_key(self):
-        adf = {'type': 'doc'}
-        assert extract_adf_text(adf) == ''
+        adf = {"type": "doc"}
+        assert extract_adf_text(adf) == ""
 
     def test_heading_extracted(self):
         """Headings must be included in extracted text (F9)."""
         adf = {
-            'type': 'doc',
-            'content': [
-                {
-                    'type': 'heading',
-                    'attrs': {'level': 2},
-                    'content': [{'type': 'text', 'text': 'My Heading'}]
-                }
-            ]
+            "type": "doc",
+            "content": [
+                {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "My Heading"}]}
+            ],
         }
-        assert 'My Heading' in extract_adf_text(adf)
+        assert "My Heading" in extract_adf_text(adf)
 
     def test_bullet_list_extracted(self):
         """Bullet list items must be included in extracted text (F9)."""
         adf = {
-            'type': 'doc',
-            'content': [
+            "type": "doc",
+            "content": [
                 {
-                    'type': 'bulletList',
-                    'content': [
+                    "type": "bulletList",
+                    "content": [
                         {
-                            'type': 'listItem',
-                            'content': [
-                                {
-                                    'type': 'paragraph',
-                                    'content': [{'type': 'text', 'text': 'Item one'}]
-                                }
-                            ]
+                            "type": "listItem",
+                            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Item one"}]}],
                         },
                         {
-                            'type': 'listItem',
-                            'content': [
-                                {
-                                    'type': 'paragraph',
-                                    'content': [{'type': 'text', 'text': 'Item two'}]
-                                }
-                            ]
-                        }
-                    ]
+                            "type": "listItem",
+                            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Item two"}]}],
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         result = extract_adf_text(adf)
-        assert 'Item one' in result
-        assert 'Item two' in result
+        assert "Item one" in result
+        assert "Item two" in result
 
     def test_code_block_extracted(self):
         """Code block content must be included in extracted text (F9)."""
         adf = {
-            'type': 'doc',
-            'content': [
+            "type": "doc",
+            "content": [
                 {
-                    'type': 'codeBlock',
-                    'attrs': {'language': 'python'},
-                    'content': [{'type': 'text', 'text': 'print("hello")'}]
+                    "type": "codeBlock",
+                    "attrs": {"language": "python"},
+                    "content": [{"type": "text", "text": 'print("hello")'}],
                 }
-            ]
+            ],
         }
         assert 'print("hello")' in extract_adf_text(adf)
 
     def test_blockquote_extracted(self):
         """Blockquote content must be included in extracted text (F9)."""
         adf = {
-            'type': 'doc',
-            'content': [
+            "type": "doc",
+            "content": [
                 {
-                    'type': 'blockquote',
-                    'content': [
-                        {
-                            'type': 'paragraph',
-                            'content': [{'type': 'text', 'text': 'Quoted text'}]
-                        }
-                    ]
+                    "type": "blockquote",
+                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Quoted text"}]}],
                 }
-            ]
+            ],
         }
-        assert 'Quoted text' in extract_adf_text(adf)
+        assert "Quoted text" in extract_adf_text(adf)
 
     def test_nested_structure_extracted(self):
         """Deeply nested ADF structures must be fully traversed (F9)."""
         adf = {
-            'type': 'doc',
-            'content': [
+            "type": "doc",
+            "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "Intro"}]},
                 {
-                    'type': 'paragraph',
-                    'content': [{'type': 'text', 'text': 'Intro'}]
-                },
-                {
-                    'type': 'orderedList',
-                    'content': [
+                    "type": "orderedList",
+                    "content": [
                         {
-                            'type': 'listItem',
-                            'content': [
-                                {
-                                    'type': 'paragraph',
-                                    'content': [{'type': 'text', 'text': 'Step 1'}]
-                                }
-                            ]
+                            "type": "listItem",
+                            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Step 1"}]}],
                         }
-                    ]
+                    ],
                 },
-                {
-                    'type': 'heading',
-                    'content': [{'type': 'text', 'text': 'Summary'}]
-                }
-            ]
+                {"type": "heading", "content": [{"type": "text", "text": "Summary"}]},
+            ],
         }
         result = extract_adf_text(adf)
-        assert 'Intro' in result
-        assert 'Step 1' in result
-        assert 'Summary' in result
+        assert "Intro" in result
+        assert "Step 1" in result
+        assert "Summary" in result

@@ -20,6 +20,7 @@ from detect_jira_issues import (
 # Tests: extract_issue_keys()
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestExtractIssueKeys:
     def test_single_key(self):
         assert extract_issue_keys("Fix WEB-1381") == ["WEB-1381"]
@@ -50,6 +51,7 @@ class TestExtractIssueKeys:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: extract_jira_hosts()
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestExtractJiraHosts:
     def test_server_url(self):
@@ -93,15 +95,10 @@ SAMPLE_PROFILES = {
             "url": "https://jira.netresearch.de",
             "auth": "pat",
             "token": "x",
-            "projects": ["NRS", "OPSMKK"]
+            "projects": ["NRS", "OPSMKK"],
         },
-        "mkk": {
-            "url": "https://jira.meine-krankenkasse.de",
-            "auth": "pat",
-            "token": "y",
-            "projects": ["WEB", "INFRA"]
-        }
-    }
+        "mkk": {"url": "https://jira.meine-krankenkasse.de", "auth": "pat", "token": "y", "projects": ["WEB", "INFRA"]},
+    },
 }
 
 
@@ -110,26 +107,20 @@ class TestResolveProfileSuggestion:
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps(SAMPLE_PROFILES))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
-            result = resolve_profile_suggestion(
-                issue_keys=["WEB-1"],
-                hosts=["https://jira.meine-krankenkasse.de"]
-            )
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
+            result = resolve_profile_suggestion(issue_keys=["WEB-1"], hosts=["https://jira.meine-krankenkasse.de"])
             assert result == "mkk"
 
     def test_resolve_via_project_key(self, tmp_path):
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps(SAMPLE_PROFILES))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
-            result = resolve_profile_suggestion(
-                issue_keys=["NRS-4167"],
-                hosts=[]
-            )
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
+            result = resolve_profile_suggestion(issue_keys=["NRS-4167"], hosts=[])
             assert result == "netresearch"
 
     def test_no_profiles_file(self, tmp_path):
-        with mock.patch('detect_jira_issues.PROFILES_FILE', tmp_path / "nonexistent.json"):
+        with mock.patch("detect_jira_issues.PROFILES_FILE", tmp_path / "nonexistent.json"):
             result = resolve_profile_suggestion(["WEB-1"], [])
             assert result is None
 
@@ -137,11 +128,8 @@ class TestResolveProfileSuggestion:
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps(SAMPLE_PROFILES))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
-            result = resolve_profile_suggestion(
-                issue_keys=["UNKNOWN-999"],
-                hosts=[]
-            )
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
+            result = resolve_profile_suggestion(issue_keys=["UNKNOWN-999"], hosts=[])
             assert result is None
 
     def test_host_takes_priority_over_key(self, tmp_path):
@@ -149,12 +137,9 @@ class TestResolveProfileSuggestion:
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps(SAMPLE_PROFILES))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
             # NRS belongs to netresearch, but host is mkk
-            result = resolve_profile_suggestion(
-                issue_keys=["NRS-1"],
-                hosts=["https://jira.meine-krankenkasse.de"]
-            )
+            result = resolve_profile_suggestion(issue_keys=["NRS-1"], hosts=["https://jira.meine-krankenkasse.de"])
             assert result == "mkk"
 
     def test_ambiguous_project_key_returns_none(self, tmp_path):
@@ -164,12 +149,12 @@ class TestResolveProfileSuggestion:
             "profiles": {
                 "a": {"url": "https://a.com", "auth": "pat", "token": "x", "projects": ["WEB"]},
                 "b": {"url": "https://b.com", "auth": "pat", "token": "y", "projects": ["WEB"]},
-            }
+            },
         }
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps(ambiguous))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
             result = resolve_profile_suggestion(["WEB-100"], [])
             assert result is None
 
@@ -177,6 +162,7 @@ class TestResolveProfileSuggestion:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: resolve_profile_suggestion() with malformed profiles.json
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestResolveProfileSuggestionMalformed:
     """resolve_profile_suggestion() must not crash on unexpected JSON shapes."""
@@ -186,7 +172,7 @@ class TestResolveProfileSuggestionMalformed:
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps(["not", "a", "dict"]))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
             result = resolve_profile_suggestion(["WEB-1"], [])
             assert result is None
 
@@ -195,7 +181,7 @@ class TestResolveProfileSuggestionMalformed:
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps({"profiles": ["not", "a", "dict"]}))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
             result = resolve_profile_suggestion(["WEB-1"], [])
             assert result is None
 
@@ -204,7 +190,7 @@ class TestResolveProfileSuggestionMalformed:
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text(json.dumps({"profiles": "not a dict"}))
 
-        with mock.patch('detect_jira_issues.PROFILES_FILE', profiles_file):
+        with mock.patch("detect_jira_issues.PROFILES_FILE", profiles_file):
             result = resolve_profile_suggestion(["WEB-1"], [])
             assert result is None
 
@@ -213,6 +199,7 @@ class TestResolveProfileSuggestionMalformed:
 # Tests: main() hook output references current architecture
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMainOutput:
     """main() hook output must reference current script architecture, not old MCP."""
 
@@ -220,22 +207,22 @@ class TestMainOutput:
         """Run detect_jira_issues.main() with mocked stdin."""
         input_data = json.dumps({"prompt": prompt_text})
         fake_profiles = tmp_path / "nonexistent" / "profiles.json"
-        with mock.patch('sys.stdin') as mock_stdin, \
-             mock.patch('detect_jira_issues.PROFILES_FILE', fake_profiles):
+        with mock.patch("sys.stdin") as mock_stdin, mock.patch("detect_jira_issues.PROFILES_FILE", fake_profiles):
             mock_stdin.read.return_value = input_data
             from detect_jira_issues import main
+
             main()
         return capsys.readouterr()
 
     def test_output_does_not_reference_mcp(self, tmp_path, capsys):
         """Hook output must not reference obsolete MCP architecture."""
         captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
-        assert 'mcp-atlassian' not in captured.out.lower()
-        assert 'jira_get_issue' not in captured.out
-        assert 'jira_search' not in captured.out
+        assert "mcp-atlassian" not in captured.out.lower()
+        assert "jira_get_issue" not in captured.out
+        assert "jira_search" not in captured.out
 
     def test_output_references_script_names(self, tmp_path, capsys):
         """Hook output should mention actual script names."""
         captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
-        assert 'jira-issue.py' in captured.out
-        assert 'jira-search.py' in captured.out
+        assert "jira-issue.py" in captured.out
+        assert "jira-search.py" in captured.out

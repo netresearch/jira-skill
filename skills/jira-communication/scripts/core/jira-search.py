@@ -27,12 +27,13 @@ from lib.output import error, format_output, format_table
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @click.group()
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--quiet', '-q', is_flag=True, help='Minimal output (keys only)')
-@click.option('--env-file', type=click.Path(), help='Environment file path')
-@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
-@click.option('--debug', is_flag=True, help='Show debug information on errors')
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output (keys only)")
+@click.option("--env-file", type=click.Path(), help="Environment file path")
+@click.option("--profile", "-P", help="Jira profile name from ~/.jira/profiles.json")
+@click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.pass_context
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira search operations.
@@ -40,18 +41,17 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     Query Jira issues using JQL (Jira Query Language).
     """
     ctx.ensure_object(dict)
-    ctx.obj['json'] = output_json
-    ctx.obj['quiet'] = quiet
-    ctx.obj['debug'] = debug
-    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
+    ctx.obj["json"] = output_json
+    ctx.obj["quiet"] = quiet
+    ctx.obj["debug"] = debug
+    ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
-@click.argument('jql')
-@click.option('--max-results', '-n', default=50, help='Maximum results to return')
-@click.option('--fields', '-f', default='key,summary,status,assignee,priority',
-              help='Comma-separated fields to return')
-@click.option('--truncate', type=int, metavar='N', help='Truncate field values to N characters')
+@click.argument("jql")
+@click.option("--max-results", "-n", default=50, help="Maximum results to return")
+@click.option("--fields", "-f", default="key,summary,status,assignee,priority", help="Comma-separated fields to return")
+@click.option("--truncate", type=int, metavar="N", help="Truncate field values to N characters")
 @click.pass_context
 def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
     """Search issues using JQL.
@@ -78,21 +78,21 @@ def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
       labels = backend                  # By label
       priority = High                   # By priority
     """
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
 
     try:
         # Parse fields
-        field_list = [f.strip() for f in fields.split(',')]
+        field_list = [f.strip() for f in fields.split(",")]
 
         # Execute search
         results = client.jql(jql, limit=max_results, fields=field_list)
-        issues = results.get('issues', [])
+        issues = results.get("issues", [])
 
-        if ctx.obj['json']:
+        if ctx.obj["json"]:
             format_output(issues, as_json=True)
-        elif ctx.obj['quiet']:
+        elif ctx.obj["quiet"]:
             for issue in issues:
-                print(issue['key'])
+                print(issue["key"])
         else:
             # Table output
             if not issues:
@@ -102,7 +102,7 @@ def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
                 print(f"\n({len(issues)} issue{'s' if len(issues) != 1 else ''} found)")
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Search failed: {e}")
         sys.exit(1)
@@ -119,46 +119,46 @@ def _print_results_table(issues: list, fields: list, truncate: int | None = None
     # Build table data
     rows = []
     for issue in issues:
-        row = {'key': issue['key']}
-        issue_fields = issue.get('fields', {})
+        row = {"key": issue["key"]}
+        issue_fields = issue.get("fields", {})
 
         for field in fields:
-            if field == 'key':
+            if field == "key":
                 continue
 
             value = issue_fields.get(field)
 
             # Handle nested objects
             if isinstance(value, dict):
-                if 'name' in value:
-                    value = value['name']
-                elif 'displayName' in value:
-                    value = value['displayName']
-                elif 'value' in value:
-                    value = value['value']
+                if "name" in value:
+                    value = value["name"]
+                elif "displayName" in value:
+                    value = value["displayName"]
+                elif "value" in value:
+                    value = value["value"]
                 else:
                     value = str(value)
             elif isinstance(value, list):
-                value = ', '.join(str(v) for v in value[:3])
+                value = ", ".join(str(v) for v in value[:3])
                 if len(issue_fields.get(field, [])) > 3:
-                    value += '...'
+                    value += "..."
             elif value is None:
-                value = '-'
+                value = "-"
             else:
                 value = str(value)
 
             # Truncate if requested
             if truncate and len(str(value)) > truncate:
-                value = str(value)[:truncate-3] + '...'
+                value = str(value)[: truncate - 3] + "..."
 
             row[field] = value
 
         rows.append(row)
 
     # Print table
-    columns = ['key'] + [f for f in fields if f != 'key']
+    columns = ["key"] + [f for f in fields if f != "key"]
     print(format_table(rows, columns))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()
