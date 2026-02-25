@@ -32,9 +32,9 @@ def _normalize_netloc(url: str) -> str:
     parsed = urlparse(url)
     host = parsed.netloc.lower()
     scheme = parsed.scheme.lower()
-    if scheme == 'https' and host.endswith(':443'):
+    if scheme == "https" and host.endswith(":443"):
         host = host[:-4]
-    elif scheme == 'http' and host.endswith(':80'):
+    elif scheme == "http" and host.endswith(":80"):
         host = host[:-3]
     return host
 
@@ -61,7 +61,7 @@ def extract_jira_hosts(text: str) -> list[str]:
     for match in re.finditer(JIRA_HOST_PATTERN, text):
         # Strip trailing punctuation that the regex may have captured
         # (e.g., "https://jira.example.com)." → "https://jira.example.com")
-        raw = match.group(1).rstrip('/').rstrip('.,;:!?)\'"')
+        raw = match.group(1).rstrip("/").rstrip(".,;:!?)'\"")
         parsed = urlparse(raw)
         if parsed.netloc:
             hosts.add(f"{parsed.scheme}://{parsed.netloc}")
@@ -86,7 +86,7 @@ def resolve_profile_suggestion(issue_keys: list[str], hosts: list[str]) -> str |
     if not isinstance(data, dict):
         return None
 
-    profiles = data.get('profiles', {})
+    profiles = data.get("profiles", {})
     if not isinstance(profiles, dict) or not profiles:
         return None
 
@@ -94,17 +94,20 @@ def resolve_profile_suggestion(issue_keys: list[str], hosts: list[str]) -> str |
     for host_url in hosts:
         input_host = _normalize_netloc(host_url)
         for name, prof in profiles.items():
-            prof_host = _normalize_netloc(prof.get('url', ''))
+            prof_host = _normalize_netloc(prof.get("url", ""))
             if prof_host and prof_host == input_host:
                 return name
 
     # Try project key matching
     for key in issue_keys:
-        prefix_match = re.match(r'^([A-Z][A-Z0-9_]+)-\d+$', key)
+        prefix_match = re.match(r"^([A-Z][A-Z0-9_]+)-\d+$", key)
         if prefix_match:
             prefix = prefix_match.group(1)
-            matches = [name for name, prof in profiles.items()
-                       if isinstance(prof.get('projects'), list) and prefix in prof['projects']]
+            matches = [
+                name
+                for name, prof in profiles.items()
+                if isinstance(prof.get("projects"), list) and prefix in prof["projects"]
+            ]
             if len(matches) == 1:
                 return matches[0]
 

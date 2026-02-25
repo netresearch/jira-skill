@@ -34,9 +34,9 @@ def _get_to_status(transition: dict) -> str:
     Cloud returns: {'to': {'name': 'In Progress', ...}}
     Server/DC returns: {'to': 'In Progress'}
     """
-    to_value = transition.get('to', '')
+    to_value = transition.get("to", "")
     if isinstance(to_value, dict):
-        return to_value.get('name', '')
+        return to_value.get("name", "")
     return str(to_value)
 
 
@@ -46,11 +46,11 @@ def _get_to_status(transition: dict) -> str:
 
 
 @click.group()
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--quiet', '-q', is_flag=True, help='Minimal output')
-@click.option('--env-file', type=click.Path(), help='Environment file path')
-@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
-@click.option('--debug', is_flag=True, help='Show debug information on errors')
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output")
+@click.option("--env-file", type=click.Path(), help="Environment file path")
+@click.option("--profile", "-P", help="Jira profile name from ~/.jira/profiles.json")
+@click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.pass_context
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue transitions.
@@ -58,14 +58,14 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     List available transitions and change issue status.
     """
     ctx.ensure_object(dict)
-    ctx.obj['json'] = output_json
-    ctx.obj['quiet'] = quiet
-    ctx.obj['debug'] = debug
-    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
+    ctx.obj["json"] = output_json
+    ctx.obj["quiet"] = quiet
+    ctx.obj["debug"] = debug
+    ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
-@cli.command('list')
-@click.argument('issue_key')
+@cli.command("list")
+@click.argument("issue_key")
 @click.pass_context
 def list_transitions(ctx, issue_key: str):
     """List available transitions for an issue.
@@ -78,21 +78,21 @@ def list_transitions(ctx, issue_key: str):
 
       jira-transition list PROJ-123
     """
-    ctx.obj['client'].with_context(issue_key=issue_key)
-    client = ctx.obj['client']
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
 
     try:
         transitions = client.get_issue_transitions(issue_key)
 
-        if ctx.obj['json']:
+        if ctx.obj["json"]:
             format_output(transitions, as_json=True)
-        elif ctx.obj['quiet']:
+        elif ctx.obj["quiet"]:
             for t in transitions:
-                print(t.get('name', ''))
+                print(t.get("name", ""))
         else:
             # Get current status
-            issue = client.issue(issue_key, fields='status')
-            current_status = issue['fields']['status']['name']
+            issue = client.issue(issue_key, fields="status")
+            current_status = issue["fields"]["status"]["name"]
 
             print(f"Available transitions for {issue_key}")
             print(f"Current status: {current_status}\n")
@@ -102,29 +102,24 @@ def list_transitions(ctx, issue_key: str):
             else:
                 rows = []
                 for t in transitions:
-                    rows.append({
-                        'ID': t.get('id', ''),
-                        'Name': t.get('name', ''),
-                        'To Status': _get_to_status(t)
-                    })
-                print(format_table(rows, ['ID', 'Name', 'To Status']))
+                    rows.append({"ID": t.get("id", ""), "Name": t.get("name", ""), "To Status": _get_to_status(t)})
+                print(format_table(rows, ["ID", "Name", "To Status"]))
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to get transitions for {issue_key}: {e}")
         sys.exit(1)
 
 
-@cli.command('do')
-@click.argument('issue_key')
-@click.argument('status_name')
-@click.option('--comment', '-c', help='Comment to add during transition')
-@click.option('--resolution', '-r', help='Resolution name (for closing transitions)')
-@click.option('--dry-run', is_flag=True, help='Show what would happen without making changes')
+@cli.command("do")
+@click.argument("issue_key")
+@click.argument("status_name")
+@click.option("--comment", "-c", help="Comment to add during transition")
+@click.option("--resolution", "-r", help="Resolution name (for closing transitions)")
+@click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
-def do_transition(ctx, issue_key: str, status_name: str,
-                  comment: str | None, resolution: str | None, dry_run: bool):
+def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, resolution: str | None, dry_run: bool):
     """Transition an issue to a new status.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -141,8 +136,8 @@ def do_transition(ctx, issue_key: str, status_name: str,
 
       jira-transition do PROJ-123 "In Review" --dry-run
     """
-    ctx.obj['client'].with_context(issue_key=issue_key)
-    client = ctx.obj['client']
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
 
     try:
         # Get available transitions
@@ -151,7 +146,7 @@ def do_transition(ctx, issue_key: str, status_name: str,
         # Find matching transition (case-insensitive)
         matching = None
         for t in transitions:
-            if t.get('name', '').lower() == status_name.lower():
+            if t.get("name", "").lower() == status_name.lower():
                 matching = t
                 break
             # Also check target status name
@@ -161,7 +156,7 @@ def do_transition(ctx, issue_key: str, status_name: str,
                 break
 
         if not matching:
-            available = [t.get('name', '') for t in transitions]
+            available = [t.get("name", "") for t in transitions]
             error(f"Transition '{status_name}' not available for {issue_key}")
             print(f"\nAvailable transitions: {', '.join(available)}")
             sys.exit(1)
@@ -181,7 +176,7 @@ def do_transition(ctx, issue_key: str, status_name: str,
         # Build transition payload
         fields = {}
         if resolution:
-            fields['resolution'] = {'name': resolution}
+            fields["resolution"] = {"name": resolution}
 
         # Perform transition - API uses target status name (not transition name/ID)
         # set_issue_status handles the transition ID lookup internally
@@ -192,21 +187,14 @@ def do_transition(ctx, issue_key: str, status_name: str,
         if comment:
             update = {"comment": [{"add": {"body": comment}}]}
 
-        client.set_issue_status(
-            issue_key,
-            target_status,
-            fields=fields if fields else None,
-            update=update
-        )
+        client.set_issue_status(issue_key, target_status, fields=fields if fields else None, update=update)
 
-        if ctx.obj['quiet']:
+        if ctx.obj["quiet"]:
             print(issue_key)
-        elif ctx.obj['json']:
-            format_output({
-                'key': issue_key,
-                'transition': matching['name'],
-                'to_status': _get_to_status(matching)
-            }, as_json=True)
+        elif ctx.obj["json"]:
+            format_output(
+                {"key": issue_key, "transition": matching["name"], "to_status": _get_to_status(matching)}, as_json=True
+            )
         else:
             success(f"Transitioned {issue_key}")
             print(f"  Status: {_get_to_status(matching)}")
@@ -214,11 +202,11 @@ def do_transition(ctx, issue_key: str, status_name: str,
                 print(f"  Comment added: {comment[:50]}...")
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to transition {issue_key}: {e}")
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

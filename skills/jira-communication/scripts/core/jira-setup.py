@@ -47,7 +47,7 @@ def detect_jira_type(url: str) -> str:
     Returns:
         'cloud' for Atlassian Cloud, 'server' for Server/DC
     """
-    return 'cloud' if is_cloud_url(url) else 'server'
+    return "cloud" if is_cloud_url(url) else "server"
 
 
 def validate_url(url: str) -> tuple[bool, str]:
@@ -59,7 +59,7 @@ def validate_url(url: str) -> tuple[bool, str]:
     Returns:
         Tuple of (success, message)
     """
-    if not url.startswith(('http://', 'https://')):
+    if not url.startswith(("http://", "https://")):
         return False, "URL must start with http:// or https://"
 
     try:
@@ -95,43 +95,43 @@ def validate_credentials(url: str, auth_type: str, **kwargs) -> tuple[bool, str]
         Tuple of (success, message/user_info)
     """
     try:
-        if auth_type == 'cloud':
+        if auth_type == "cloud":
             client = Jira(
                 url=url,
-                username=kwargs['username'],
-                password=kwargs['api_token'],
+                username=kwargs["username"],
+                password=kwargs["api_token"],
                 cloud=True,
                 timeout=JIRA_TIMEOUT,
             )
         else:
             client = Jira(
                 url=url,
-                token=kwargs['personal_token'],
+                token=kwargs["personal_token"],
                 timeout=JIRA_TIMEOUT,
             )
 
         user = client.myself()
         if isinstance(user, dict):
-            display_name = user.get('displayName', user.get('name', 'Unknown'))
-            email = user.get('emailAddress', '')
+            display_name = user.get("displayName", user.get("name", "Unknown"))
+            email = user.get("emailAddress", "")
         else:
-            user_str = str(user) if user else ''
+            user_str = str(user) if user else ""
             # Detect HTML response (2FA/Secure Login intercept)
-            if user_str.lstrip().startswith(('<!DOCTYPE', '<html', '<HTML')):
+            if user_str.lstrip().startswith(("<!DOCTYPE", "<html", "<HTML")):
                 return False, (
                     "Two-factor authentication (2FA/Secure Login) intercepted the API call. "
                     "Your PAT may not bypass 2FA on this instance. "
                     "Check Jira admin settings or create a new PAT with API access."
                 )
-            display_name = user_str or 'Unknown'
-            email = ''
+            display_name = user_str or "Unknown"
+            email = ""
         return True, f"{display_name}" + (f" ({email})" if email else "")
 
     except Exception as e:
         error_msg = _sanitize_error(str(e))
-        if '401' in error_msg or 'Unauthorized' in error_msg:
+        if "401" in error_msg or "Unauthorized" in error_msg:
             return False, "Authentication failed - invalid credentials"
-        if '403' in error_msg or 'Forbidden' in error_msg:
+        if "403" in error_msg or "Forbidden" in error_msg:
             return False, "Access denied - check permissions"
         return False, f"Connection error: {error_msg}"
 
@@ -162,7 +162,7 @@ def write_env_file(path: Path, config: dict) -> None:
     lines.append("")
 
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
+    with os.fdopen(fd, "w") as f:
         f.write("\n".join(lines))
     os.chmod(path, 0o600)
 
@@ -182,29 +182,29 @@ def write_profile(profile_name: str, profile_data: dict) -> None:
             data = json.loads(PROFILES_FILE.read_text())
         except json.JSONDecodeError:
             warning(f"{PROFILES_FILE} is corrupted. Creating backup and starting fresh.")
-            PROFILES_FILE.replace(PROFILES_FILE.with_suffix('.json.bak'))
-            data = {'version': 1, 'profiles': {}}
+            PROFILES_FILE.replace(PROFILES_FILE.with_suffix(".json.bak"))
+            data = {"version": 1, "profiles": {}}
         else:
             # Validate structure: must be a dict with a 'profiles' dict
-            if not isinstance(data, dict) or not isinstance(data.get('profiles'), dict):
+            if not isinstance(data, dict) or not isinstance(data.get("profiles"), dict):
                 warning(f"{PROFILES_FILE} has invalid structure. Creating backup and starting fresh.")
-                PROFILES_FILE.replace(PROFILES_FILE.with_suffix('.json.bak'))
-                data = {'version': 1, 'profiles': {}}
+                PROFILES_FILE.replace(PROFILES_FILE.with_suffix(".json.bak"))
+                data = {"version": 1, "profiles": {}}
     else:
         profiles_dir.mkdir(parents=True, exist_ok=True)
-        data = {'version': 1, 'profiles': {}}
+        data = {"version": 1, "profiles": {}}
 
     # Update profile
-    data['profiles'][profile_name] = profile_data
+    data["profiles"][profile_name] = profile_data
 
     # Set default if first profile
-    if 'default' not in data or not data['default']:
-        data['default'] = profile_name
+    if "default" not in data or not data["default"]:
+        data["default"] = profile_name
 
     # Write with restricted permissions from creation (no race condition)
     fd = os.open(PROFILES_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        f.write(json.dumps(data, indent=2) + '\n')
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(data, indent=2) + "\n")
     os.chmod(PROFILES_FILE, 0o600)
 
 
@@ -222,20 +222,20 @@ def migrate_env_to_profile() -> None:
 
     config = load_env()
 
-    url = config.get('JIRA_URL', '')
-    profile_data = {'url': url}
+    url = config.get("JIRA_URL", "")
+    profile_data = {"url": url}
 
-    if config.get('JIRA_PERSONAL_TOKEN'):
-        profile_data['auth'] = 'pat'
-        profile_data['token'] = config['JIRA_PERSONAL_TOKEN']
+    if config.get("JIRA_PERSONAL_TOKEN"):
+        profile_data["auth"] = "pat"
+        profile_data["token"] = config["JIRA_PERSONAL_TOKEN"]
     else:
-        profile_data['auth'] = 'cloud'
-        profile_data['username'] = config.get('JIRA_USERNAME', '')
-        profile_data['api_token'] = config.get('JIRA_API_TOKEN', '')
+        profile_data["auth"] = "cloud"
+        profile_data["username"] = config.get("JIRA_USERNAME", "")
+        profile_data["api_token"] = config.get("JIRA_API_TOKEN", "")
 
-    profile_data['projects'] = []
+    profile_data["projects"] = []
 
-    write_profile('default', profile_data)
+    write_profile("default", profile_data)
     success(f"Migrated {DEFAULT_ENV_FILE} → {PROFILES_FILE} (profile: 'default')")
     click.echo()
     click.echo("You can now add project keys to the profile:")
@@ -243,18 +243,32 @@ def migrate_env_to_profile() -> None:
 
 
 @click.command()
-@click.option('--url', help='Jira instance URL (will prompt if not provided)')
-@click.option('--type', 'jira_type', type=click.Choice(['cloud', 'server', 'auto']),
-              default='auto', help='Jira deployment type')
-@click.option('--output', '-o', type=click.Path(), default=str(DEFAULT_ENV_FILE),
-              help=f'Output file path (default: {DEFAULT_ENV_FILE})')
-@click.option('--force', '-f', is_flag=True, help='Overwrite existing file without prompting')
-@click.option('--test-only', is_flag=True, help='Test credentials without saving')
-@click.option('--profile', '-P', help='Save as named profile in ~/.jira/profiles.json')
-@click.option('--projects', help='Comma-separated project keys for the profile')
-@click.option('--migrate', is_flag=True, help='Migrate ~/.env.jira to profiles.json')
-def main(url: str | None, jira_type: str, output: str, force: bool, test_only: bool,
-         profile: str | None, projects: str | None, migrate: bool):
+@click.option("--url", help="Jira instance URL (will prompt if not provided)")
+@click.option(
+    "--type", "jira_type", type=click.Choice(["cloud", "server", "auto"]), default="auto", help="Jira deployment type"
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=str(DEFAULT_ENV_FILE),
+    help=f"Output file path (default: {DEFAULT_ENV_FILE})",
+)
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing file without prompting")
+@click.option("--test-only", is_flag=True, help="Test credentials without saving")
+@click.option("--profile", "-P", help="Save as named profile in ~/.jira/profiles.json")
+@click.option("--projects", help="Comma-separated project keys for the profile")
+@click.option("--migrate", is_flag=True, help="Migrate ~/.env.jira to profiles.json")
+def main(
+    url: str | None,
+    jira_type: str,
+    output: str,
+    force: bool,
+    test_only: bool,
+    profile: str | None,
+    projects: str | None,
+    migrate: bool,
+):
     """Interactive Jira credential setup.
 
     Guides you through configuring Jira authentication credentials
@@ -321,10 +335,10 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
         click.echo("  - https://company.atlassian.net (Jira Cloud)")
         click.echo("  - https://jira.company.com (Jira Server/DC)")
         click.echo()
-        url = click.prompt("Jira URL", type=str).strip().rstrip('/')
+        url = click.prompt("Jira URL", type=str).strip().rstrip("/")
 
     # Warn about non-HTTPS URLs
-    if url.startswith('http://') and not url.startswith('http://localhost'):
+    if url.startswith("http://") and not url.startswith("http://localhost"):
         warning("Using HTTP without TLS. Credentials will be transmitted in plaintext.")
 
     # Validate URL
@@ -343,21 +357,17 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
     click.echo("Step 2: Authentication Type")
     click.echo("-" * 40)
 
-    if jira_type == 'auto':
+    if jira_type == "auto":
         detected = detect_jira_type(url)
         click.echo(f"Detected Jira type: {detected.upper()}")
 
-        if detected == 'cloud':
+        if detected == "cloud":
             click.echo("  → Using Username + API Token authentication")
         else:
             click.echo("  → Using Personal Access Token (PAT) authentication")
 
         if not click.confirm("Is this correct?", default=True):
-            jira_type = click.prompt(
-                "Select type",
-                type=click.Choice(['cloud', 'server']),
-                default=detected
-            )
+            jira_type = click.prompt("Select type", type=click.Choice(["cloud", "server"]), default=detected)
         else:
             jira_type = detected
 
@@ -367,9 +377,9 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
     click.echo("Step 3: Credentials")
     click.echo("-" * 40)
 
-    config = {'JIRA_URL': url}
+    config = {"JIRA_URL": url}
 
-    if jira_type == 'cloud':
+    if jira_type == "cloud":
         click.echo("Jira Cloud authentication requires:")
         click.echo("  1. Your Atlassian account email")
         click.echo("  2. An API token (create at https://id.atlassian.com/manage-profile/security/api-tokens)")
@@ -378,15 +388,13 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
         username = click.prompt("Email address", type=str).strip()
         api_token = click.prompt("API Token", type=str, hide_input=True).strip()
 
-        config['JIRA_USERNAME'] = username
-        config['JIRA_API_TOKEN'] = api_token
+        config["JIRA_USERNAME"] = username
+        config["JIRA_API_TOKEN"] = api_token
 
         # Validate
         click.echo()
         click.echo("Validating credentials...", nl=False)
-        cred_ok, cred_msg = validate_credentials(url, 'cloud',
-                                                  username=username,
-                                                  api_token=api_token)
+        cred_ok, cred_msg = validate_credentials(url, "cloud", username=username, api_token=api_token)
     else:
         click.echo("Jira Server/Data Center authentication requires:")
         click.echo("  - A Personal Access Token (PAT)")
@@ -395,13 +403,12 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
 
         personal_token = click.prompt("Personal Access Token", type=str, hide_input=True).strip()
 
-        config['JIRA_PERSONAL_TOKEN'] = personal_token
+        config["JIRA_PERSONAL_TOKEN"] = personal_token
 
         # Validate
         click.echo()
         click.echo("Validating credentials...", nl=False)
-        cred_ok, cred_msg = validate_credentials(url, 'server',
-                                                  personal_token=personal_token)
+        cred_ok, cred_msg = validate_credentials(url, "server", personal_token=personal_token)
 
     if cred_ok:
         click.echo(" ✓")
@@ -410,7 +417,7 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
         click.echo(" ✗")
         error(f"Authentication failed: {cred_msg}")
 
-        if jira_type == 'cloud':
+        if jira_type == "cloud":
             click.echo()
             click.echo("Troubleshooting tips:")
             click.echo("  1. Verify your email address is correct")
@@ -446,29 +453,28 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
         # Get project keys
         project_list = []
         if projects:
-            project_list = [p.strip() for p in projects.split(',') if p.strip()]
+            project_list = [p.strip() for p in projects.split(",") if p.strip()]
         else:
             click.echo()
             proj_input = click.prompt(
-                "Project keys (comma-separated, e.g. WEB,INFRA)",
-                type=str, default='', show_default=False
+                "Project keys (comma-separated, e.g. WEB,INFRA)", type=str, default="", show_default=False
             ).strip()
             if proj_input:
-                project_list = [p.strip() for p in proj_input.split(',') if p.strip()]
+                project_list = [p.strip() for p in proj_input.split(",") if p.strip()]
 
         if click.confirm("Save profile?", default=True):
-            profile_data = {'url': url}
+            profile_data = {"url": url}
 
-            if jira_type == 'cloud':
-                profile_data['auth'] = 'cloud'
-                profile_data['username'] = config['JIRA_USERNAME']
-                profile_data['api_token'] = config['JIRA_API_TOKEN']
+            if jira_type == "cloud":
+                profile_data["auth"] = "cloud"
+                profile_data["username"] = config["JIRA_USERNAME"]
+                profile_data["api_token"] = config["JIRA_API_TOKEN"]
             else:
-                profile_data['auth'] = 'pat'
-                profile_data['token'] = config['JIRA_PERSONAL_TOKEN']
+                profile_data["auth"] = "pat"
+                profile_data["token"] = config["JIRA_PERSONAL_TOKEN"]
 
             if project_list:
-                profile_data['projects'] = project_list
+                profile_data["projects"] = project_list
 
             write_profile(profile, profile_data)
             click.echo()
@@ -505,5 +511,5 @@ def main(url: str | None, jira_type: str, output: str, force: bool, test_only: b
     sys.exit(EXIT_SUCCESS)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

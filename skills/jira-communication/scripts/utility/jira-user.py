@@ -27,12 +27,13 @@ from lib.output import error, format_output
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @click.group()
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--quiet', '-q', is_flag=True, help='Minimal output')
-@click.option('--env-file', type=click.Path(), help='Environment file path')
-@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
-@click.option('--debug', is_flag=True, help='Show debug information on errors')
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output")
+@click.option("--env-file", type=click.Path(), help="Environment file path")
+@click.option("--profile", "-P", help="Jira profile name from ~/.jira/profiles.json")
+@click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.pass_context
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira user operations.
@@ -40,10 +41,10 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     Get information about Jira users.
     """
     ctx.ensure_object(dict)
-    ctx.obj['json'] = output_json
-    ctx.obj['quiet'] = quiet
-    ctx.obj['debug'] = debug
-    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
+    ctx.obj["json"] = output_json
+    ctx.obj["quiet"] = quiet
+    ctx.obj["debug"] = debug
+    ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
@@ -57,33 +58,33 @@ def me(ctx):
 
       jira-user me
     """
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
 
     try:
         user = client.myself()
 
-        if ctx.obj['json']:
+        if ctx.obj["json"]:
             format_output(user, as_json=True)
-        elif ctx.obj['quiet']:
-            print(user.get('accountId', user.get('name', '')))
+        elif ctx.obj["quiet"]:
+            print(user.get("accountId", user.get("name", "")))
         else:
             print("Current User:")
             print(f"  Name: {user.get('displayName', 'Unknown')}")
             print(f"  Email: {user.get('emailAddress', 'N/A')}")
             print(f"  Account ID: {user.get('accountId', user.get('key', 'N/A'))}")
             print(f"  Active: {'Yes' if user.get('active', True) else 'No'}")
-            timezone = user.get('timeZone', 'N/A')
+            timezone = user.get("timeZone", "N/A")
             print(f"  Timezone: {timezone}")
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to get current user: {e}")
         sys.exit(1)
 
 
 @cli.command()
-@click.argument('identifier')
+@click.argument("identifier")
 @click.pass_context
 def get(ctx, identifier: str):
     """Get user by identifier.
@@ -98,9 +99,9 @@ def get(ctx, identifier: str):
 
       jira-user get 5b10ac8d82e05b22cc7d4ef5
     """
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
 
-    debug = ctx.obj['debug']
+    debug = ctx.obj["debug"]
 
     try:
         # Try different methods to find user
@@ -125,7 +126,7 @@ def get(ctx, identifier: str):
         # Try user search API (works for email on Server/DC)
         if not user:
             try:
-                users = client.get('rest/api/2/user/search', params={'username': identifier})
+                users = client.get("rest/api/2/user/search", params={"username": identifier})
                 if users and isinstance(users, list) and len(users) > 0:
                     user = users[0]
             except Exception as e:
@@ -140,7 +141,7 @@ def get(ctx, identifier: str):
                     found = users[0]
                     if isinstance(found, dict):
                         user = found
-                    elif isinstance(found, str) and not found.startswith('Username'):
+                    elif isinstance(found, str) and not found.startswith("Username"):
                         # It's a username string, fetch full object
                         user = client.user(username=found)
             except Exception as e:
@@ -151,10 +152,10 @@ def get(ctx, identifier: str):
             error(f"User not found: {identifier}")
             sys.exit(1)
 
-        if ctx.obj['json']:
+        if ctx.obj["json"]:
             format_output(user, as_json=True)
-        elif ctx.obj['quiet']:
-            print(user.get('accountId', user.get('name', '')))
+        elif ctx.obj["quiet"]:
+            print(user.get("accountId", user.get("name", "")))
         else:
             print(f"User: {user.get('displayName', 'Unknown')}")
             print(f"  Email: {user.get('emailAddress', 'N/A')}")
@@ -162,11 +163,11 @@ def get(ctx, identifier: str):
             print(f"  Active: {'Yes' if user.get('active', True) else 'No'}")
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to get user {identifier}: {e}")
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

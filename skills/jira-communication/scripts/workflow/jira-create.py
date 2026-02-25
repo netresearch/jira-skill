@@ -30,11 +30,11 @@ from lib.output import error, format_output, success, warning
 
 
 @click.group()
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--quiet', '-q', is_flag=True, help='Minimal output (just issue key)')
-@click.option('--env-file', type=click.Path(), help='Environment file path')
-@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
-@click.option('--debug', is_flag=True, help='Show debug information on errors')
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output (just issue key)")
+@click.option("--env-file", type=click.Path(), help="Environment file path")
+@click.option("--profile", "-P", help="Jira profile name from ~/.jira/profiles.json")
+@click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.pass_context
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue creation.
@@ -42,30 +42,39 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     Create new Jira issues with various types and configurations.
     """
     ctx.ensure_object(dict)
-    ctx.obj['json'] = output_json
-    ctx.obj['quiet'] = quiet
-    ctx.obj['debug'] = debug
-    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
+    ctx.obj["json"] = output_json
+    ctx.obj["quiet"] = quiet
+    ctx.obj["debug"] = debug
+    ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
-@click.argument('project_key')
-@click.argument('summary')
-@click.option('--type', '-t', 'issue_type', required=True,
-              help='Issue type (Task, Bug, Story, Epic, etc.)')
-@click.option('--description', '-d', help='Issue description (Jira wiki markup)')
-@click.option('--priority', '-p', help='Priority name (High, Medium, Low, etc.)')
-@click.option('--labels', '-l', help='Comma-separated labels')
-@click.option('--assignee', '-a', help='Assignee username or email')
-@click.option('--parent', help='Parent issue key (for subtasks or epic link)')
-@click.option('--components', help='Comma-separated component names')
-@click.option('--fields-json', help='JSON string of additional fields')
-@click.option('--dry-run', is_flag=True, help='Show what would be created without making changes')
+@click.argument("project_key")
+@click.argument("summary")
+@click.option("--type", "-t", "issue_type", required=True, help="Issue type (Task, Bug, Story, Epic, etc.)")
+@click.option("--description", "-d", help="Issue description (Jira wiki markup)")
+@click.option("--priority", "-p", help="Priority name (High, Medium, Low, etc.)")
+@click.option("--labels", "-l", help="Comma-separated labels")
+@click.option("--assignee", "-a", help="Assignee username or email")
+@click.option("--parent", help="Parent issue key (for subtasks or epic link)")
+@click.option("--components", help="Comma-separated component names")
+@click.option("--fields-json", help="JSON string of additional fields")
+@click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
 @click.pass_context
-def issue(ctx, project_key: str, summary: str, issue_type: str,
-          description: str | None, priority: str | None, labels: str | None,
-          assignee: str | None, parent: str | None, components: str | None,
-          fields_json: str | None, dry_run: bool):
+def issue(
+    ctx,
+    project_key: str,
+    summary: str,
+    issue_type: str,
+    description: str | None,
+    priority: str | None,
+    labels: str | None,
+    assignee: str | None,
+    parent: str | None,
+    components: str | None,
+    fields_json: str | None,
+    dry_run: bool,
+):
     """Create a new Jira issue.
 
     PROJECT_KEY: The Jira project key (e.g., PROJ)
@@ -84,51 +93,51 @@ def issue(ctx, project_key: str, summary: str, issue_type: str,
 
       jira-create issue PROJ "Test" --type Task --dry-run
     """
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
 
     # Build issue fields
     fields = {
-        'project': {'key': project_key},
-        'summary': summary,
-        'issuetype': {'name': issue_type},
+        "project": {"key": project_key},
+        "summary": summary,
+        "issuetype": {"name": issue_type},
     }
 
     if description:
-        fields['description'] = description
+        fields["description"] = description
 
     if priority:
-        fields['priority'] = {'name': priority}
+        fields["priority"] = {"name": priority}
 
     if labels:
-        fields['labels'] = [lbl.strip() for lbl in labels.split(',')]
+        fields["labels"] = [lbl.strip() for lbl in labels.split(",")]
 
     if assignee:
         if is_account_id(assignee):
-            fields['assignee'] = {'accountId': assignee}
+            fields["assignee"] = {"accountId": assignee}
         else:
             users = client.user_find_by_user_string(query=assignee)
             if users:
-                user = users[0] if isinstance(users[0], dict) else {'name': users[0]}
-                if 'accountId' in user:
-                    fields['assignee'] = {'accountId': user['accountId']}
+                user = users[0] if isinstance(users[0], dict) else {"name": users[0]}
+                if "accountId" in user:
+                    fields["assignee"] = {"accountId": user["accountId"]}
                 else:
-                    fields['assignee'] = {'name': user.get('name', user.get('key', assignee))}
+                    fields["assignee"] = {"name": user.get("name", user.get("key", assignee))}
             else:
                 # Fall back to raw identifier (username/email) and let Jira
                 # validate it — avoids breaking Server/DC where direct names work.
                 warning(f"User not found via search for '{assignee}', using raw identifier")
-                fields['assignee'] = {'name': assignee}
+                fields["assignee"] = {"name": assignee}
 
     if parent:
         # Determine if subtask or epic link
-        if issue_type.lower() in ('subtask', 'sub-task'):
-            fields['parent'] = {'key': parent}
+        if issue_type.lower() in ("subtask", "sub-task"):
+            fields["parent"] = {"key": parent}
         else:
             # Epic link - field name varies by Jira version
-            fields['parent'] = {'key': parent}
+            fields["parent"] = {"key": parent}
 
     if components:
-        fields['components'] = [{'name': c.strip()} for c in components.split(',')]
+        fields["components"] = [{"name": c.strip()} for c in components.split(",")]
 
     if fields_json:
         try:
@@ -161,9 +170,9 @@ def issue(ctx, project_key: str, summary: str, issue_type: str,
     try:
         result = client.create_issue(fields=fields)
 
-        if ctx.obj['quiet']:
-            print(result['key'])
-        elif ctx.obj['json']:
+        if ctx.obj["quiet"]:
+            print(result["key"])
+        elif ctx.obj["json"]:
             format_output(result, as_json=True)
         else:
             success(f"Created issue: {result['key']}")
@@ -172,11 +181,11 @@ def issue(ctx, project_key: str, summary: str, issue_type: str,
             print(f"  URL: {client.url}/browse/{result['key']}")
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to create issue: {e}")
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

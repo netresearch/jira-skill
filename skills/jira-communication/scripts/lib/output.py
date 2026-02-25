@@ -6,6 +6,7 @@ from typing import Any
 
 # === INLINE_START: output ===
 
+
 def format_json(data: Any, indent: int = 2) -> str:
     """Format data as JSON string.
 
@@ -34,14 +35,14 @@ def format_table(data: list, columns: list | None = None) -> str:
 
     # Determine columns
     if columns is None:
-        columns = list(data[0].keys()) if isinstance(data[0], dict) else ['value']
+        columns = list(data[0].keys()) if isinstance(data[0], dict) else ["value"]
 
     # Calculate column widths
     widths = {col: len(col) for col in columns}
     for row in data:
         if isinstance(row, dict):
             for col in columns:
-                val = str(row.get(col, ''))
+                val = str(row.get(col, ""))
                 widths[col] = max(widths[col], len(val))
 
     # Build table
@@ -55,7 +56,7 @@ def format_table(data: list, columns: list | None = None) -> str:
     # Rows
     for row in data:
         if isinstance(row, dict):
-            line = " | ".join(str(row.get(col, '')).ljust(widths[col]) for col in columns)
+            line = " | ".join(str(row.get(col, "")).ljust(widths[col]) for col in columns)
         else:
             line = str(row)
         lines.append(line)
@@ -72,11 +73,11 @@ def format_output(data: Any, as_json: bool = False, quiet: bool = False) -> None
         quiet: Minimal output if True
     """
     if quiet:
-        if isinstance(data, dict) and 'key' in data:
-            print(data['key'])
-        elif isinstance(data, list) and data and isinstance(data[0], dict) and 'key' in data[0]:
+        if isinstance(data, dict) and "key" in data:
+            print(data["key"])
+        elif isinstance(data, list) and data and isinstance(data[0], dict) and "key" in data[0]:
             for item in data:
-                print(item.get('key', ''))
+                print(item.get("key", ""))
         else:
             print(data if isinstance(data, str) else format_json(data))
         return
@@ -151,19 +152,20 @@ def extract_adf_text(adf) -> str:
         return str(adf)
 
     parts = _extract_text_recursive(adf)
-    return ' '.join(parts)
+    return " ".join(parts)
 
 
 def _extract_text_recursive(node) -> list:
     """Recursively extract text from any ADF node."""
     parts = []
     if isinstance(node, dict):
-        if node.get('type') == 'text':
-            text = node.get('text', '')
+        if node.get("type") == "text":
+            text = node.get("text", "")
             if text:
                 parts.append(text)
-        for child in node.get('content', []):
+        for child in node.get("content", []):
             parts.extend(_extract_text_recursive(child))
     return parts
+
 
 # === INLINE_END: output ===

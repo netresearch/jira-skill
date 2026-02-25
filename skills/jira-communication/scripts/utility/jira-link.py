@@ -27,12 +27,13 @@ from lib.output import error, format_output, format_table, success, warning
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @click.group()
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--quiet', '-q', is_flag=True, help='Minimal output')
-@click.option('--env-file', type=click.Path(), help='Environment file path')
-@click.option('--profile', '-P', help='Jira profile name from ~/.jira/profiles.json')
-@click.option('--debug', is_flag=True, help='Show debug information on errors')
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output")
+@click.option("--env-file", type=click.Path(), help="Environment file path")
+@click.option("--profile", "-P", help="Jira profile name from ~/.jira/profiles.json")
+@click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.pass_context
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue link operations.
@@ -40,18 +41,17 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     Create links between issues and list available link types.
     """
     ctx.ensure_object(dict)
-    ctx.obj['json'] = output_json
-    ctx.obj['quiet'] = quiet
-    ctx.obj['debug'] = debug
-    ctx.obj['client'] = LazyJiraClient(env_file=env_file, profile=profile)
+    ctx.obj["json"] = output_json
+    ctx.obj["quiet"] = quiet
+    ctx.obj["debug"] = debug
+    ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
-@click.argument('from_key')
-@click.argument('to_key')
-@click.option('--type', '-t', 'link_type', required=True,
-              help='Link type name (e.g., "Blocks", "Relates")')
-@click.option('--dry-run', is_flag=True, help='Show what would be created')
+@click.argument("from_key")
+@click.argument("to_key")
+@click.option("--type", "-t", "link_type", required=True, help='Link type name (e.g., "Blocks", "Relates")')
+@click.option("--dry-run", is_flag=True, help="Show what would be created")
 @click.pass_context
 def create(ctx, from_key: str, to_key: str, link_type: str, dry_run: bool):
     """Create a link between two issues.
@@ -66,8 +66,8 @@ def create(ctx, from_key: str, to_key: str, link_type: str, dry_run: bool):
 
       jira-link create PROJ-123 PROJ-456 --type "Relates" --dry-run
     """
-    ctx.obj['client'].with_context(issue_key=from_key)
-    client = ctx.obj['client']
+    ctx.obj["client"].with_context(issue_key=from_key)
+    client = ctx.obj["client"]
 
     if dry_run:
         warning("DRY RUN - No link will be created")
@@ -76,32 +76,25 @@ def create(ctx, from_key: str, to_key: str, link_type: str, dry_run: bool):
         return
 
     try:
-        client.create_issue_link({
-            "type": {"name": link_type},
-            "inwardIssue": {"key": to_key},
-            "outwardIssue": {"key": from_key}
-        })
+        client.create_issue_link(
+            {"type": {"name": link_type}, "inwardIssue": {"key": to_key}, "outwardIssue": {"key": from_key}}
+        )
 
-        if ctx.obj['json']:
-            format_output({
-                'from': from_key,
-                'to': to_key,
-                'type': link_type,
-                'created': True
-            }, as_json=True)
-        elif ctx.obj['quiet']:
-            print('ok')
+        if ctx.obj["json"]:
+            format_output({"from": from_key, "to": to_key, "type": link_type, "created": True}, as_json=True)
+        elif ctx.obj["quiet"]:
+            print("ok")
         else:
             success(f"Created link: {from_key} --[{link_type}]--> {to_key}")
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to create link: {e}")
         sys.exit(1)
 
 
-@cli.command('list-types')
+@cli.command("list-types")
 @click.pass_context
 def list_types(ctx):
     """List available link types.
@@ -112,33 +105,31 @@ def list_types(ctx):
 
       jira-link list-types
     """
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
 
     try:
         link_types = client.get_issue_link_types()
 
-        if ctx.obj['json']:
+        if ctx.obj["json"]:
             format_output(link_types, as_json=True)
-        elif ctx.obj['quiet']:
+        elif ctx.obj["quiet"]:
             for lt in link_types:
-                print(lt.get('name', ''))
+                print(lt.get("name", ""))
         else:
             print("Available link types:\n")
             rows = []
             for lt in link_types:
-                rows.append({
-                    'Name': lt.get('name', ''),
-                    'Inward': lt.get('inward', ''),
-                    'Outward': lt.get('outward', '')
-                })
-            print(format_table(rows, ['Name', 'Inward', 'Outward']))
+                rows.append(
+                    {"Name": lt.get("name", ""), "Inward": lt.get("inward", ""), "Outward": lt.get("outward", "")}
+                )
+            print(format_table(rows, ["Name", "Inward", "Outward"]))
 
     except Exception as e:
-        if ctx.obj['debug']:
+        if ctx.obj["debug"]:
             raise
         error(f"Failed to get link types: {e}")
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()
