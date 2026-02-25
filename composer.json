@@ -1,5 +1,8 @@
 {
-  "name": "netresearch/agent-jira-skill",
+  "name": "netresearch/jira-skill",
+  "replace": {
+    "netresearch/agent-jira-skill": "self.version"
+  },
   "description": "Netresearch AI skill for Jira API operations and wiki markup syntax",
   "type": "ai-agent-skill",
   "license": "MIT",
