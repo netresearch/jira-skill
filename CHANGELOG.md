@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.5] - 2026-02-27
+
+### Fixed
+
+- **jira-issue.py**: Guard assignee lookup against non-list API response on Server/DC
+- **jira-create.py**: Same assignee lookup fix applied to issue creation
+- **plugin.json**: Align plugin name with SKILL.md
+- **composer.json**: Rename package to match repository name
+
+### Documentation
+
+- **SKILL.md**: Add working directory note clarifying script path context
+
+## [3.3.4] - 2026-02-25
+
 ### Added
 
 - **Multi-profile support**: Work with multiple Jira instances via `~/.jira/profiles.json` (#15)
@@ -25,6 +40,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `resolve_profile()`: Priority-based profile resolution algorithm
   - `profile_to_config()`: Convert profile to env-style config dict
   - `load_config()`: Unified loader combining profiles and legacy env files
+- **Comprehensive test suite**: 187 tests covering CLI smoke tests, config, client, and security (#15)
+
+### Fixed
+
+- **SKILL.md**: Clean frontmatter and align description with quality standards
+
+## [3.3.3] - 2026-02-20
+
+Internal maintenance release (CI improvements).
+
+## [3.3.2] - 2026-02-15
+
+### Fixed
+
+- **SKILL.md**: Align description with writing-skills quality standard
+
+## [3.3.1] - 2026-02-07
+
+Internal maintenance release (CI improvements).
 
 ## [3.3.0] - 2026-01-30
 
@@ -365,7 +399,12 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.3.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.3.5...HEAD
+[3.3.5]: https://github.com/netresearch/jira-skill/compare/v3.3.4...v3.3.5
+[3.3.4]: https://github.com/netresearch/jira-skill/compare/v3.3.3...v3.3.4
+[3.3.3]: https://github.com/netresearch/jira-skill/compare/v3.3.2...v3.3.3
+[3.3.2]: https://github.com/netresearch/jira-skill/compare/v3.3.1...v3.3.2
+[3.3.1]: https://github.com/netresearch/jira-skill/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/netresearch/jira-skill/compare/v3.2.1...v3.3.0
 [3.2.1]: https://github.com/netresearch/jira-skill/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/netresearch/jira-skill/compare/v3.1.6...v3.2.0
