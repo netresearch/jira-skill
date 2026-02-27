@@ -7,7 +7,7 @@ description: "Use when interacting with Jira issues - searching, creating, updat
 
 CLI scripts for Jira operations using `uv run`. All scripts support `--help`, `--json`, `--quiet`, `--debug`.
 
-**Working directory**: All script paths below are relative to this skill's directory (`skills/jira-communication/`). `cd` there before running commands, or prefix paths with `skills/jira-communication/` from the plugin root.
+**Paths** are relative to `skills/jira-communication/`. Run from there or prefix accordingly.
 
 ## Auto-Trigger
 
