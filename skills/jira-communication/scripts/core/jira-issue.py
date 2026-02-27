@@ -288,12 +288,21 @@ def update(
             update_fields["assignee"] = {"accountId": assignee}
         else:
             users = client.user_find_by_user_string(query=assignee)
-            if users:
-                user = users[0] if isinstance(users[0], dict) else {"name": users[0]}
-                if "accountId" in user:
-                    update_fields["assignee"] = {"accountId": user["accountId"]}
+            if users and isinstance(users, list) and len(users) > 0:
+                found = users[0]
+                if isinstance(found, dict):
+                    if "accountId" in found:
+                        update_fields["assignee"] = {"accountId": found["accountId"]}
+                    else:
+                        update_fields["assignee"] = {"name": found.get("name", found.get("key", assignee))}
+                elif isinstance(found, str):
+                    update_fields["assignee"] = {"name": assignee}
                 else:
-                    update_fields["assignee"] = {"name": user.get("name", user.get("key", assignee))}
+                    update_fields["assignee"] = {"name": assignee}
+            elif users and isinstance(users, str):
+                # API returned a string instead of a list (Server/DC),
+                # fall back to raw identifier
+                update_fields["assignee"] = {"name": assignee}
             else:
                 error(f"User not found: {assignee}")
                 sys.exit(1)

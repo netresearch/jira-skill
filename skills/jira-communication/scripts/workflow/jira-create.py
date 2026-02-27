@@ -116,12 +116,21 @@ def issue(
             fields["assignee"] = {"accountId": assignee}
         else:
             users = client.user_find_by_user_string(query=assignee)
-            if users:
-                user = users[0] if isinstance(users[0], dict) else {"name": users[0]}
-                if "accountId" in user:
-                    fields["assignee"] = {"accountId": user["accountId"]}
+            if users and isinstance(users, list) and len(users) > 0:
+                found = users[0]
+                if isinstance(found, dict):
+                    if "accountId" in found:
+                        fields["assignee"] = {"accountId": found["accountId"]}
+                    else:
+                        fields["assignee"] = {"name": found.get("name", found.get("key", assignee))}
+                elif isinstance(found, str):
+                    fields["assignee"] = {"name": assignee}
                 else:
-                    fields["assignee"] = {"name": user.get("name", user.get("key", assignee))}
+                    fields["assignee"] = {"name": assignee}
+            elif users and isinstance(users, str):
+                # API returned a string instead of a list (Server/DC),
+                # fall back to raw identifier
+                fields["assignee"] = {"name": assignee}
             else:
                 # Fall back to raw identifier (username/email) and let Jira
                 # validate it — avoids breaking Server/DC where direct names work.
