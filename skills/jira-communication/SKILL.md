@@ -72,10 +72,10 @@ Never derive the Jira username from a display name or email address — they oft
 
 ```bash
 # Get current user's username
-uv run scripts/utility/jira-user.py --json me   # → use the "name" field
+uv run scripts/utility/jira-user.py --quiet me   # → returns username or account ID
 
 # Assign an issue to yourself
-ME=$(uv run scripts/utility/jira-user.py --json me | python3 -c "import sys,json; print(json.load(sys.stdin)['name'])")
+ME=$(uv run scripts/utility/jira-user.py --quiet me)
 uv run scripts/core/jira-issue.py update PROJ-123 --assignee "$ME"
 ```
 
