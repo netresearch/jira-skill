@@ -33,7 +33,7 @@ When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credent
 | `scripts/core/jira-attachment.py` | Download attachments |
 | `scripts/workflow/jira-create.py` | Create issues |
 | `scripts/workflow/jira-transition.py` | Change status |
-| `scripts/workflow/jira-comment.py` | Add/edit comments |
+| `scripts/workflow/jira-comment.py` | Add/edit/list comments |
 | `scripts/workflow/jira-sprint.py` | List sprints |
 | `scripts/workflow/jira-board.py` | List boards |
 | `scripts/utility/jira-user.py` | User info |

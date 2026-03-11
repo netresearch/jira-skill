@@ -20,7 +20,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient
+from lib.client import LazyJiraClient, _sanitize_error
 from lib.output import error, extract_adf_text, format_output, success
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -88,7 +88,7 @@ def add(ctx, issue_key: str, comment_text: str):
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to add comment to {issue_key}: {e}")
+        error(f"Failed to add comment to {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 
@@ -119,7 +119,10 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
         result = client.issue_edit_comment(issue_key, comment_id, comment_text)
 
         if ctx.obj["quiet"]:
-            print(comment_id)
+            if isinstance(result, dict):
+                print(result.get("id", "ok"))
+            else:
+                print("ok")
         elif ctx.obj["json"]:
             format_output(result, as_json=True)
         else:
@@ -128,7 +131,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to edit comment {comment_id} on {issue_key}: {e}")
+        error(f"Failed to edit comment {comment_id} on {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 
@@ -192,7 +195,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to get comments for {issue_key}: {e}")
+        error(f"Failed to get comments for {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 
