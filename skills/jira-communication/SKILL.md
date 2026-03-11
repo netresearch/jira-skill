@@ -33,7 +33,7 @@ When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credent
 | `scripts/core/jira-attachment.py` | Download attachments |
 | `scripts/workflow/jira-create.py` | Create issues |
 | `scripts/workflow/jira-transition.py` | Change status |
-| `scripts/workflow/jira-comment.py` | Add comments |
+| `scripts/workflow/jira-comment.py` | Add/edit/list comments |
 | `scripts/workflow/jira-sprint.py` | List sprints |
 | `scripts/workflow/jira-board.py` | List boards |
 | `scripts/utility/jira-user.py` | User info |
@@ -56,6 +56,7 @@ uv run scripts/core/jira-search.py query "assignee = currentUser()"
 uv run scripts/core/jira-issue.py get PROJ-123
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
+uv run scripts/workflow/jira-comment.py edit PROJ-123 12345 "Updated comment text"
 ```
 
 ## Related Skills
@@ -87,19 +88,8 @@ When `~/.jira/profiles.json` exists, multiple Jira instances are supported.
 6. Default profile from profiles.json
 7. Fallback to `~/.env.jira`
 
-**When triggered by URL** → extract host → match profile automatically:
-```bash
-# User mentions https://jira.meine-krankenkasse.de/browse/WEB-1381
-# Profile "mkk" is automatically resolved from URL host match
-uv run scripts/core/jira-issue.py get WEB-1381
-```
-
-**When triggered by issue key only** → check project mapping automatically:
-```bash
-# WEB is mapped to "mkk" profile → automatically resolved
-uv run scripts/core/jira-issue.py get WEB-1381
-```
-
+**When triggered by URL** → host matched to profile automatically.
+**When triggered by issue key** → project prefix matched to profile.
 **If ambiguous** → ask user which profile to use.
 
 **Profile management**:
