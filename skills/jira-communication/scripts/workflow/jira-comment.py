@@ -6,7 +6,7 @@
 #     "click>=8.1.0,<9",
 # ]
 # ///
-"""Jira comment operations - add and list issue comments."""
+"""Jira comment operations - add, edit, and list issue comments."""
 
 import sys
 from pathlib import Path
@@ -38,7 +38,7 @@ from lib.output import error, extract_adf_text, format_output, success
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira comment operations.
 
-    Add and list comments on Jira issues.
+    Add, edit, and list comments on Jira issues.
     Note: Comments should use Jira wiki markup syntax, not Markdown.
     """
     ctx.ensure_object(dict)
@@ -89,6 +89,46 @@ def add(ctx, issue_key: str, comment_text: str):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to add comment to {issue_key}: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.argument("comment_id")
+@click.argument("comment_text")
+@click.pass_context
+def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
+    """Edit an existing comment on an issue.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    COMMENT_ID: The ID of the comment to edit (use 'list' to find IDs)
+
+    COMMENT_TEXT: New comment text (use Jira wiki markup, not Markdown)
+
+    Examples:
+
+      jira-comment edit PROJ-123 12345 "Updated: fixed in commit abc123"
+
+      jira-comment edit PROJ-123 12345 "h3. Findings\\n\\nUpdated analysis"
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        result = client.issue_edit_comment(issue_key, comment_id, comment_text)
+
+        if ctx.obj["quiet"]:
+            print(comment_id)
+        elif ctx.obj["json"]:
+            format_output(result, as_json=True)
+        else:
+            success(f"Updated comment {comment_id} on {issue_key}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to edit comment {comment_id} on {issue_key}: {e}")
         sys.exit(1)
 
 
