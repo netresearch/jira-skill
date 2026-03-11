@@ -88,19 +88,8 @@ When `~/.jira/profiles.json` exists, multiple Jira instances are supported.
 6. Default profile from profiles.json
 7. Fallback to `~/.env.jira`
 
-**When triggered by URL** → extract host → match profile automatically:
-```bash
-# User mentions https://jira.meine-krankenkasse.de/browse/WEB-1381
-# Profile "mkk" is automatically resolved from URL host match
-uv run scripts/core/jira-issue.py get WEB-1381
-```
-
-**When triggered by issue key only** → check project mapping automatically:
-```bash
-# WEB is mapped to "mkk" profile → automatically resolved
-uv run scripts/core/jira-issue.py get WEB-1381
-```
-
+**When triggered by URL** → host matched to profile automatically.
+**When triggered by issue key** → project prefix matched to profile.
 **If ambiguous** → ask user which profile to use.
 
 **Profile management**:
