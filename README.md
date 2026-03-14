@@ -1,7 +1,7 @@
 # Jira Integration Plugin for Claude Code
 
 [![CI](https://github.com/netresearch/jira-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/netresearch/jira-skill/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/netresearch/jira-skill)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT%20%2B%20CC--BY--SA--4.0-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12%7C3.13-blue)](https://www.python.org/)
 
 A Claude Code plugin providing comprehensive Jira integration through two specialized skills.
