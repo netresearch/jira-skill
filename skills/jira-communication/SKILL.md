@@ -48,6 +48,37 @@ Global flags **MUST** come **before** subcommand:
 # Wrong:    uv run scripts/core/jira-issue.py get PROJ-123 --json
 ```
 
+## Creating Subtasks (Jira Server/DC)
+
+On Jira Server and Data Center, subtask issue types are **prefixed with `Sub: `** — never `Sub-task` or a plain type name:
+
+```bash
+# Correct — use "Sub: Task", "Sub: Bug", "Sub: Improvement", etc.
+uv run scripts/workflow/jira-create.py issue PROJ "Fix login" --type "Sub: Task" --parent PROJ-100
+
+# Wrong — these will fail with "issue type is not a sub-task" or "invalid issue type"
+uv run scripts/workflow/jira-create.py issue PROJ "Fix login" --type "Task" --parent PROJ-100
+uv run scripts/workflow/jira-create.py issue PROJ "Fix login" --type "Sub-task" --parent PROJ-100
+```
+
+To list all available issue types for a project (including subtask names):
+```bash
+uv run scripts/utility/jira-fields.py search "issuetype"
+```
+
+## Resolving "Assign to Me"
+
+Never derive the Jira username from a display name or email address — they often differ. Use `jira-user.py me` to get the authenticated user's username:
+
+```bash
+# Get current user's username
+uv run scripts/utility/jira-user.py --quiet me   # → returns username or account ID
+
+# Assign an issue to yourself
+ME=$(uv run scripts/utility/jira-user.py --quiet me)
+uv run scripts/core/jira-issue.py update PROJ-123 --assignee "$ME"
+```
+
 ## Quick Examples
 
 ```bash
