@@ -6,63 +6,22 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  bandit:
-    name: Bandit Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
-        with:
-          enable-cache: true
-
-      - name: Bandit security scan
-        run: >
-          uv run --with bandit
-          bandit -r
-          skills/jira-communication/scripts/
-          scripts/
-          -c pyproject.toml
-          --severity-level medium
-
-  test:
-    name: Test (Python ${{ matrix.python }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
-        with:
-          enable-cache: true
-
-      - name: Run tests (Python ${{ matrix.python }})
-        run: >
-          uv run
-          --python ${{ matrix.python }}
-          --with pytest
-          --with atlassian-python-api
-          --with click
-          --with requests
-          python -m pytest tests/ -v
+  ci:
+    uses: netresearch/skill-repo-skill/.github/workflows/ci-python.yml@main
+    permissions:
+      contents: read
+    with:
+      python-versions: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
+      test-command: >
+        uv run
+        --python "$PYTHON_VERSION"
+        --with pytest
+        --with atlassian-python-api
+        --with click
+        --with requests
+        python -m pytest tests/ -v
+      run-bandit: true
+      bandit-args: '-r skills/jira-communication/scripts/ scripts/ -c pyproject.toml --severity-level medium'
