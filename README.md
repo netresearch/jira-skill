@@ -52,6 +52,7 @@ Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 
 ```bash
 npx skills add https://github.com/netresearch/jira-skill --skill jira-communication
+npx skills add https://github.com/netresearch/jira-skill --skill jira-syntax
 ```
 
 ### Download Release
