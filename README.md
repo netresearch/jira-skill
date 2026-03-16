@@ -37,59 +37,40 @@ The skills contained in this plugin follow the [Agent Skills open standard](http
 
 ## Installation
 
-### Download Options
+### Marketplace (Recommended)
 
-Each release provides multiple packages to match your AI agent platform:
+Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then browse and install skills:
 
-| Package | Use Case |
-|---------|----------|
-| `jira-integration-plugin-vX.X.X.zip` | **Full plugin** - Platforms supporting multi-skill plugins |
-| `jira-communication-skill-vX.X.X.zip` | **Standalone skill** - Platforms requiring single SKILL.md per package |
-| `jira-syntax-skill-vX.X.X.zip` | **Standalone skill** - Wiki markup only (no API scripts) |
-
-Download from [Releases](https://github.com/netresearch/jira-skill/releases).
-
-### Installation
-
-Skills follow the [Agent Skills specification](https://agentskills.io/specification). Installation varies by platform:
-
-**Multi-skill platforms** (e.g., Claude Code CLI):
 ```bash
-# Install the full plugin containing both skills
-claude plugins install path/to/jira-integration-plugin-vX.X.X.zip
+# Claude Code
+/plugin marketplace add netresearch/claude-code-marketplace
 ```
 
-**Single-skill platforms** (e.g., Claude Desktop, Cursor, GitHub Copilot):
-1. Download the standalone skill ZIP (`jira-communication-skill-*.zip` or `jira-syntax-skill-*.zip`)
-2. Import via your platform's skill/extension management
+### npx ([skills.sh](https://skills.sh))
 
-Refer to your AI agent's documentation for specific installation instructions.
+Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 
-### Prerequisites
+```bash
+npx skills add https://github.com/netresearch/jira-skill --skill jira-communication
+```
 
-1. **Install uv** (Python package runner):
-   ```bash
-   pip install uv
-   ```
+### Download Release
 
-2. **Configure credentials** in `~/.env.jira`:
-   ```
-   JIRA_URL=https://your-instance.atlassian.net
-   JIRA_USERNAME=your-email@example.com
-   JIRA_API_TOKEN=your-api-token
-   ```
+Download the [latest release](https://github.com/netresearch/jira-skill/releases/latest) and extract to your agent's skills directory.
 
-   For Jira Server/DC with Personal Access Token:
-   ```
-   JIRA_URL=https://jira.yourcompany.com
-   JIRA_PERSONAL_TOKEN=your-personal-access-token
-   ```
+### Git Clone
 
-3. **Validate setup**:
-   ```bash
-   uv run scripts/core/jira-validate.py --verbose
-   ```
+```bash
+git clone https://github.com/netresearch/jira-skill.git
+```
 
+### Composer (PHP Projects)
+
+```bash
+composer require netresearch/jira-skill
+```
+
+Requires [netresearch/composer-agent-skill-plugin](https://github.com/netresearch/composer-agent-skill-plugin).
 ## Quick Start
 
 > **Note:** Run commands from `skills/jira-communication/`, or prefix paths with `skills/jira-communication/` from the repo root.
