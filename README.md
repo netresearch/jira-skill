@@ -69,7 +69,7 @@ Refer to your AI agent's documentation for specific installation instructions.
 
 1. **Install uv** (Python package runner):
    ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
+   pip install uv
    ```
 
 2. **Configure credentials** in `~/.env.jira`:
@@ -262,7 +262,7 @@ uv run scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks" --d
 
 Install uv:
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+pip install uv
 ```
 
 ### "Environment file not found"

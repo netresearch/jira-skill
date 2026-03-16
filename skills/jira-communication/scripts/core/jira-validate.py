@@ -66,7 +66,7 @@ def check_runtime(verbose: bool = False) -> tuple[bool, dict]:
         error(
             "Runtime check failed: 'uv' command not found",
             "To install uv, run:\n"
-            "    curl -LsSf https://astral.sh/uv/install.sh | sh\n\n"
+            "    pip install uv\n\n"
             "  Or visit: https://docs.astral.sh/uv/getting-started/installation/",
         )
         checks_passed = False

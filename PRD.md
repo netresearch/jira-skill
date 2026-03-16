@@ -234,7 +234,7 @@ Pre-flight validation MUST check (in order):
 
 **Error Handling:**
 - Provide clear, actionable error messages (not just exit codes)
-- Include suggestions for resolution (e.g., "Run: curl -LsSf https://astral.sh/uv/install.sh | sh")
+- Include suggestions for resolution (e.g., "Run: pip install uv")
 - Show which check failed and why
 - `--verbose` flag for detailed diagnostic output
 
@@ -243,7 +243,7 @@ Pre-flight validation MUST check (in order):
 ✗ Runtime check failed: 'uv' command not found
 
   To install uv, run:
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    pip install uv
 
   Or visit: https://docs.astral.sh/uv/getting-started/installation/
 ```
