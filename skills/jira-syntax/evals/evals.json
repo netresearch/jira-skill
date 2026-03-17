@@ -1,0 +1,60 @@
+[
+  {
+    "name": "convert_markdown_to_jira",
+    "prompt": "Convert this Markdown to Jira wiki format: **bold** text with [link](https://example.com) and `code`",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "\\*bold\\*"
+      },
+      {
+        "type": "content",
+        "pattern": "\\[link\\|https://example\\.com\\]"
+      },
+      {
+        "type": "content",
+        "pattern": "\\{\\{code\\}\\}"
+      },
+      {
+        "type": "not_content",
+        "pattern": "\\*\\*bold\\*\\*"
+      }
+    ]
+  },
+  {
+    "name": "bug_report_with_table",
+    "prompt": "Write a Jira bug report description with a table of reproduction steps (Step, Action, Expected, Actual) for a file upload bug",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "\\|\\|.*Step.*\\|\\|"
+      },
+      {
+        "type": "content",
+        "pattern": "h[1-3]\\."
+      },
+      {
+        "type": "not_content",
+        "pattern": "^#{1,3} "
+      },
+      {
+        "type": "not_content",
+        "pattern": "\\*\\*"
+      }
+    ]
+  },
+  {
+    "name": "format_code_block_in_jira",
+    "prompt": "Show me how to include a Java stack trace in a Jira comment with proper formatting",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "\\{code(:java)?\\}"
+      },
+      {
+        "type": "not_content",
+        "pattern": "```"
+      }
+    ]
+  }
+]

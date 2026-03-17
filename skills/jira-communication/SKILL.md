@@ -1,21 +1,28 @@
 ---
 name: jira-communication
-description: "Use when interacting with Jira issues - searching, creating, updating, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123)."
+description: "Use when interacting with Jira issues - searching, creating, updating, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
+license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
+compatibility: "Requires python 3.10+, uv, curl. Jira Server/DC or Cloud instance with API access."
+metadata:
+  author: Netresearch DTT GmbH
+  version: "3.3.7"
+  repository: https://github.com/netresearch/jira-skill
+allowed-tools: Bash(python:*) Bash(uv:*) Bash(curl:*) Read Write
 ---
 
 # Jira Communication
 
-CLI scripts for Jira operations using `uv run`. All scripts support `--help`, `--json`, `--quiet`, `--debug`.
+CLI scripts for Jira operations via `uv run`. All scripts support `--help`, `--json`, `--quiet`, `--debug`.
 
-**Paths** are relative to `skills/jira-communication/`. Run from there or prefix accordingly.
+**Paths** are relative to `skills/jira-communication/`.
 
 ## Auto-Trigger
 
-Trigger when user mentions:
+Activate when user mentions:
 - **Jira URLs**: `https://jira.*/browse/*`, `https://*.atlassian.net/browse/*`
 - **Issue keys**: `PROJ-123`, `NRS-4167`
 
-When triggered by URL → extract issue key → run `jira-issue.py get PROJ-123`
+On URL trigger → extract key → `jira-issue.py get PROJ-123`
 
 ## Auth Failure Handling
 
@@ -42,7 +49,7 @@ When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credent
 
 ## Critical: Flag Ordering
 
-Global flags **MUST** come **before** subcommand:
+Global flags go **before** the subcommand (argparse requirement):
 ```bash
 # Correct:  uv run scripts/core/jira-issue.py --json get PROJ-123
 # Wrong:    uv run scripts/core/jira-issue.py get PROJ-123 --json
@@ -51,12 +58,10 @@ Global flags **MUST** come **before** subcommand:
 ## Quick Examples
 
 ```bash
-uv run scripts/core/jira-validate.py --verbose
 uv run scripts/core/jira-search.py query "assignee = currentUser()"
 uv run scripts/core/jira-issue.py get PROJ-123
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
-uv run scripts/workflow/jira-comment.py edit PROJ-123 12345 "Updated comment text"
 ```
 
 ## Related Skills
@@ -80,22 +85,17 @@ Config via `~/.env.jira` or env vars. Run `jira-validate.py --verbose` to verify
 When `~/.jira/profiles.json` exists, multiple Jira instances are supported.
 
 **Profile resolution** (automatic, priority order):
-1. `--env-file PATH` → legacy single-file behavior
-2. `--profile NAME` flag → use named profile directly
-3. Full Jira URL in input → match host to profile
-4. Issue key (e.g., WEB-1381) → match project prefix to profile
-5. `.jira-profile` file in working directory → use named profile
+1. `--env-file PATH` - legacy single-file behavior
+2. `--profile NAME` flag - use named profile
+3. Full Jira URL in input - match host to profile
+4. Issue key (e.g., WEB-1381) - match project prefix
+5. `.jira-profile` file in working directory
 6. Default profile from profiles.json
 7. Fallback to `~/.env.jira`
 
-**When triggered by URL** → host matched to profile automatically.
-**When triggered by issue key** → project prefix matched to profile.
-**If ambiguous** → ask user which profile to use.
-
 **Profile management**:
 ```bash
-uv run scripts/core/jira-setup.py --profile mkk                    # Create profile
-uv run scripts/core/jira-validate.py --profile mkk --verbose        # Validate profile
-uv run scripts/core/jira-validate.py --all-profiles                 # Validate all
-uv run scripts/core/jira-setup.py --migrate                         # Migrate .env.jira
+uv run scripts/core/jira-setup.py --profile mkk        # Create profile
+uv run scripts/core/jira-validate.py --all-profiles     # Validate all
+uv run scripts/core/jira-setup.py --migrate             # Migrate .env.jira
 ```

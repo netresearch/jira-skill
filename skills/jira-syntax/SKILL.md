@@ -1,11 +1,16 @@
 ---
 name: jira-syntax
-description: "Use when writing Jira descriptions or comments, converting Markdown to Jira wiki markup, using templates (bug reports, feature requests), or validating Jira syntax before submission."
+description: "Use when writing or formatting Jira descriptions, comments, or any text destined for Jira. Converts Markdown to Jira wiki markup, provides templates (bug reports, feature requests), and validates syntax before submission. Trigger on any Jira content authoring task."
+license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
+metadata:
+  author: Netresearch DTT GmbH
+  version: "3.3.7"
+  repository: https://github.com/netresearch/jira-skill
 ---
 
-# Jira Syntax Validation Skill
+# Jira Syntax
 
-Provides Jira wiki markup syntax validation, templates, and formatting guidance. For API operations, use the **jira-communication** skill.
+Jira wiki markup syntax, templates, and validation. For API operations, use the **jira-communication** skill.
 
 ## Quick Syntax Reference
 
