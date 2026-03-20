@@ -1,6 +1,6 @@
 ---
 name: jira-communication
-description: "Use when interacting with Jira issues - searching, creating, updating, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
+description: "Use when interacting with Jira issues - searching, creating, updating, moving, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python 3.10+, uv, curl. Jira Server/DC or Cloud instance with API access."
 metadata:
@@ -39,6 +39,7 @@ When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credent
 | `scripts/core/jira-worklog.py` | Time tracking |
 | `scripts/core/jira-attachment.py` | Download attachments |
 | `scripts/workflow/jira-create.py` | Create issues |
+| `scripts/workflow/jira-move.py` | Move issues between projects |
 | `scripts/workflow/jira-transition.py` | Change status |
 | `scripts/workflow/jira-comment.py` | Add/edit/list comments |
 | `scripts/workflow/jira-sprint.py` | List sprints |
@@ -61,6 +62,7 @@ Global flags go **before** the subcommand (argparse requirement):
 uv run scripts/core/jira-search.py query "assignee = currentUser()"
 uv run scripts/core/jira-issue.py get PROJ-123
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
+uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
 uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
 ```
 
