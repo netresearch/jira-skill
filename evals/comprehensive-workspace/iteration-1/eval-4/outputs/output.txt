@@ -1,0 +1,6 @@
+Command:
+uv run skills/jira-communication/scripts/workflow/jira-transition.py do TEST-135 "In Progress"
+
+Output:
+✓ Transitioned TEST-135
+  Status: In Progress

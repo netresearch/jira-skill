@@ -1,0 +1,10 @@
+COMMAND:
+uv run skills/jira-communication/scripts/core/jira-search.py query "project = TEST AND assignee = currentUser() AND status != Closed"
+
+OUTPUT:
+key      | summary                    | status      | assignee         | priority
+---------+----------------------------+-------------+------------------+---------
+TEST-137 | Eval iter2: bug subtask    | Open        | sebastian.mendel | Medium
+TEST-135 | testing ios-update-checker | In Progress | sebastian.mendel | Critical
+
+(2 issues found)

@@ -1,0 +1,8 @@
+COMMAND:
+uv run skills/jira-communication/scripts/core/jira-worklog.py add TEST-135 30m --comment "Eval: testing worklog"
+
+OUTPUT:
+Installed 16 packages in 17ms
+✓ Added worklog to TEST-135: 30m
+  Comment: Eval: testing worklog
+  Worklog ID: 399124

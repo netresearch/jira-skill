@@ -1,0 +1,11 @@
+COMMAND:
+uv run skills/jira-communication/scripts/workflow/jira-transition.py list TEST-135
+
+OUTPUT:
+Available transitions for TEST-135
+Current status: Resolved
+
+ID  | Name         | To Status
+----+--------------+----------
+701 | Close Issue  | Closed
+3   | Reopen Issue | Reopened

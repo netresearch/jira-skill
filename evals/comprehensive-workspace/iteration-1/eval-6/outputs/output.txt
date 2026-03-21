@@ -1,0 +1,8 @@
+Command:
+uv run skills/jira-communication/scripts/workflow/jira-create.py issue TEST "Eval: comprehensive test issue" --type Task
+
+Output:
+✓ Created issue: TEST-138
+  Summary: Eval: comprehensive test issue
+  Type: Task
+  URL: https://jira.netresearch.de/browse/TEST-138

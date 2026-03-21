@@ -1,0 +1,7 @@
+Command:
+uv run skills/jira-communication/scripts/core/jira-worklog.py add TEST-135 30m --comment "Baseline eval: testing worklog"
+
+Output:
+✓ Added worklog to TEST-135: 30m
+  Comment: Baseline eval: testing worklog
+  Worklog ID: 399125

@@ -1,0 +1,76 @@
+{
+  "skill_name": "jira-communication",
+  "description": "Comprehensive eval of all common Jira operations — measuring tool efficiency",
+  "evals": [
+    {
+      "id": 1,
+      "name": "read-issue",
+      "prompt": "What's the status and assignee of TEST-135?",
+      "expected_output": "Agent runs jira-issue.py get TEST-135 and reports status + assignee",
+      "ideal_tools": 1
+    },
+    {
+      "id": 2,
+      "name": "search-issues",
+      "prompt": "Find all open issues in the TEST project assigned to me",
+      "expected_output": "Agent runs jira-search.py with JQL query",
+      "ideal_tools": 1
+    },
+    {
+      "id": 3,
+      "name": "add-comment",
+      "prompt": "Add a comment to TEST-135 saying 'Eval: testing comment workflow'",
+      "expected_output": "Agent runs jira-comment.py add TEST-135 with the comment text",
+      "ideal_tools": 1
+    },
+    {
+      "id": 4,
+      "name": "transition-issue",
+      "prompt": "Start progress on TEST-135",
+      "expected_output": "Agent runs jira-transition.py do TEST-135 'Start Progress' or 'In Progress'",
+      "ideal_tools": 1
+    },
+    {
+      "id": 5,
+      "name": "log-work",
+      "prompt": "Log 30 minutes of work on TEST-135 with comment 'Eval: testing worklog'",
+      "expected_output": "Agent runs jira-worklog.py add TEST-135 30m --comment '...'",
+      "ideal_tools": 1
+    },
+    {
+      "id": 6,
+      "name": "create-issue",
+      "prompt": "Create a new Task in the TEST project with summary 'Eval: comprehensive test issue'",
+      "expected_output": "Agent runs jira-create.py issue TEST 'Eval: comprehensive test issue' --type Task",
+      "ideal_tools": 1
+    },
+    {
+      "id": 7,
+      "name": "update-fields",
+      "prompt": "Change the priority of TEST-135 to Critical",
+      "expected_output": "Agent runs jira-issue.py update TEST-135 --priority Critical",
+      "ideal_tools": 1
+    },
+    {
+      "id": 8,
+      "name": "read-issue-json",
+      "prompt": "Get TEST-135 details as JSON",
+      "expected_output": "Agent runs jira-issue.py --json get TEST-135",
+      "ideal_tools": 1
+    },
+    {
+      "id": 9,
+      "name": "list-transitions",
+      "prompt": "What status transitions are available for TEST-135?",
+      "expected_output": "Agent runs jira-transition.py list TEST-135",
+      "ideal_tools": 1
+    },
+    {
+      "id": 10,
+      "name": "search-with-fields",
+      "prompt": "Show me the last 5 issues updated in TEST project with their status and priority",
+      "expected_output": "Agent runs jira-search.py with appropriate JQL, fields, and limit",
+      "ideal_tools": 1
+    }
+  ]
+}

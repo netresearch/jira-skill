@@ -1,0 +1,8 @@
+Command:
+uv run skills/jira-communication/scripts/workflow/jira-create.py issue TEST "Baseline eval: test issue" --type Task
+
+Output:
+✓ Created issue: TEST-139
+  Summary: Baseline eval: test issue
+  Type: Task
+  URL: https://jira.netresearch.de/browse/TEST-139

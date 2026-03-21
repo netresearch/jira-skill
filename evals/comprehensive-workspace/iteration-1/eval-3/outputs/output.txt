@@ -1,0 +1,7 @@
+Command:
+uv run skills/jira-communication/scripts/workflow/jira-comment.py add TEST-135 "Eval: testing comment workflow"
+
+Output:
+Installed 16 packages in 16ms
+✓ Added comment to TEST-135
+  Comment ID: 594276

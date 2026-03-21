@@ -1,0 +1,214 @@
+Command executed:
+uv run skills/jira-communication/scripts/core/jira-search.py --json query "project = TEST ORDER BY updated DESC" --max-results 5
+
+Output:
+
+Last 5 Issues Updated in TEST Project:
+
+1. TEST-139
+   Summary: Baseline eval: test issue
+   Status: Open
+   Priority: Medium
+
+2. TEST-135
+   Summary: testing ios-update-checker
+   Status: Resolved
+   Priority: Medium
+
+3. TEST-138
+   Summary: Eval: comprehensive test issue
+   Status: Open
+   Priority: Medium
+
+4. TEST-137
+   Summary: Eval iter2: bug subtask
+   Status: Open
+   Priority: Medium
+
+5. TEST-136
+   Summary: Eval iter2: subtask auto-detection
+   Status: Open
+   Priority: Medium
+
+Full JSON Response:
+
+[
+  {
+    "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+    "id": "144315",
+    "self": "https://jira.netresearch.de/rest/api/2/issue/144315",
+    "key": "TEST-139",
+    "fields": {
+      "summary": "Baseline eval: test issue",
+      "assignee": null,
+      "priority": {
+        "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+        "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+        "name": "Medium",
+        "id": "10101"
+      },
+      "status": {
+        "self": "https://jira.netresearch.de/rest/api/2/status/1",
+        "description": "The issue is open and ready for the assignee to start work on it.",
+        "iconUrl": "https://jira.netresearch.de/images/icons/statuses/open.png",
+        "name": "Open",
+        "id": "1",
+        "statusCategory": {
+          "self": "https://jira.netresearch.de/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "default",
+          "name": "To Do"
+        }
+      }
+    }
+  },
+  {
+    "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+    "id": "126706",
+    "self": "https://jira.netresearch.de/rest/api/2/issue/126706",
+    "key": "TEST-135",
+    "fields": {
+      "summary": "testing ios-update-checker",
+      "assignee": {
+        "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+        "name": "sebastian.mendel",
+        "key": "sebastian.mendel",
+        "emailAddress": "sebastian.mendel@netresearch.de",
+        "avatarUrls": {
+          "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+          "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+          "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+          "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+        },
+        "displayName": "Sebastian Mendel",
+        "active": true,
+        "timeZone": "Europe/Berlin"
+      },
+      "priority": {
+        "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+        "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+        "name": "Medium",
+        "id": "10101"
+      },
+      "status": {
+        "self": "https://jira.netresearch.de/rest/api/2/status/5",
+        "description": "",
+        "iconUrl": "https://jira.netresearch.de/images/icons/statuses/resolved.png",
+        "name": "Resolved",
+        "id": "5",
+        "statusCategory": {
+          "self": "https://jira.netresearch.de/rest/api/2/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "success",
+          "name": "Done"
+        }
+      }
+    }
+  },
+  {
+    "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+    "id": "144314",
+    "self": "https://jira.netresearch.de/rest/api/2/issue/144314",
+    "key": "TEST-138",
+    "fields": {
+      "summary": "Eval: comprehensive test issue",
+      "assignee": null,
+      "priority": {
+        "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+        "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+        "name": "Medium",
+        "id": "10101"
+      },
+      "status": {
+        "self": "https://jira.netresearch.de/rest/api/2/status/1",
+        "description": "The issue is open and ready for the assignee to start work on it.",
+        "iconUrl": "https://jira.netresearch.de/images/icons/statuses/open.png",
+        "name": "Open",
+        "id": "1",
+        "statusCategory": {
+          "self": "https://jira.netresearch.de/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "default",
+          "name": "To Do"
+        }
+      }
+    }
+  },
+  {
+    "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+    "id": "144313",
+    "self": "https://jira.netresearch.de/rest/api/2/issue/144313",
+    "key": "TEST-137",
+    "fields": {
+      "summary": "Eval iter2: bug subtask",
+      "assignee": {
+        "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+        "name": "sebastian.mendel",
+        "key": "sebastian.mendel",
+        "emailAddress": "sebastian.mendel@netresearch.de",
+        "avatarUrls": {
+          "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+          "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+          "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+          "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+        },
+        "displayName": "Sebastian Mendel",
+        "active": true,
+        "timeZone": "Europe/Berlin"
+      },
+      "priority": {
+        "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+        "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+        "name": "Medium",
+        "id": "10101"
+      },
+      "status": {
+        "self": "https://jira.netresearch.de/rest/api/2/status/1",
+        "description": "The issue is open and ready for the assignee to start work on it.",
+        "iconUrl": "https://jira.netresearch.de/images/icons/statuses/open.png",
+        "name": "Open",
+        "id": "1",
+        "statusCategory": {
+          "self": "https://jira.netresearch.de/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "default",
+          "name": "To Do"
+        }
+      }
+    }
+  },
+  {
+    "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+    "id": "144312",
+    "self": "https://jira.netresearch.de/rest/api/2/issue/144312",
+    "key": "TEST-136",
+    "fields": {
+      "summary": "Eval iter2: subtask auto-detection",
+      "assignee": null,
+      "priority": {
+        "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+        "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+        "name": "Medium",
+        "id": "10101"
+      },
+      "status": {
+        "self": "https://jira.netresearch.de/rest/api/2/status/1",
+        "description": "The issue is open and ready for the assignee to start work on it.",
+        "iconUrl": "https://jira.netresearch.de/images/icons/statuses/open.png",
+        "name": "Open",
+        "id": "1",
+        "statusCategory": {
+          "self": "https://jira.netresearch.de/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "default",
+          "name": "To Do"
+        }
+      }
+    }
+  }
+]

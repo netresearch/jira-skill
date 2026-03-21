@@ -1,0 +1,43 @@
+=== Jira Communication Skill: Last 5 TEST Project Issues ===
+
+COMMAND EXECUTED:
+----------------
+uv run skills/jira-communication/scripts/core/jira-search.py --json query "project = TEST ORDER BY updated DESC" --max-results 5 --fields key,summary,status,priority,updated
+
+OUTPUT:
+-------
+
+Last 5 Issues Updated in TEST Project (ordered by most recent):
+
+1. TEST-135: testing ios-update-checker
+   Status: In Progress
+   Priority: Critical
+   Updated: 2026-03-21T22:01:10.000+0000
+
+2. TEST-138: Eval: comprehensive test issue
+   Status: Open
+   Priority: Medium
+   Updated: 2026-03-21T22:01:03.000+0000
+
+3. TEST-137: Eval iter2: bug subtask
+   Status: Open
+   Priority: Medium
+   Updated: 2026-03-21T15:56:41.000+0000
+
+4. TEST-136: Eval iter2: subtask auto-detection
+   Status: Open
+   Priority: Medium
+   Updated: 2026-03-21T15:56:39.000+0000
+
+5. TEST-4: Mailweiterleitung Test JIRA
+   Status: Open
+   Priority: Minor
+   Updated: 2024-02-15T08:38:10.000+0000
+
+SUMMARY:
+--------
+- Total issues returned: 5
+- Most recent update: TEST-135 (2026-03-21T22:01:10, In Progress, Critical)
+- Status distribution: 1 In Progress, 4 Open
+- Priority distribution: 1 Critical, 3 Medium, 1 Minor
+- Time span: From Feb 2024 to Mar 2026

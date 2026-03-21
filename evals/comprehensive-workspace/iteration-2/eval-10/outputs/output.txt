@@ -1,0 +1,13 @@
+Command:
+uv run skills/jira-communication/scripts/core/jira-search.py query "project = TEST ORDER BY updated DESC" -n 5 -f key,summary,status,priority
+
+Output:
+key      | summary                            | status      | priority
+---------+------------------------------------+-------------+---------
+TEST-135 | testing ios-update-checker         | In Progress | Critical
+TEST-138 | Eval: comprehensive test issue     | Open        | Medium
+TEST-137 | Eval iter2: bug subtask            | Open        | Medium
+TEST-136 | Eval iter2: subtask auto-detection | Open        | Medium
+TEST-4   | Mailweiterleitung Test JIRA        | Open        | Minor
+
+(5 issues found)

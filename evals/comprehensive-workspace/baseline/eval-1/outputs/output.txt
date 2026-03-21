@@ -1,0 +1,466 @@
+Command:
+uv run skills/jira-communication/scripts/core/jira-issue.py --json get TEST-135
+
+Output:
+{
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+  "id": "126706",
+  "self": "https://jira.netresearch.de/rest/api/2/issue/126706",
+  "key": "TEST-135",
+  "fields": {
+    "customfield_19680": "<div>\n  <div style='color: green'>OPEN</div>\n  <p>Lead: Sebastian Mendel</p>\n  <p>Contact: Thomas Fleck</p>\n</div>",
+    "customfield_10071": null,
+    "customfield_19681": {
+      "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+      "name": "sebastian.mendel",
+      "key": "sebastian.mendel",
+      "emailAddress": "sebastian.mendel@netresearch.de",
+      "avatarUrls": {
+        "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+        "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+        "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+        "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+      },
+      "displayName": "Sebastian Mendel",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "customfield_19682": {
+      "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+      "name": "sebastian.mendel",
+      "key": "sebastian.mendel",
+      "emailAddress": "sebastian.mendel@netresearch.de",
+      "avatarUrls": {
+        "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+        "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+        "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+        "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+      },
+      "displayName": "Sebastian Mendel",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "customfield_11680": null,
+    "fixVersions": [],
+    "resolution": null,
+    "customfield_10985": null,
+    "customfield_10986": null,
+    "customfield_10987": null,
+    "customfield_12080": "{summaryBean=com.atlassian.jira.plugin.devstatus.rest.SummaryBean@6f163fa8[summary={pullrequest=com.atlassian.jira.plugin.devstatus.rest.SummaryItemBean@24cd9f1a[overall=PullRequestOverallBean{stateCount=0, state='OPEN', details=PullRequestOverallDetails{openCount=0, mergedCount=0, declinedCount=0}},byInstanceType={}], build=com.atlassian.jira.plugin.devstatus.rest.SummaryItemBean@3091cc9b[overall=com.atlassian.jira.plugin.devstatus.summary.beans.BuildOverallBean@78ecb0dc[failedBuildCount=0,successfulBuildCount=0,unknownBuildCount=0,count=0,lastUpdated=<null>,lastUpdatedTimestamp=<null>],byInstanceType={}], review=com.atlassian.jira.plugin.devstatus.rest.SummaryItemBean@71b85afb[overall=com.atlassian.jira.plugin.devstatus.summary.beans.ReviewsOverallBean@3d7cd951[stateCount=0,state=<null>,dueDate=<null>,overDue=false,count=0,lastUpdated=<null>,lastUpdatedTimestamp=<null>],byInstanceType={}], deployment-environment=com.atlassian.jira.plugin.devstatus.rest.SummaryItemBean@3372f71[overall=com.atlassian.jira.plugin.devstatus.summary.beans.DeploymentOverallBean@1e40159b[topEnvironments=[],showProjects=false,successfulCount=0,count=0,lastUpdated=<null>,lastUpdatedTimestamp=<null>],byInstanceType={}], repository=com.atlassian.jira.plugin.devstatus.rest.SummaryItemBean@2d1cfb2a[overall=com.atlassian.jira.plugin.devstatus.summary.beans.CommitOverallBean@76f11989[count=0,lastUpdated=<null>,lastUpdatedTimestamp=<null>],byInstanceType={}], branch=com.atlassian.jira.plugin.devstatus.rest.SummaryItemBean@4c07fc81[overall=com.atlassian.jira.plugin.devstatus.summary.beans.BranchOverallBean@52f5c457[count=0,lastUpdated=<null>,lastUpdatedTimestamp=<null>],byInstanceType={}]},errors=[],configErrors=[]], devSummaryJson={\"cachedValue\":{\"errors\":[],\"configErrors\":[],\"summary\":{\"pullrequest\":{\"overall\":{\"count\":0,\"lastUpdated\":null,\"stateCount\":0,\"state\":\"OPEN\",\"details\":{\"openCount\":0,\"mergedCount\":0,\"declinedCount\":0,\"total\":0},\"open\":true},\"byInstanceType\":{}},\"build\":{\"overall\":{\"count\":0,\"lastUpdated\":null,\"failedBuildCount\":0,\"successfulBuildCount\":0,\"unknownBuildCount\":0},\"byInstanceType\":{}},\"review\":{\"overall\":{\"count\":0,\"lastUpdated\":null,\"stateCount\":0,\"state\":null,\"dueDate\":null,\"overDue\":false,\"completed\":false},\"byInstanceType\":{}},\"deployment-environment\":{\"overall\":{\"count\":0,\"lastUpdated\":null,\"topEnvironments\":[],\"showProjects\":false,\"successfulCount\":0},\"byInstanceType\":{}},\"repository\":{\"overall\":{\"count\":0,\"lastUpdated\":null},\"byInstanceType\":{}},\"branch\":{\"overall\":{\"count\":0,\"lastUpdated\":null},\"byInstanceType\":{}}}},\"isStale\":true}}",
+    "customfield_18981": null,
+    "lastViewed": null,
+    "customfield_10060": null,
+    "customfield_10580": null,
+    "priority": {
+      "self": "https://jira.netresearch.de/rest/api/2/priority/2",
+      "iconUrl": "https://jira.netresearch.de/images/icons/priorities/critical.svg",
+      "name": "Critical",
+      "id": "2"
+    },
+    "customfield_10981": null,
+    "labels": [],
+    "aggregatetimeoriginalestimate": null,
+    "timeestimate": 0,
+    "versions": [],
+    "issuelinks": [],
+    "assignee": {
+      "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+      "name": "sebastian.mendel",
+      "key": "sebastian.mendel",
+      "emailAddress": "sebastian.mendel@netresearch.de",
+      "avatarUrls": {
+        "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+        "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+        "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+        "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+      },
+      "displayName": "Sebastian Mendel",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "status": {
+      "self": "https://jira.netresearch.de/rest/api/2/status/3",
+      "description": "",
+      "iconUrl": "https://jira.netresearch.de/images/icons/statuses/inprogress.png",
+      "name": "In Progress",
+      "id": "3",
+      "statusCategory": {
+        "self": "https://jira.netresearch.de/rest/api/2/statuscategory/4",
+        "id": 4,
+        "key": "indeterminate",
+        "colorName": "inprogress",
+        "name": "In Progress"
+      }
+    },
+    "components": [],
+    "customfield_12590": null,
+    "customfield_18690": null,
+    "customfield_18691": null,
+    "customfield_12592": null,
+    "customfield_18692": null,
+    "customfield_12591": null,
+    "customfield_11780": null,
+    "customfield_12594": null,
+    "customfield_12593": null,
+    "customfield_11782": null,
+    "customfield_12596": null,
+    "customfield_12595": null,
+    "customfield_12598": null,
+    "customfield_12597": null,
+    "customfield_12599": null,
+    "aggregatetimeestimate": 0,
+    "customfield_12181": null,
+    "creator": {
+      "self": "https://jira.netresearch.de/rest/api/2/user?username=tobias.schneehardt",
+      "name": "tobias.schneehardt",
+      "key": "tobias.schneehardt",
+      "emailAddress": "tobias.schneehardt@netresearch.de",
+      "avatarUrls": {
+        "48x48": "https://jira.netresearch.de/secure/useravatar?ownerId=tobias.schneehardt&avatarId=17444",
+        "24x24": "https://jira.netresearch.de/secure/useravatar?size=small&ownerId=tobias.schneehardt&avatarId=17444",
+        "16x16": "https://jira.netresearch.de/secure/useravatar?size=xsmall&ownerId=tobias.schneehardt&avatarId=17444",
+        "32x32": "https://jira.netresearch.de/secure/useravatar?size=medium&ownerId=tobias.schneehardt&avatarId=17444"
+      },
+      "displayName": "Tobias Schneehardt",
+      "active": false,
+      "timeZone": "Europe/Berlin"
+    },
+    "customfield_12180": null,
+    "customfield_11490": null,
+    "customfield_12183": null,
+    "customfield_12182": null,
+    "customfield_10280": "9223372036854775807",
+    "subtasks": [
+      {
+        "id": "144312",
+        "key": "TEST-136",
+        "self": "https://jira.netresearch.de/rest/api/2/issue/144312",
+        "fields": {
+          "summary": "Eval iter2: subtask auto-detection",
+          "status": {
+            "self": "https://jira.netresearch.de/rest/api/2/status/1",
+            "description": "The issue is open and ready for the assignee to start work on it.",
+            "iconUrl": "https://jira.netresearch.de/images/icons/statuses/open.png",
+            "name": "Open",
+            "id": "1",
+            "statusCategory": {
+              "self": "https://jira.netresearch.de/rest/api/2/statuscategory/2",
+              "id": 2,
+              "key": "new",
+              "colorName": "default",
+              "name": "To Do"
+            }
+          },
+          "priority": {
+            "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+            "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+            "name": "Medium",
+            "id": "10101"
+          },
+          "issuetype": {
+            "self": "https://jira.netresearch.de/rest/api/2/issuetype/13",
+            "id": "13",
+            "description": "A technical task.",
+            "iconUrl": "https://jira.netresearch.de/secure/viewavatar?size=xsmall&avatarId=13758&avatarType=issuetype",
+            "name": "Sub: Technical task",
+            "subtask": true,
+            "avatarId": 13758
+          }
+        }
+      },
+      {
+        "id": "144313",
+        "key": "TEST-137",
+        "self": "https://jira.netresearch.de/rest/api/2/issue/144313",
+        "fields": {
+          "summary": "Eval iter2: bug subtask",
+          "status": {
+            "self": "https://jira.netresearch.de/rest/api/2/status/1",
+            "description": "The issue is open and ready for the assignee to start work on it.",
+            "iconUrl": "https://jira.netresearch.de/images/icons/statuses/open.png",
+            "name": "Open",
+            "id": "1",
+            "statusCategory": {
+              "self": "https://jira.netresearch.de/rest/api/2/statuscategory/2",
+              "id": 2,
+              "key": "new",
+              "colorName": "default",
+              "name": "To Do"
+            }
+          },
+          "priority": {
+            "self": "https://jira.netresearch.de/rest/api/2/priority/10101",
+            "iconUrl": "https://jira.netresearch.de/images/icons/priorities/medium.svg",
+            "name": "Medium",
+            "id": "10101"
+          },
+          "issuetype": {
+            "self": "https://jira.netresearch.de/rest/api/2/issuetype/7",
+            "id": "7",
+            "description": "Sub-task: A problem which impairs or prevents the functions of the product.",
+            "iconUrl": "https://jira.netresearch.de/secure/viewavatar?size=xsmall&avatarId=13743&avatarType=issuetype",
+            "name": "Sub: Bug",
+            "subtask": true,
+            "avatarId": 13743
+          }
+        }
+      }
+    ],
+    "customfield_11492": null,
+    "customfield_11491": null,
+    "customfield_10040": null,
+    "customfield_11494": null,
+    "customfield_11493": null,
+    "customfield_10680": null,
+    "customfield_11496": null,
+    "customfield_12585": null,
+    "reporter": {
+      "self": "https://jira.netresearch.de/rest/api/2/user?username=tobias.schneehardt",
+      "name": "tobias.schneehardt",
+      "key": "tobias.schneehardt",
+      "emailAddress": "tobias.schneehardt@netresearch.de",
+      "avatarUrls": {
+        "48x48": "https://jira.netresearch.de/secure/useravatar?ownerId=tobias.schneehardt&avatarId=17444",
+        "24x24": "https://jira.netresearch.de/secure/useravatar?size=small&ownerId=tobias.schneehardt&avatarId=17444",
+        "16x16": "https://jira.netresearch.de/secure/useravatar?size=xsmall&ownerId=tobias.schneehardt&avatarId=17444",
+        "32x32": "https://jira.netresearch.de/secure/useravatar?size=medium&ownerId=tobias.schneehardt&avatarId=17444"
+      },
+      "displayName": "Tobias Schneehardt",
+      "active": false,
+      "timeZone": "Europe/Berlin"
+    },
+    "customfield_10681": "1|i00cqn:",
+    "customfield_11495": null,
+    "customfield_12584": null,
+    "aggregateprogress": {
+      "progress": 1800,
+      "total": 1800,
+      "percent": 100
+    },
+    "customfield_11498": null,
+    "customfield_12587": null,
+    "customfield_11497": null,
+    "customfield_12586": null,
+    "customfield_18688": null,
+    "customfield_12589": null,
+    "customfield_18689": null,
+    "customfield_12588": null,
+    "progress": {
+      "progress": 1800,
+      "total": 1800,
+      "percent": 100
+    },
+    "votes": {
+      "self": "https://jira.netresearch.de/rest/api/2/issue/TEST-135/votes",
+      "votes": 0,
+      "hasVoted": false
+    },
+    "worklog": {
+      "startAt": 0,
+      "maxResults": 20,
+      "total": 1,
+      "worklogs": [
+        {
+          "self": "https://jira.netresearch.de/rest/api/2/issue/126706/worklog/399124",
+          "author": {
+            "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+            "name": "sebastian.mendel",
+            "key": "sebastian.mendel",
+            "emailAddress": "sebastian.mendel@netresearch.de",
+            "avatarUrls": {
+              "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+              "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+              "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+              "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+            },
+            "displayName": "Sebastian Mendel",
+            "active": true,
+            "timeZone": "Europe/Berlin"
+          },
+          "updateAuthor": {
+            "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+            "name": "sebastian.mendel",
+            "key": "sebastian.mendel",
+            "emailAddress": "sebastian.mendel@netresearch.de",
+            "avatarUrls": {
+              "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+              "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+              "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+              "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+            },
+            "displayName": "Sebastian Mendel",
+            "active": true,
+            "timeZone": "Europe/Berlin"
+          },
+          "comment": "Eval: testing worklog",
+          "created": "2026-03-21T22:01:07.704+0000",
+          "updated": "2026-03-21T22:01:07.704+0000",
+          "started": "2026-03-21T22:01:06.000+0000",
+          "timeSpent": "30m",
+          "timeSpentSeconds": 1800,
+          "id": "399124",
+          "issueId": "126706"
+        }
+      ]
+    },
+    "customfield_15282": null,
+    "issuetype": {
+      "self": "https://jira.netresearch.de/rest/api/2/issuetype/3",
+      "id": "3",
+      "description": "A task that needs to be done.",
+      "iconUrl": "https://jira.netresearch.de/secure/viewavatar?size=xsmall&avatarId=13758&avatarType=issuetype",
+      "name": "Task",
+      "subtask": false,
+      "avatarId": 13758
+    },
+    "customfield_15283": null,
+    "customfield_11080": null,
+    "customfield_15280": null,
+    "customfield_11081": [],
+    "customfield_11082": null,
+    "customfield_15286": null,
+    "customfield_11083": null,
+    "customfield_15287": null,
+    "customfield_13780": {
+      "self": "https://jira.netresearch.de/rest/api/2/customFieldOption/-1",
+      "value": "",
+      "id": "-1",
+      "disabled": false
+    },
+    "customfield_11084": null,
+    "customfield_15284": null,
+    "timespent": 1800,
+    "customfield_11085": null,
+    "customfield_15285": null,
+    "customfield_10030": null,
+    "customfield_10031": null,
+    "customfield_17985": null,
+    "project": {
+      "self": "https://jira.netresearch.de/rest/api/2/project/13954",
+      "id": "13954",
+      "key": "TEST",
+      "name": "Test",
+      "projectTypeKey": "software",
+      "avatarUrls": {
+        "48x48": "https://jira.netresearch.de/secure/projectavatar?pid=13954&avatarId=10011",
+        "24x24": "https://jira.netresearch.de/secure/projectavatar?size=small&pid=13954&avatarId=10011",
+        "16x16": "https://jira.netresearch.de/secure/projectavatar?size=xsmall&pid=13954&avatarId=10011",
+        "32x32": "https://jira.netresearch.de/secure/projectavatar?size=medium&pid=13954&avatarId=10011"
+      }
+    },
+    "customfield_11485": "Desktop Design: [path]\r\nMobile Design: [path]",
+    "customfield_10033": null,
+    "customfield_11484": null,
+    "customfield_15289": null,
+    "customfield_11487": null,
+    "aggregatetimespent": 1800,
+    "customfield_11486": null,
+    "customfield_12611": null,
+    "customfield_11489": "h4. Development\r\n- \r\n- \r\n\r\nh4. Staging\r\n- \r\n- ",
+    "customfield_12610": null,
+    "customfield_11488": null,
+    "customfield_12602": null,
+    "customfield_12601": null,
+    "customfield_12608": null,
+    "resolutiondate": null,
+    "customfield_12609": null,
+    "workratio": -1,
+    "customfield_19480": null,
+    "customfield_19080": null,
+    "customfield_19081": null,
+    "customfield_18782": null,
+    "customfield_18783": "3.0",
+    "watches": {
+      "self": "https://jira.netresearch.de/rest/api/2/issue/TEST-135/watchers",
+      "watchCount": 2,
+      "isWatching": true
+    },
+    "customfield_18784": "0.0",
+    "customfield_18785": "3.0",
+    "customfield_10380": null,
+    "customfield_18780": "10.0.0 -> 10.1.0,10.1.0 -> 10.1.5,10.1.5 -> 10.2.0",
+    "created": "2023-10-27T10:35:30.341+0000",
+    "customfield_18781": "10.0.0 -> 10.1.0,10.1.0 -> 10.1.5,10.1.5 -> 10.2.0",
+    "customfield_10780": null,
+    "customfield_18786": "10.0.0 -> 10.1.0,10.1.0 -> 10.1.5,10.1.5 -> 10.2.0",
+    "customfield_18787": "126706",
+    "customfield_12600": null,
+    "updated": "2026-03-21T22:01:10.253+0000",
+    "customfield_11180": null,
+    "timeoriginalestimate": null,
+    "description": "h3. Tasks\r\nh4. Grafana (IOS-164)\r\n- {task:id=22751}10.0.0 -> 10.1.0{task}\r\n-- Release notes: https://github.com/grafana/grafana/releases/tag/v10.1.0\r\n- {task:id=22752}10.1.0 -> 10.1.5{task}\r\n-- Release notes: https://github.com/grafana/grafana/releases/tag/v10.1.5\r\n- {task:id=22753}10.1.5 -> 10.2.0{task}\r\n-- Release notes: https://github.com/grafana/grafana/releases/tag/v10.2.0",
+    "customfield_11980": null,
+    "timetracking": {
+      "remainingEstimate": "0m",
+      "timeSpent": "30m",
+      "remainingEstimateSeconds": 0,
+      "timeSpentSeconds": 1800
+    },
+    "attachment": [],
+    "customfield_19181": null,
+    "customfield_19180": null,
+    "summary": "testing ios-update-checker",
+    "customfield_10082": null,
+    "customfield_10480": null,
+    "customfield_10001": null,
+    "customfield_10881": {
+      "self": "https://jira.netresearch.de/rest/tempo-accounts/1/account/88",
+      "id": "88",
+      "key": "BLUG",
+      "name": "Blugento"
+    },
+    "customfield_10882": null,
+    "customfield_10883": null,
+    "customfield_10884": null,
+    "environment": null,
+    "duedate": null,
+    "comment": {
+      "comments": [
+        {
+          "self": "https://jira.netresearch.de/rest/api/2/issue/126706/comment/594276",
+          "id": "594276",
+          "author": {
+            "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+            "name": "sebastian.mendel",
+            "key": "sebastian.mendel",
+            "emailAddress": "sebastian.mendel@netresearch.de",
+            "avatarUrls": {
+              "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+              "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+              "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+              "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+            },
+            "displayName": "Sebastian Mendel",
+            "active": true,
+            "timeZone": "Europe/Berlin"
+          },
+          "body": "Eval: testing comment workflow",
+          "updateAuthor": {
+            "self": "https://jira.netresearch.de/rest/api/2/user?username=sebastian.mendel",
+            "name": "sebastian.mendel",
+            "key": "sebastian.mendel",
+            "emailAddress": "sebastian.mendel@netresearch.de",
+            "avatarUrls": {
+              "48x48": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=48",
+              "24x24": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=24",
+              "16x16": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=16",
+              "32x32": "https://www.gravatar.com/avatar/db70db41367f9674a034a87848d0398e?d=mm&s=32"
+            },
+            "displayName": "Sebastian Mendel",
+            "active": true,
+            "timeZone": "Europe/Berlin"
+          },
+          "created": "2026-03-21T22:01:04.737+0000",
+          "updated": "2026-03-21T22:01:04.737+0000"
+        }
+      ],
+      "maxResults": 1,
+      "total": 1,
+      "startAt": 0
+    }
+  }
+}
+
+Key Information:
+- Status: In Progress
+- Assignee: Sebastian Mendel (sebastian.mendel@netresearch.de)

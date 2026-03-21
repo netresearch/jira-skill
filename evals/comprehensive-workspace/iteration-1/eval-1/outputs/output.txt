@@ -1,0 +1,20 @@
+Command:
+uv run skills/jira-communication/scripts/core/jira-issue.py get TEST-135
+
+Output:
+TEST-135: testing ios-update-checker
+============================================================
+Type: Task | Status: Open | Priority: Medium
+Assignee: Sebastian Mendel | Reporter: Tobias Schneehardt
+
+Description:
+  h3. Tasks
+  h4. Grafana (IOS-164)
+  - {task:id=22751}10.0.0 -> 10.1.0{task}
+  -- Release notes: https://github.com/grafana/grafana/releases/tag/v10.1.0
+  - {task:id=22752}10.1.0 -> 10.1.5{task}
+  -- Release notes: https://github.com/grafana/grafana/releases/tag/v10.1.5
+  - {task:id=22753}10.1.5 -> 10.2.0{task}
+  -- Release notes: https://github.com/grafana/grafana/releases/tag/v10.2.0
+
+Created: 2023-10-27 | Updated: 2026-03-21

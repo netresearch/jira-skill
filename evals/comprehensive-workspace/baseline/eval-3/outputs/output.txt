@@ -1,0 +1,6 @@
+COMMAND:
+uv run skills/jira-communication/scripts/workflow/jira-comment.py add TEST-135 "Baseline eval: testing comment workflow"
+
+OUTPUT:
+✓ Added comment to TEST-135
+  Comment ID: 594277

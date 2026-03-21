@@ -1,0 +1,6 @@
+Command:
+uv run skills/jira-communication/scripts/core/jira-issue.py update TEST-135 --priority Medium
+
+Output:
+✓ Updated TEST-135
+  ✓ priority
