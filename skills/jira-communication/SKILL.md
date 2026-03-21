@@ -51,24 +51,41 @@ When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credent
 
 ## Execution Style
 
-**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`) from the API response. No need to run `--help`, dry-run, or fetch the issue after to verify.
+**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`). No need to dry-run or verify after.
 
 Global flags go **before** the subcommand:
 ```bash
-uv run scripts/core/jira-issue.py --json get PROJ-123    # correct
+uv run scripts/core/jira-issue.py --json get PROJ-123
 ```
 
-## Common Tasks
+## Common Tasks — Copy These Directly
 
 ```bash
+# Get issue
 uv run scripts/core/jira-issue.py get PROJ-123
+
+# Assign to me
 uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
+
+# Create subtask (--type auto-resolves to subtask type when --parent given)
 uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Task --parent PROJ-100
+
+# Create and assign to me
 uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100 --assignee me
+
+# Transition
 uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
+
+# Search
 uv run scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed"
+
+# Log work
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
+
+# List issue types for a project
 uv run scripts/utility/jira-fields.py types PROJ
+
+# Move issue
 uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
 ```
 
@@ -88,8 +105,4 @@ uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
 **Cloud**: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`
 **Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
 
-Config via `~/.env.jira` or env vars. Run `jira-validate.py --verbose` to verify.
-
-## Multi-Profile Support
-
-Multiple instances via `~/.jira/profiles.json`, auto-resolved from issue key, URL, or `--profile NAME`.
+Config via `~/.env.jira` or env vars. Multiple instances via `~/.jira/profiles.json` (auto-resolves from issue key/URL or `--profile NAME`).
