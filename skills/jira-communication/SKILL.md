@@ -18,15 +18,7 @@ CLI scripts for Jira operations via `uv run`. All scripts support `--help`, `--j
 
 ## Auto-Trigger
 
-Activate when user mentions:
-- **Jira URLs**: `https://jira.*/browse/*`, `https://*.atlassian.net/browse/*`
-- **Issue keys**: `PROJ-123`, `NRS-4167`
-
-On URL trigger → extract key → `jira-issue.py get PROJ-123`
-
-## Auth Failure Handling
-
-When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credential setup)
+On Jira URL or issue key (PROJ-123) → `jira-issue.py get PROJ-123`. Auth failure → `jira-setup.py`.
 
 ## Scripts
 
@@ -58,38 +50,42 @@ Global flags go **before** the subcommand:
 uv run scripts/core/jira-issue.py --json get PROJ-123
 ```
 
-## Common Tasks — Copy These Directly
+## Common Tasks
 
 ```bash
-# Get issue
+# Read issue
 uv run scripts/core/jira-issue.py get PROJ-123
+uv run scripts/core/jira-issue.py --json get PROJ-123
 
-# Assign to me
-uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
-
-# Create subtask (--type auto-resolves to subtask type when --parent given)
-uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Task --parent PROJ-100
-
-# Create and assign to me
-uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100 --assignee me
-
-# Transition
-uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
-
-# Search
+# Search (use -f for fields, -n for limit)
 uv run scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed"
+uv run scripts/core/jira-search.py query "project = PROJ ORDER BY updated DESC" -n 5 -f key,summary,status,priority
+
+# Update fields / assign
+uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
+uv run scripts/core/jira-issue.py update PROJ-123 --priority Critical
+
+# Comment
+uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
+
+# Transition (use "list" to see available transitions)
+uv run scripts/workflow/jira-transition.py list PROJ-123
+uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 
 # Log work
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 
-# List issue types for a project
-uv run scripts/utility/jira-fields.py types PROJ
+# Create (--type auto-resolves to subtask type when --parent given)
+uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
+uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100 --assignee me
 
-# Move issue
+# Move / link / types
 uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
+uv run scripts/utility/jira-link.py add PROJ-123 "blocks" PROJ-456
+uv run scripts/utility/jira-fields.py types PROJ
 ```
 
-`--assignee me` works on any script — resolves to the authenticated user automatically.
+`--assignee me` resolves to the authenticated user on any script.
 
 ## Related Skills
 
@@ -102,7 +98,4 @@ uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
 
 ## Authentication
 
-**Cloud**: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`
-**Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
-
-Config via `~/.env.jira` or env vars. Multiple instances via `~/.jira/profiles.json` (auto-resolves from issue key/URL or `--profile NAME`).
+Cloud: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`. Server/DC: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`. Config via `~/.env.jira` or `~/.jira/profiles.json` (auto-resolves from issue key).
