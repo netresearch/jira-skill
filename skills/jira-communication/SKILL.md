@@ -22,23 +22,11 @@ On Jira URL or issue key (PROJ-123) → `jira-issue.py get PROJ-123`. Auth failu
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/core/jira-setup.py` | Interactive credential config |
-| `scripts/core/jira-validate.py` | Verify connection |
-| `scripts/core/jira-issue.py` | Get/update issue details |
-| `scripts/core/jira-search.py` | Search with JQL |
-| `scripts/core/jira-worklog.py` | Time tracking |
-| `scripts/core/jira-attachment.py` | Download attachments |
-| `scripts/workflow/jira-create.py` | Create issues |
-| `scripts/workflow/jira-move.py` | Move issues between projects |
-| `scripts/workflow/jira-transition.py` | Change status |
-| `scripts/workflow/jira-comment.py` | Add/edit/list comments |
-| `scripts/workflow/jira-sprint.py` | List sprints |
-| `scripts/workflow/jira-board.py` | List boards |
-| `scripts/utility/jira-user.py` | User info |
-| `scripts/utility/jira-fields.py` | Search fields, list issue types |
-| `scripts/utility/jira-link.py` | Issue links |
+**Core**: `jira-issue.py` (get/update), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
+**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
+**Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`
+
+All in `scripts/core/`, `scripts/workflow/`, or `scripts/utility/`.
 
 
 ## Execution Style
@@ -61,12 +49,15 @@ uv run scripts/core/jira-issue.py --json get PROJ-123
 uv run scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed"
 uv run scripts/core/jira-search.py query "project = PROJ ORDER BY updated DESC" -n 5 -f key,summary,status,priority
 
-# Update fields / assign
+# Update fields / assign (use --fields-json for description and custom fields)
 uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
-uv run scripts/core/jira-issue.py update PROJ-123 --priority Critical
+uv run scripts/core/jira-issue.py update PROJ-123 --priority Critical --summary "New title"
+uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New description"}'
 
-# Comment
+# Comment (add/edit/list — edit needs comment ID from list)
 uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
+uv run scripts/workflow/jira-comment.py --json list PROJ-123
+uv run scripts/workflow/jira-comment.py edit PROJ-123 COMMENT_ID "Updated text"
 
 # Transition (use "list" to see available transitions)
 uv run scripts/workflow/jira-transition.py list PROJ-123
