@@ -159,6 +159,8 @@ def delete(ctx, issue_key: str, comment_id: str):
 
         if ctx.obj["quiet"]:
             print("ok")
+        elif ctx.obj["json"]:
+            format_output({"issue_key": issue_key, "comment_id": comment_id, "deleted": True}, as_json=True)
         else:
             success(f"Deleted comment {comment_id} from {issue_key}")
 

@@ -145,6 +145,12 @@ class TestSubcommandHelp:
     def test_comment_list_help(self):
         self._run_help(_comment_mod.cli, ["list", "--help"])
 
+    def test_comment_edit_help(self):
+        self._run_help(_comment_mod.cli, ["edit", "--help"])
+
+    def test_comment_delete_help(self):
+        self._run_help(_comment_mod.cli, ["delete", "--help"])
+
     def test_sprint_list_help(self):
         self._run_help(_sprint_mod.cli, ["list", "--help"])
 
