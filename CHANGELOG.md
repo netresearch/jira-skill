@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-03-22
+
+### Added
+
+- **`--assignee me` support**: Shared `resolve_assignee()` in `lib/client.py` resolves `"me"` via `client.myself()` on Cloud and Server/DC. Works on any script with `--assignee`. ([#38](https://github.com/netresearch/jira-skill/pull/38))
+- **Subtask type auto-detection**: `resolve_subtask_type()` queries Jira API `subtask` boolean — no naming convention assumptions. `jira-create.py` auto-resolves when `--parent` given. ([#39](https://github.com/netresearch/jira-skill/pull/39))
+- **`jira-fields.py types [PROJECT]`**: List available issue types with subtask flag
+- **`jira-comment.py delete`**: Delete comments. Closes [#33](https://github.com/netresearch/jira-skill/issues/33). ([#40](https://github.com/netresearch/jira-skill/pull/40))
+- **Skill evals**: 14 eval scenarios testing all common Jira operations
+
+### Changed
+
+- **SKILL.md rewritten for direct execution**: Copy-paste recipes for all operations. Agents go from 3-9 tool calls to 1 per task (-52% average)
+- **Assignee resolution deduplicated**: Shared `resolve_assignee()` replaces duplicated blocks in `jira-create.py` and `jira-issue.py`
+
+## [3.5.0] - 2026-03-21
+
+### Added
+
+- **`jira-move.py`**: Move issues between projects ([#37](https://github.com/netresearch/jira-skill/pull/37))
+
+## [3.4.0] - 2026-03-17
+
+### Added
+
+- Agent Skills spec frontmatter and improved descriptions
+
 ## [3.3.5] - 2026-02-27
 
 ### Fixed
