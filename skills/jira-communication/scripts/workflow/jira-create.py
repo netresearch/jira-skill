@@ -21,7 +21,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, is_account_id
+from lib.client import LazyJiraClient, resolve_assignee
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -112,30 +112,7 @@ def issue(
         fields["labels"] = [lbl.strip() for lbl in labels.split(",")]
 
     if assignee:
-        if is_account_id(assignee):
-            fields["assignee"] = {"accountId": assignee}
-        else:
-            users = client.user_find_by_user_string(query=assignee)
-            if users and isinstance(users, list) and len(users) > 0:
-                found = users[0]
-                if isinstance(found, dict):
-                    if "accountId" in found:
-                        fields["assignee"] = {"accountId": found["accountId"]}
-                    else:
-                        fields["assignee"] = {"name": found.get("name", found.get("key", assignee))}
-                elif isinstance(found, str):
-                    fields["assignee"] = {"name": assignee}
-                else:
-                    fields["assignee"] = {"name": assignee}
-            elif users and isinstance(users, str):
-                # API returned a string instead of a list (Server/DC),
-                # fall back to raw identifier
-                fields["assignee"] = {"name": assignee}
-            else:
-                # Fall back to raw identifier (username/email) and let Jira
-                # validate it — avoids breaking Server/DC where direct names work.
-                warning(f"User not found via search for '{assignee}', using raw identifier")
-                fields["assignee"] = {"name": assignee}
+        fields["assignee"] = resolve_assignee(client, assignee)
 
     if parent:
         # Determine if subtask or epic link

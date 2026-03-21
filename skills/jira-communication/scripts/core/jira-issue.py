@@ -21,7 +21,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, is_account_id
+from lib.client import LazyJiraClient, resolve_assignee
 from lib.output import error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -284,28 +284,7 @@ def update(
         update_fields["labels"] = [l.strip() for l in labels.split(",")]
 
     if assignee:
-        if is_account_id(assignee):
-            update_fields["assignee"] = {"accountId": assignee}
-        else:
-            users = client.user_find_by_user_string(query=assignee)
-            if users and isinstance(users, list) and len(users) > 0:
-                found = users[0]
-                if isinstance(found, dict):
-                    if "accountId" in found:
-                        update_fields["assignee"] = {"accountId": found["accountId"]}
-                    else:
-                        update_fields["assignee"] = {"name": found.get("name", found.get("key", assignee))}
-                elif isinstance(found, str):
-                    update_fields["assignee"] = {"name": assignee}
-                else:
-                    update_fields["assignee"] = {"name": assignee}
-            elif users and isinstance(users, str):
-                # API returned a string instead of a list (Server/DC),
-                # fall back to raw identifier
-                update_fields["assignee"] = {"name": assignee}
-            else:
-                error(f"User not found: {assignee}")
-                sys.exit(1)
+        update_fields["assignee"] = resolve_assignee(client, assignee)
 
     if fields_json:
         try:
