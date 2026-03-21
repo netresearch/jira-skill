@@ -6,7 +6,7 @@
 #     "click>=8.1.0,<9",
 # ]
 # ///
-"""Jira comment operations - add, edit, and list issue comments."""
+"""Jira comment operations - add, edit, delete, and list issue comments."""
 
 import sys
 from pathlib import Path
@@ -38,7 +38,7 @@ from lib.output import error, extract_adf_text, format_output, success
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira comment operations.
 
-    Add, edit, and list comments on Jira issues.
+    Add, edit, delete, and list comments on Jira issues.
     Note: Comments should use Jira wiki markup syntax, not Markdown.
     """
     ctx.ensure_object(dict)
@@ -132,6 +132,40 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to edit comment {comment_id} on {issue_key}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.argument("comment_id")
+@click.pass_context
+def delete(ctx, issue_key: str, comment_id: str):
+    """Delete a comment from an issue.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    COMMENT_ID: The ID of the comment to delete (use 'list' to find IDs)
+
+    Examples:
+
+      jira-comment delete PROJ-123 12345
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        url = f"rest/api/2/issue/{issue_key}/comment/{comment_id}"
+        client.delete(url)
+
+        if ctx.obj["quiet"]:
+            print("ok")
+        else:
+            success(f"Deleted comment {comment_id} from {issue_key}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to delete comment {comment_id} from {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 

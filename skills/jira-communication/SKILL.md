@@ -23,7 +23,7 @@ On Jira URL or issue key (PROJ-123) → `jira-issue.py get PROJ-123`. Auth failu
 ## Scripts
 
 **Core**: `jira-issue.py` (get/update), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
-**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
+**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/delete/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
 **Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`
 
 All in `scripts/core/`, `scripts/workflow/`, or `scripts/utility/`.
@@ -58,6 +58,7 @@ uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description":
 uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
 uv run scripts/workflow/jira-comment.py --json list PROJ-123
 uv run scripts/workflow/jira-comment.py edit PROJ-123 COMMENT_ID "Updated text"
+uv run scripts/workflow/jira-comment.py delete PROJ-123 COMMENT_ID
 
 # Transition (use "list" to see available transitions)
 uv run scripts/workflow/jira-transition.py list PROJ-123
