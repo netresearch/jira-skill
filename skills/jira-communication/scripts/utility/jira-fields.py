@@ -20,8 +20,8 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient
-from lib.output import error, format_output, format_table
+from lib.client import LazyJiraClient, get_project_issue_types
+from lib.output import error, format_output, format_table, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -165,6 +165,58 @@ def list_fields(ctx, field_type: str, limit: int):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to list fields: {e}")
+        sys.exit(1)
+
+
+@cli.command("types")
+@click.argument("project", required=False)
+@click.pass_context
+def list_types(ctx, project: str | None):
+    """List available issue types.
+
+    If PROJECT is given, show types for that project (including subtask flag).
+    Otherwise, show all global issue types.
+
+    Examples:
+
+      jira-fields.py types PROJ
+
+      jira-fields.py types
+    """
+    client = ctx.obj["client"]
+
+    try:
+        if project:
+            # Use project key for profile resolution
+            client.with_context(issue_key=f"{project}-1")
+            types = get_project_issue_types(client, project)
+        else:
+            types = client.get_all_issuetypes()
+
+        if ctx.obj["json"]:
+            format_output(types, as_json=True)
+            return
+
+        if not types:
+            warning("No issue types found")
+            return
+
+        rows = []
+        for t in types:
+            rows.append(
+                {
+                    "Name": t.get("name", ""),
+                    "ID": t.get("id", ""),
+                    "Subtask": "Yes" if t.get("subtask") else "",
+                }
+            )
+        rows.sort(key=lambda r: (r["Subtask"] != "Yes", r["Name"]))
+        print(format_table(rows, ["Name", "ID", "Subtask"]))
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to list issue types: {e}")
         sys.exit(1)
 
 

@@ -21,7 +21,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, resolve_assignee
+from lib.client import LazyJiraClient, resolve_assignee, resolve_subtask_type
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -56,7 +56,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--priority", "-p", help="Priority name (High, Medium, Low, etc.)")
 @click.option("--labels", "-l", help="Comma-separated labels")
 @click.option("--assignee", "-a", help="Assignee username or email")
-@click.option("--parent", help="Parent issue key (for subtasks or epic link)")
+@click.option("--parent", help="Parent issue key (creates a subtask)")
 @click.option("--components", help="Comma-separated component names")
 @click.option("--fields-json", help="JSON string of additional fields")
 @click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
@@ -115,12 +115,19 @@ def issue(
         fields["assignee"] = resolve_assignee(client, assignee)
 
     if parent:
-        # Determine if subtask or epic link
-        if issue_type.lower() in ("subtask", "sub-task"):
-            fields["parent"] = {"key": parent}
-        else:
-            # Epic link - field name varies by Jira version
-            fields["parent"] = {"key": parent}
+        # Resolve issue type to a valid subtask type for the target project
+        resolved_type = resolve_subtask_type(client, project_key, issue_type)
+        if resolved_type is None:
+            error(
+                f"Project {project_key} has no subtask issue types matching '{issue_type}'",
+                suggestion=f"Run: uv run scripts/utility/jira-fields.py types {project_key} to list available types",
+            )
+            sys.exit(1)
+        if resolved_type != issue_type:
+            warning(f"Resolved issue type '{issue_type}' → '{resolved_type}' (subtask type for {project_key})")
+            fields["issuetype"] = {"name": resolved_type}
+            issue_type = resolved_type
+        fields["parent"] = {"key": parent}
 
     if components:
         fields["components"] = [{"name": c.strip()} for c in components.split(",")]
