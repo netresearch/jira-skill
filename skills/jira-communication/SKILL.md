@@ -45,26 +45,34 @@ When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credent
 | `scripts/workflow/jira-sprint.py` | List sprints |
 | `scripts/workflow/jira-board.py` | List boards |
 | `scripts/utility/jira-user.py` | User info |
-| `scripts/utility/jira-fields.py` | Search fields |
+| `scripts/utility/jira-fields.py` | Search fields, list issue types |
 | `scripts/utility/jira-link.py` | Issue links |
 
-## Critical: Flag Ordering
 
-Global flags go **before** the subcommand (argparse requirement):
+## Execution Style
+
+**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`) from the API response. No need to run `--help`, dry-run, or fetch the issue after to verify.
+
+Global flags go **before** the subcommand:
 ```bash
-# Correct:  uv run scripts/core/jira-issue.py --json get PROJ-123
-# Wrong:    uv run scripts/core/jira-issue.py get PROJ-123 --json
+uv run scripts/core/jira-issue.py --json get PROJ-123    # correct
 ```
 
-## Quick Examples
+## Common Tasks
 
 ```bash
-uv run scripts/core/jira-search.py query "assignee = currentUser()"
 uv run scripts/core/jira-issue.py get PROJ-123
+uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
+uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Task --parent PROJ-100
+uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100 --assignee me
+uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
+uv run scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed"
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
+uv run scripts/utility/jira-fields.py types PROJ
 uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
-uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
 ```
+
+`--assignee me` works on any script — resolves to the authenticated user automatically.
 
 ## Related Skills
 
@@ -84,20 +92,4 @@ Config via `~/.env.jira` or env vars. Run `jira-validate.py --verbose` to verify
 
 ## Multi-Profile Support
 
-When `~/.jira/profiles.json` exists, multiple Jira instances are supported.
-
-**Profile resolution** (automatic, priority order):
-1. `--env-file PATH` - legacy single-file behavior
-2. `--profile NAME` flag - use named profile
-3. Full Jira URL in input - match host to profile
-4. Issue key (e.g., WEB-1381) - match project prefix
-5. `.jira-profile` file in working directory
-6. Default profile from profiles.json
-7. Fallback to `~/.env.jira`
-
-**Profile management**:
-```bash
-uv run scripts/core/jira-setup.py --profile mkk        # Create profile
-uv run scripts/core/jira-validate.py --all-profiles     # Validate all
-uv run scripts/core/jira-setup.py --migrate             # Migrate .env.jira
-```
+Multiple instances via `~/.jira/profiles.json`, auto-resolved from issue key, URL, or `--profile NAME`.
