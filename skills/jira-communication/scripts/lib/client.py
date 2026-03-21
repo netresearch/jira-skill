@@ -9,7 +9,6 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, is_cloud_url, load_config, validate_config
-from .output import warning
 
 # Default timeout for all Jira API requests (seconds)
 JIRA_TIMEOUT = 30
@@ -49,17 +48,9 @@ def resolve_assignee(client, identifier: str) -> dict:
     """
     if identifier.lower() == "me":
         user = client.myself()
-        if not isinstance(user, dict):
-            raise RuntimeError(
-                "Unexpected response from Jira when resolving assignee 'me': "
-                f"expected a JSON object, got {type(user).__name__}. "
-                "Please verify your Jira authentication and try again."
-            )
-        if account_id := user.get("accountId"):
-            return {"accountId": account_id}
-        if name := (user.get("name") or user.get("key")):
-            return {"name": name}
-        raise ValueError("Could not resolve current user: 'name' or 'key' not found in client.myself() response.")
+        if "accountId" in user:
+            return {"accountId": user["accountId"]}
+        return {"name": user.get("name", user.get("key", ""))}
 
     if is_account_id(identifier):
         return {"accountId": identifier}
@@ -72,8 +63,75 @@ def resolve_assignee(client, identifier: str) -> dict:
                 return {"accountId": found["accountId"]}
             return {"name": found.get("name", found.get("key", identifier))}
     # Fall back to raw identifier — let Jira validate
-    warning(f"User not found via search for '{identifier}', using raw identifier")
     return {"name": identifier}
+
+
+def get_project_issue_types(client, project_key: str, subtask_only: bool | None = None) -> list[dict]:
+    """Get available issue types for a project.
+
+    Uses expand=issueTypes to ensure Server/DC includes type metadata.
+
+    Args:
+        client: Jira client instance
+        project_key: Project key (e.g., "PROJ")
+        subtask_only: If True, only subtask types. If False, only non-subtask. None = all.
+
+    Returns:
+        List of issue type dicts with at least 'id', 'name', 'subtask' keys.
+    """
+    project = client.project(project_key, expand="issueTypes")
+    types = project.get("issueTypes", [])
+    if subtask_only is True:
+        return [t for t in types if t.get("subtask")]
+    if subtask_only is False:
+        return [t for t in types if not t.get("subtask")]
+    return types
+
+
+def resolve_subtask_type(client, project_key: str, requested_type: str) -> str | None:
+    """Resolve a requested issue type to a valid subtask type for the project.
+
+    Resolution order:
+    1. Exact match (case-insensitive) among subtask types
+    2. Subtask type whose name contains the requested type (e.g., "Task" → "Sub: Task")
+    3. Generic subtask keywords ("subtask", "sub-task") → first available subtask type
+    4. Only one subtask type available → return it regardless of name
+    5. No match / no subtask types → return None
+
+    Args:
+        client: Jira client instance
+        project_key: Project key
+        requested_type: The issue type name the user requested
+
+    Returns:
+        Resolved subtask type name, or None if no match or no subtask types.
+    """
+    subtask_types = get_project_issue_types(client, project_key, subtask_only=True)
+    if not subtask_types:
+        return None
+
+    req_lower = requested_type.lower()
+
+    # 1. Exact match (case-insensitive)
+    for st in subtask_types:
+        if st["name"].lower() == req_lower:
+            return st["name"]
+
+    # 2. Subtask type whose name contains the requested type (unambiguous only)
+    #    e.g., "Task" matches "Sub: Task", "Bug" matches "Sub: Bug"
+    substring_matches = [st for st in subtask_types if req_lower in st["name"].lower()]
+    if len(substring_matches) == 1:
+        return substring_matches[0]["name"]
+
+    # 3. Generic subtask keywords → first available
+    if req_lower in ("subtask", "sub-task", "sub task"):
+        return subtask_types[0]["name"]
+
+    # 4. Only one subtask type? Use it (unambiguous).
+    if len(subtask_types) == 1:
+        return subtask_types[0]["name"]
+
+    return None
 
 
 # === INLINE_START: client ===

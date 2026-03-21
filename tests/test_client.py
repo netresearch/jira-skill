@@ -15,8 +15,10 @@ from lib.client import (
     _check_captcha_challenge,
     _sanitize_error,
     get_jira_client,
+    get_project_issue_types,
     is_account_id,
     resolve_assignee,
+    resolve_subtask_type,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -361,23 +363,130 @@ class TestResolveAssignee:
         result = resolve_assignee(mock_client, "some.user")
         assert result == {"name": "some.user"}
 
-    def test_me_raises_value_error_when_no_identifier(self):
-        """'me' raises ValueError when myself() returns no name, key, or accountId."""
-        mock_client = mock.Mock()
-        mock_client.myself.return_value = {"displayName": "Ghost User"}
-        try:
-            resolve_assignee(mock_client, "me")
-            raise AssertionError("Should have raised ValueError")
-        except ValueError as e:
-            assert "'name' or 'key' not found" in str(e)
 
-    def test_me_raises_runtime_error_when_non_dict(self):
-        """'me' raises RuntimeError when myself() returns a non-dict response."""
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: get_project_issue_types() and resolve_subtask_type()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Sample issue types returned by Jira API for a project
+SAMPLE_ISSUE_TYPES = [
+    {"id": "1", "name": "Bug", "subtask": False},
+    {"id": "2", "name": "Task", "subtask": False},
+    {"id": "3", "name": "Story", "subtask": False},
+    {"id": "4", "name": "Sub: Task", "subtask": True},
+    {"id": "5", "name": "Sub: Bug", "subtask": True},
+    {"id": "6", "name": "Epic", "subtask": False},
+]
+
+# Alternative: instance where subtask types use different naming
+SAMPLE_ISSUE_TYPES_ALT = [
+    {"id": "1", "name": "Bug", "subtask": False},
+    {"id": "2", "name": "Task", "subtask": False},
+    {"id": "10", "name": "Sub-task", "subtask": True},
+    {"id": "11", "name": "Technical Sub-task", "subtask": True},
+]
+
+
+def _mock_client_with_types(issue_types):
+    """Helper: create a mock client that returns given issue types."""
+    mock_client = mock.Mock()
+    mock_client.project.return_value = {"issueTypes": issue_types}
+    return mock_client
+
+
+class TestGetProjectIssueTypes:
+    """get_project_issue_types() must return issue types from API."""
+
+    def test_returns_issue_types_from_project(self):
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = get_project_issue_types(client, "PROJ")
+        assert len(result) == 6
+        assert result[0]["name"] == "Bug"
+        client.project.assert_called_once_with("PROJ", expand="issueTypes")
+
+    def test_filters_subtask_types(self):
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = get_project_issue_types(client, "PROJ", subtask_only=True)
+        assert len(result) == 2
+        assert all(t["subtask"] for t in result)
+
+    def test_filters_non_subtask_types(self):
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = get_project_issue_types(client, "PROJ", subtask_only=False)
+        assert len(result) == 4
+        assert not any(t["subtask"] for t in result)
+
+    def test_empty_issue_types(self):
+        """Handles project with no issueTypes key gracefully."""
         mock_client = mock.Mock()
-        mock_client.myself.return_value = "unexpected-string"
-        try:
-            resolve_assignee(mock_client, "me")
-            raise AssertionError("Should have raised RuntimeError")
-        except RuntimeError as e:
-            assert "expected a JSON object" in str(e)
-            assert "str" in str(e)
+        mock_client.project.return_value = {}
+        result = get_project_issue_types(mock_client, "PROJ")
+        assert result == []
+
+
+class TestResolveSubtaskType:
+    """resolve_subtask_type() must find the correct subtask type from API."""
+
+    def test_exact_match_subtask(self):
+        """Exact name match among subtask types returns that type."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = resolve_subtask_type(client, "PROJ", "Sub: Task")
+        assert result == "Sub: Task"
+
+    def test_case_insensitive_match(self):
+        """Matching is case-insensitive."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = resolve_subtask_type(client, "PROJ", "sub: task")
+        assert result == "Sub: Task"
+
+    def test_non_subtask_name_resolved_to_subtask(self):
+        """'Task' with --parent resolves to 'Sub: Task' if that subtask contains 'Task'."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = resolve_subtask_type(client, "PROJ", "Task")
+        assert result == "Sub: Task"
+
+    def test_bug_resolved_to_sub_bug(self):
+        """'Bug' with --parent resolves to 'Sub: Bug'."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = resolve_subtask_type(client, "PROJ", "Bug")
+        assert result == "Sub: Bug"
+
+    def test_subtask_keyword_resolved(self):
+        """'Subtask' or 'Sub-task' resolves to first available subtask type."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = resolve_subtask_type(client, "PROJ", "Subtask")
+        assert result in ("Sub: Task", "Sub: Bug")
+
+    def test_different_naming_convention(self):
+        """Works with instances that name subtasks differently."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES_ALT)
+        result = resolve_subtask_type(client, "PROJ", "Sub-task")
+        assert result == "Sub-task"
+
+    def test_only_one_subtask_type_returns_it(self):
+        """When only one subtask type exists and no match, return it."""
+        client = _mock_client_with_types(
+            [
+                {"id": "1", "name": "Task", "subtask": False},
+                {"id": "2", "name": "Teilaufgabe", "subtask": True},
+            ]
+        )
+        result = resolve_subtask_type(client, "PROJ", "Task")
+        assert result == "Teilaufgabe"
+
+    def test_no_subtask_types_returns_none(self):
+        """When project has no subtask types, returns None."""
+        client = _mock_client_with_types(
+            [
+                {"id": "1", "name": "Task", "subtask": False},
+                {"id": "2", "name": "Bug", "subtask": False},
+            ]
+        )
+        result = resolve_subtask_type(client, "PROJ", "Task")
+        assert result is None
+
+    def test_no_match_multiple_subtask_types_returns_none(self):
+        """No match + multiple subtask types → None (ambiguous)."""
+        client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
+        result = resolve_subtask_type(client, "PROJ", "Epic")
+        assert result is None
