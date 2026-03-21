@@ -9,6 +9,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, is_cloud_url, load_config, validate_config
+from .output import warning
 
 # Default timeout for all Jira API requests (seconds)
 JIRA_TIMEOUT = 30
@@ -33,6 +34,46 @@ def is_account_id(s: str) -> bool:
     if ":" in s:
         return bool(ACCOUNT_ID_PATTERN.match(s))
     return bool(LEGACY_ACCOUNT_ID_PATTERN.match(s))
+
+
+def resolve_assignee(client, identifier: str) -> dict:
+    """Resolve an assignee identifier to a Jira-API-ready dict.
+
+    Handles:
+    - "me" (case-insensitive): resolves via client.myself()
+    - Jira Cloud account IDs: returned as {"accountId": ...}
+    - Usernames/emails: searched via user_find_by_user_string()
+
+    Returns:
+        dict with either {"accountId": ...} or {"name": ...}
+    """
+    if identifier.lower() == "me":
+        user = client.myself()
+        if not isinstance(user, dict):
+            raise RuntimeError(
+                "Unexpected response from Jira when resolving assignee 'me': "
+                f"expected a JSON object, got {type(user).__name__}. "
+                "Please verify your Jira authentication and try again."
+            )
+        if account_id := user.get("accountId"):
+            return {"accountId": account_id}
+        if name := (user.get("name") or user.get("key")):
+            return {"name": name}
+        raise ValueError("Could not resolve current user: 'name' or 'key' not found in client.myself() response.")
+
+    if is_account_id(identifier):
+        return {"accountId": identifier}
+
+    users = client.user_find_by_user_string(query=identifier)
+    if users and isinstance(users, list) and len(users) > 0:
+        found = users[0]
+        if isinstance(found, dict):
+            if "accountId" in found:
+                return {"accountId": found["accountId"]}
+            return {"name": found.get("name", found.get("key", identifier))}
+    # Fall back to raw identifier — let Jira validate
+    warning(f"User not found via search for '{identifier}', using raw identifier")
+    return {"name": identifier}
 
 
 # === INLINE_START: client ===

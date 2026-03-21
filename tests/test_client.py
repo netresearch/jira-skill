@@ -16,6 +16,7 @@ from lib.client import (
     _sanitize_error,
     get_jira_client,
     is_account_id,
+    resolve_assignee,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -281,3 +282,102 @@ class TestSanitizeError:
         result = _sanitize_error("password=hunter2")
         assert "hunter2" not in result
         assert "***" in result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: resolve_assignee()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestResolveAssignee:
+    """resolve_assignee() must handle 'me', account IDs, and user search."""
+
+    def test_me_returns_account_id_on_cloud(self):
+        """'me' resolves to accountId from client.myself() on Cloud."""
+        mock_client = mock.Mock()
+        mock_client.myself.return_value = {
+            "accountId": "557058:abc-123",
+            "displayName": "Test User",
+        }
+        result = resolve_assignee(mock_client, "me")
+        assert result == {"accountId": "557058:abc-123"}
+        mock_client.myself.assert_called_once()
+
+    def test_me_returns_name_on_server(self):
+        """'me' resolves to name from client.myself() on Server/DC (no accountId)."""
+        mock_client = mock.Mock()
+        mock_client.myself.return_value = {
+            "name": "john.doe",
+            "key": "john.doe",
+            "displayName": "John Doe",
+        }
+        result = resolve_assignee(mock_client, "me")
+        assert result == {"name": "john.doe"}
+        mock_client.myself.assert_called_once()
+
+    def test_me_case_insensitive(self):
+        """'ME', 'Me', 'mE' all resolve as 'me'."""
+        mock_client = mock.Mock()
+        mock_client.myself.return_value = {"accountId": "abc:123"}
+        for variant in ("ME", "Me", "mE"):
+            result = resolve_assignee(mock_client, variant)
+            assert "accountId" in result
+
+    def test_account_id_passed_through(self):
+        """Account IDs are returned directly without API calls."""
+        mock_client = mock.Mock()
+        result = resolve_assignee(mock_client, "557058:d5765ebc-27de-4ce3-b520-a77a87e5e99a")
+        assert result == {"accountId": "557058:d5765ebc-27de-4ce3-b520-a77a87e5e99a"}
+        mock_client.myself.assert_not_called()
+        mock_client.user_find_by_user_string.assert_not_called()
+
+    def test_username_searched_and_resolved_cloud(self):
+        """Non-me, non-account-ID strings are searched via user_find_by_user_string."""
+        mock_client = mock.Mock()
+        mock_client.user_find_by_user_string.return_value = [
+            {"accountId": "found:user-id", "displayName": "Found User"}
+        ]
+        result = resolve_assignee(mock_client, "found.user")
+        assert result == {"accountId": "found:user-id"}
+
+    def test_username_searched_and_resolved_server(self):
+        """Server/DC user without accountId returns name."""
+        mock_client = mock.Mock()
+        mock_client.user_find_by_user_string.return_value = [{"name": "jdoe", "key": "jdoe", "displayName": "J Doe"}]
+        result = resolve_assignee(mock_client, "jdoe")
+        assert result == {"name": "jdoe"}
+
+    def test_user_not_found_returns_raw_name(self):
+        """When user search returns empty, fall back to raw identifier."""
+        mock_client = mock.Mock()
+        mock_client.user_find_by_user_string.return_value = []
+        result = resolve_assignee(mock_client, "unknown.user")
+        assert result == {"name": "unknown.user"}
+
+    def test_user_search_returns_string_fallback(self):
+        """Server/DC may return a string instead of list — fall back to name."""
+        mock_client = mock.Mock()
+        mock_client.user_find_by_user_string.return_value = "some-string"
+        result = resolve_assignee(mock_client, "some.user")
+        assert result == {"name": "some.user"}
+
+    def test_me_raises_value_error_when_no_identifier(self):
+        """'me' raises ValueError when myself() returns no name, key, or accountId."""
+        mock_client = mock.Mock()
+        mock_client.myself.return_value = {"displayName": "Ghost User"}
+        try:
+            resolve_assignee(mock_client, "me")
+            raise AssertionError("Should have raised ValueError")
+        except ValueError as e:
+            assert "'name' or 'key' not found" in str(e)
+
+    def test_me_raises_runtime_error_when_non_dict(self):
+        """'me' raises RuntimeError when myself() returns a non-dict response."""
+        mock_client = mock.Mock()
+        mock_client.myself.return_value = "unexpected-string"
+        try:
+            resolve_assignee(mock_client, "me")
+            raise AssertionError("Should have raised RuntimeError")
+        except RuntimeError as e:
+            assert "expected a JSON object" in str(e)
+            assert "str" in str(e)
