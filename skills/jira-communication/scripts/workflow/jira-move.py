@@ -4,7 +4,7 @@
 # dependencies = [
 #     "atlassian-python-api>=3.41.0,<4",
 #     "click>=8.1.0,<9",
-#     "requests>=2.28.0,<3",
+#     "requests>=2.31.0,<3",
 # ]
 # ///
 """Jira issue move - move issues between projects."""
@@ -21,9 +21,9 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
+import requests
 from lib.client import LazyJiraClient, _sanitize_error
 from lib.output import error, format_output, success, warning
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -109,8 +109,6 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                 "issuetype": {"name": target_type},
             }
         }
-
-        import requests
 
         url = f"{client.url}/rest/api/2/issue/{issue_key}"
         response = client._session.put(url, json=update_fields)
