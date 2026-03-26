@@ -265,9 +265,7 @@ class TestMockedCommands:
         """jira-comment add PROJ-123 - must read comment from stdin."""
         mc = self._make_mock_client()
         mc.issue_add_comment.return_value = {"id": "99999"}
-        result, mc = self._run_comment_cmd(
-            ["add", "PROJ-123", "-"], mock_client=mc, input="h2. Test\n\nBody text"
-        )
+        result, mc = self._run_comment_cmd(["add", "PROJ-123", "-"], mock_client=mc, input="h2. Test\n\nBody text")
         assert result.exit_code == 0, result.output
         assert "99999" in result.output
         mc.issue_add_comment.assert_called_once()
@@ -280,9 +278,7 @@ class TestMockedCommands:
         mc = self._make_mock_client()
         mc.issue_add_comment.return_value = {"id": "99998"}
         body = "  indented line\n\n  another indented"
-        result, mc = self._run_comment_cmd(
-            ["add", "PROJ-123", "-"], mock_client=mc, input=body
-        )
+        result, mc = self._run_comment_cmd(["add", "PROJ-123", "-"], mock_client=mc, input=body)
         assert result.exit_code == 0, result.output
         actual_body = mc.issue_add_comment.call_args[0][1]
         assert actual_body.startswith("  indented")
@@ -301,9 +297,7 @@ class TestMockedCommands:
         """jira-comment add PROJ-123 'text' must pass text directly, not read stdin."""
         mc = self._make_mock_client()
         mc.issue_add_comment.return_value = {"id": "99997"}
-        result, mc = self._run_comment_cmd(
-            ["add", "PROJ-123", "literal text"], mock_client=mc
-        )
+        result, mc = self._run_comment_cmd(["add", "PROJ-123", "literal text"], mock_client=mc)
         assert result.exit_code == 0, result.output
         mc.issue_add_comment.assert_called_once_with("PROJ-123", "literal text")
 
