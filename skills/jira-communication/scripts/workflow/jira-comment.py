@@ -79,9 +79,37 @@ def add(ctx, issue_key: str, comment_text: str):
 
     # Read from stdin if "-" is passed as comment text
     if comment_text == "-":
-        comment_text = sys.stdin.read().rstrip("\n")
+        if sys.stdin.isatty():
+            error(
+                "'-' requires piped input but stdin is a terminal",
+                suggestion="Usage: cat comment.txt | jira-comment add PROJ-123 -",
+            )
+            sys.exit(1)
+
+        max_size = 256 * 1024  # 256KB, above Jira's comment limit
+        try:
+            comment_text = sys.stdin.read(max_size + 1)
+        except UnicodeDecodeError:
+            error(
+                "stdin contains invalid text encoding (expected UTF-8)",
+                suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
+            )
+            sys.exit(1)
+
+        if len(comment_text) > max_size:
+            error(
+                f"stdin input exceeds maximum size ({max_size // 1024}KB)",
+                suggestion="Jira comments have size limits. Consider attaching the content as a file.",
+            )
+            sys.exit(1)
+
+        comment_text = comment_text.rstrip("\n")
+
         if not comment_text.strip():
-            error("No input received from stdin")
+            error(
+                "No input received from stdin (empty or whitespace-only)",
+                suggestion="Verify your piped command produces non-empty output.",
+            )
             sys.exit(1)
 
     try:

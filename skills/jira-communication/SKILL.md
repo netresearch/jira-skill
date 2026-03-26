@@ -56,6 +56,7 @@ uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description":
 
 # Comment (add/edit/list — edit needs comment ID from list)
 uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
+cat comment.txt | uv run scripts/workflow/jira-comment.py add PROJ-123 -  # stdin for multiline
 uv run scripts/workflow/jira-comment.py --json list PROJ-123
 uv run scripts/workflow/jira-comment.py edit PROJ-123 COMMENT_ID "Updated text"
 uv run scripts/workflow/jira-comment.py delete PROJ-123 COMMENT_ID

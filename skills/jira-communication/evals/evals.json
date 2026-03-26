@@ -78,16 +78,20 @@
   },
   {
     "name": "add_multiline_comment_via_stdin",
-    "prompt": "Add this comment to PROJ-789:\n\nh2. Status Update\n\n* Deployment completed\n* Tests passing\n\nPlease write it to a temp file and pipe it to jira-comment.",
+    "prompt": "Add this comment to PROJ-789:\n\nh2. Status Update\n\n* Deployment completed\n* Tests passing\n\nThis is multiline Jira wiki markup — use stdin piping to preserve formatting.",
     "assertions": [
       {
         "type": "tool_use",
         "tool": "Bash",
-        "pattern": "jira-comment\\.py.*add.*PROJ-789.*-"
+        "pattern": "jira-comment\\.py.*add\\s+PROJ-789\\s+-"
       },
       {
         "type": "content",
-        "pattern": "(cat|pipe|stdin|<)"
+        "pattern": "(\\bcat\\b|\\|.*jira-comment|\\bstdin\\b|<<)"
+      },
+      {
+        "type": "content",
+        "pattern": "Status Update"
       }
     ]
   },
@@ -98,7 +102,7 @@
       {
         "type": "tool_use",
         "tool": "Bash",
-        "pattern": "jira-comment\\.py.*add.*PROJ-100"
+        "pattern": "jira-comment\\.py.*add.*PROJ-100.*Fixed in commit"
       },
       {
         "type": "content",

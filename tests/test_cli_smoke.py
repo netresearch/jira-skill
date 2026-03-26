@@ -271,6 +271,7 @@ class TestMockedCommands:
         mc.issue_add_comment.assert_called_once()
         actual_body = mc.issue_add_comment.call_args[0][1]
         assert "h2. Test" in actual_body
+        assert "\n\n" in actual_body
         assert "Body text" in actual_body
 
     def test_comment_add_stdin_preserves_whitespace(self):
@@ -281,17 +282,59 @@ class TestMockedCommands:
         result, mc = self._run_comment_cmd(["add", "PROJ-123", "-"], mock_client=mc, input=body)
         assert result.exit_code == 0, result.output
         actual_body = mc.issue_add_comment.call_args[0][1]
-        assert actual_body.startswith("  indented")
+        assert actual_body == "  indented line\n\n  another indented"
+
+    def test_comment_add_stdin_strips_trailing_newlines_only(self):
+        """Trailing newlines stripped; leading whitespace and internal newlines preserved."""
+        mc = self._make_mock_client()
+        mc.issue_add_comment.return_value = {"id": "100"}
+        result, mc = self._run_comment_cmd(["add", "PROJ-123", "-"], mock_client=mc, input="  leading\nline2\n\n")
+        assert result.exit_code == 0, result.output
+        actual = mc.issue_add_comment.call_args[0][1]
+        assert actual == "  leading\nline2"
 
     def test_comment_add_stdin_empty_fails(self):
         """jira-comment add PROJ-123 - with empty stdin must fail."""
         result, _ = self._run_comment_cmd(["add", "PROJ-123", "-"], input="")
         assert result.exit_code == 1
+        assert "stdin" in result.output.lower()
 
     def test_comment_add_stdin_whitespace_only_fails(self):
         """jira-comment add PROJ-123 - with whitespace-only stdin must fail."""
         result, _ = self._run_comment_cmd(["add", "PROJ-123", "-"], input="   \n\n  ")
         assert result.exit_code == 1
+        assert "stdin" in result.output.lower()
+
+    def test_comment_add_stdin_tty_guard_exists(self):
+        """The add command must check sys.stdin.isatty() before reading stdin.
+
+        Click's CliRunner replaces sys.stdin during invoke(), making it impossible
+        to test the isatty guard through the CLI. We verify at the source level
+        that the guard exists and is correctly placed before sys.stdin.read().
+        """
+        import inspect
+
+        source = inspect.getsource(_comment_mod.add.callback)
+        isatty_pos = source.find("isatty()")
+        read_pos = source.find("stdin.read(")
+        assert isatty_pos != -1, "isatty() guard missing from add command"
+        assert read_pos != -1, "stdin.read() missing from add command"
+        assert isatty_pos < read_pos, "isatty() guard must come before stdin.read()"
+
+    def test_comment_add_stdin_oversized_fails(self):
+        """stdin input exceeding size limit must fail."""
+        big_input = "x" * (256 * 1024 + 100)
+        result, _ = self._run_comment_cmd(["add", "PROJ-123", "-"], input=big_input)
+        assert result.exit_code == 1
+        assert "size" in result.output.lower()
+
+    def test_comment_add_stdin_quiet(self):
+        """jira-comment --quiet add PROJ-123 - must output only the comment ID."""
+        mc = self._make_mock_client()
+        mc.issue_add_comment.return_value = {"id": "88888"}
+        result, mc = self._run_comment_cmd(["--quiet", "add", "PROJ-123", "-"], mock_client=mc, input="text")
+        assert result.exit_code == 0, result.output
+        assert result.output.strip() == "88888"
 
     def test_comment_add_literal_text(self):
         """jira-comment add PROJ-123 'text' must pass text directly, not read stdin."""
