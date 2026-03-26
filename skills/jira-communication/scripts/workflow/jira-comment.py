@@ -57,7 +57,8 @@ def add(ctx, issue_key: str, comment_text: str):
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
 
-    COMMENT_TEXT: Comment text (use Jira wiki markup, not Markdown)
+    COMMENT_TEXT: Comment text (use Jira wiki markup, not Markdown).
+    Use "-" to read from stdin (e.g., cat file.txt | jira-comment add PROJ-123 -)
 
     Note: Use Jira wiki syntax:
       - *bold* not **bold**
@@ -70,9 +71,18 @@ def add(ctx, issue_key: str, comment_text: str):
       jira-comment add PROJ-123 "Fixed in commit abc123"
 
       jira-comment add PROJ-123 "See {code}config.py{code} for details"
+
+      cat comment.txt | jira-comment add PROJ-123 -
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
+
+    # Read from stdin if "-" is passed as comment text
+    if comment_text == "-":
+        comment_text = sys.stdin.read().strip()
+        if not comment_text:
+            error("No input received from stdin")
+            sys.exit(1)
 
     try:
         result = client.issue_add_comment(issue_key, comment_text)
