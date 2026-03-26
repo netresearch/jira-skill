@@ -79,8 +79,8 @@ def add(ctx, issue_key: str, comment_text: str):
 
     # Read from stdin if "-" is passed as comment text
     if comment_text == "-":
-        comment_text = sys.stdin.read().strip()
-        if not comment_text:
+        comment_text = sys.stdin.read().rstrip("\n")
+        if not comment_text.strip():
             error("No input received from stdin")
             sys.exit(1)
 

@@ -75,5 +75,35 @@
         "pattern": "(--comment|--description).*Implemented API endpoint"
       }
     ]
+  },
+  {
+    "name": "add_multiline_comment_via_stdin",
+    "prompt": "Add this comment to PROJ-789:\n\nh2. Status Update\n\n* Deployment completed\n* Tests passing\n\nPlease write it to a temp file and pipe it to jira-comment.",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-comment\\.py.*add.*PROJ-789.*-"
+      },
+      {
+        "type": "content",
+        "pattern": "(cat|pipe|stdin|<)"
+      }
+    ]
+  },
+  {
+    "name": "add_simple_comment_inline",
+    "prompt": "Add a comment to PROJ-100 saying 'Fixed in commit abc123'",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-comment\\.py.*add.*PROJ-100"
+      },
+      {
+        "type": "content",
+        "pattern": "Fixed in commit abc123"
+      }
+    ]
   }
 ]

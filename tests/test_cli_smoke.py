@@ -250,6 +250,63 @@ class TestMockedCommands:
         assert "DRY RUN" in result.output
         mock_client.create_issue_link.assert_not_called()
 
+    def _run_comment_cmd(self, args, mock_client=None, **invoke_kwargs):
+        """Run a jira-comment CLI command with a mocked LazyJiraClient."""
+        if mock_client is None:
+            mock_client = self._make_mock_client()
+        mock_client.with_context = mock.Mock()
+        runner = click.testing.CliRunner()
+        # Patch on the already-imported module so the constructor is intercepted
+        with mock.patch.object(_comment_mod, "LazyJiraClient", return_value=mock_client):
+            result = runner.invoke(_comment_mod.cli, args, **invoke_kwargs)
+        return result, mock_client
+
+    def test_comment_add_stdin(self):
+        """jira-comment add PROJ-123 - must read comment from stdin."""
+        mc = self._make_mock_client()
+        mc.issue_add_comment.return_value = {"id": "99999"}
+        result, mc = self._run_comment_cmd(
+            ["add", "PROJ-123", "-"], mock_client=mc, input="h2. Test\n\nBody text"
+        )
+        assert result.exit_code == 0, result.output
+        assert "99999" in result.output
+        mc.issue_add_comment.assert_called_once()
+        actual_body = mc.issue_add_comment.call_args[0][1]
+        assert "h2. Test" in actual_body
+        assert "Body text" in actual_body
+
+    def test_comment_add_stdin_preserves_whitespace(self):
+        """stdin input must preserve leading whitespace and internal structure."""
+        mc = self._make_mock_client()
+        mc.issue_add_comment.return_value = {"id": "99998"}
+        body = "  indented line\n\n  another indented"
+        result, mc = self._run_comment_cmd(
+            ["add", "PROJ-123", "-"], mock_client=mc, input=body
+        )
+        assert result.exit_code == 0, result.output
+        actual_body = mc.issue_add_comment.call_args[0][1]
+        assert actual_body.startswith("  indented")
+
+    def test_comment_add_stdin_empty_fails(self):
+        """jira-comment add PROJ-123 - with empty stdin must fail."""
+        result, _ = self._run_comment_cmd(["add", "PROJ-123", "-"], input="")
+        assert result.exit_code == 1
+
+    def test_comment_add_stdin_whitespace_only_fails(self):
+        """jira-comment add PROJ-123 - with whitespace-only stdin must fail."""
+        result, _ = self._run_comment_cmd(["add", "PROJ-123", "-"], input="   \n\n  ")
+        assert result.exit_code == 1
+
+    def test_comment_add_literal_text(self):
+        """jira-comment add PROJ-123 'text' must pass text directly, not read stdin."""
+        mc = self._make_mock_client()
+        mc.issue_add_comment.return_value = {"id": "99997"}
+        result, mc = self._run_comment_cmd(
+            ["add", "PROJ-123", "literal text"], mock_client=mc
+        )
+        assert result.exit_code == 0, result.output
+        mc.issue_add_comment.assert_called_once_with("PROJ-123", "literal text")
+
     def test_user_me_json(self):
         """jira-user --json me must output user info as JSON."""
         mock_client = self._make_mock_client()
