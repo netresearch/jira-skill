@@ -21,7 +21,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient, _sanitize_error
-from lib.output import error, extract_adf_text, format_output, success
+from lib.output import error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -142,16 +142,54 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
 
     COMMENT_ID: The ID of the comment to edit (use 'list' to find IDs)
 
-    COMMENT_TEXT: New comment text (use Jira wiki markup, not Markdown)
+    COMMENT_TEXT: New comment text (use Jira wiki markup, not Markdown).
+    Use "-" to read from stdin (e.g., cat file.txt | jira-comment edit PROJ-123 12345 -)
 
     Examples:
 
       jira-comment edit PROJ-123 12345 "Updated: fixed in commit abc123"
 
       jira-comment edit PROJ-123 12345 "h3. Findings\\n\\nUpdated analysis"
+
+      cat comment.txt | jira-comment edit PROJ-123 12345 -
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
+
+    # Read from stdin if "-" is passed as comment text
+    if comment_text == "-":
+        if sys.stdin.isatty():
+            error(
+                "'-' requires piped input but stdin is a terminal",
+                suggestion="Usage: cat comment.txt | jira-comment edit PROJ-123 12345 -",
+            )
+            sys.exit(1)
+
+        max_size = 256 * 1024  # 256KB, above Jira's comment limit
+        try:
+            comment_text = sys.stdin.read(max_size + 1)
+        except UnicodeDecodeError:
+            error(
+                "stdin contains invalid text encoding (expected UTF-8)",
+                suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
+            )
+            sys.exit(1)
+
+        if len(comment_text) > max_size:
+            error(
+                f"stdin input exceeds maximum size ({max_size // 1024}KB)",
+                suggestion="Jira comments have size limits. Consider attaching the content as a file.",
+            )
+            sys.exit(1)
+
+        comment_text = comment_text.rstrip("\n")
+
+        if not comment_text.strip():
+            error(
+                "No input received from stdin (empty or whitespace-only)",
+                suggestion="Verify your piped command produces non-empty output.",
+            )
+            sys.exit(1)
 
     try:
         result = client.issue_edit_comment(issue_key, comment_id, comment_text)
@@ -176,8 +214,9 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
 @cli.command()
 @click.argument("issue_key")
 @click.argument("comment_id")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without making changes")
 @click.pass_context
-def delete(ctx, issue_key: str, comment_id: str):
+def delete(ctx, issue_key: str, comment_id: str, dry_run: bool):
     """Delete a comment from an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -187,9 +226,16 @@ def delete(ctx, issue_key: str, comment_id: str):
     Examples:
 
       jira-comment delete PROJ-123 12345
+
+      jira-comment delete PROJ-123 12345 --dry-run
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
+
+    if dry_run:
+        warning("DRY RUN - No comment will be deleted")
+        print(f"\nWould delete comment {comment_id} from {issue_key}")
+        return
 
     try:
         url = f"rest/api/2/issue/{issue_key}/comment/{comment_id}"

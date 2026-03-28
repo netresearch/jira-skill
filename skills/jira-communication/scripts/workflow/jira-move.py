@@ -111,6 +111,8 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         }
 
         url = f"{client.url}/rest/api/2/issue/{issue_key}"
+        # atlassian-python-api has no public method for issue move/edit.
+        # Using _session directly is intentional; pin library version in PEP 723 header.
         response = client._session.put(url, json=update_fields)
 
         if response.status_code == 204:

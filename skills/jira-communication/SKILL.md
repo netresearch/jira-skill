@@ -31,7 +31,7 @@ All in `scripts/core/`, `scripts/workflow/`, or `scripts/utility/`.
 
 ## Execution Style
 
-**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`). No need to dry-run or verify after.
+**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`). Destructive operations (delete, move) support `--dry-run` for preview.
 
 Global flags go **before** the subcommand:
 ```bash
@@ -54,12 +54,12 @@ uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
 uv run scripts/core/jira-issue.py update PROJ-123 --priority Critical --summary "New title"
 uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New description"}'
 
-# Comment (add/edit/list — edit needs comment ID from list)
+# Comment (add/edit/list — use --json list to get IDs for edit/delete)
 uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
-cat comment.txt | uv run scripts/workflow/jira-comment.py add PROJ-123 -  # stdin for multiline
+cat comment.txt | uv run scripts/workflow/jira-comment.py add PROJ-123 -
 uv run scripts/workflow/jira-comment.py --json list PROJ-123
 uv run scripts/workflow/jira-comment.py edit PROJ-123 COMMENT_ID "Updated text"
-uv run scripts/workflow/jira-comment.py delete PROJ-123 COMMENT_ID
+uv run scripts/workflow/jira-comment.py delete PROJ-123 COMMENT_ID --dry-run
 
 # Transition (use "list" to see available transitions)
 uv run scripts/workflow/jira-transition.py list PROJ-123
@@ -74,7 +74,7 @@ uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent 
 
 # Move / link / types
 uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
-uv run scripts/utility/jira-link.py add PROJ-123 "blocks" PROJ-456
+uv run scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks"
 uv run scripts/utility/jira-fields.py types PROJ
 ```
 
@@ -87,6 +87,7 @@ uv run scripts/utility/jira-fields.py types PROJ
 ## References
 
 - `references/jql-quick-reference.md` - JQL syntax
+- `references/multi-profile.md` - Multi-profile configuration and auto-resolution
 - `references/troubleshooting.md` - Setup and auth issues
 
 ## Authentication

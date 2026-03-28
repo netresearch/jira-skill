@@ -167,8 +167,19 @@ project = PROJ ORDER BY priority DESC, created ASC
 - Project keys: `project = PROJ`
 - Function calls: `assignee = currentUser()`
 
+## Cloud vs Server/DC Differences
+
+- **User references**: Cloud uses `accountId` (e.g. `assignee = "5b10ac8d82e05b22cc7d4ef5"`), Server/DC uses `username` (e.g. `assignee = "john.doe"`). The `currentUser()` function works on both.
+- Functions like `currentUser()`, `membersOf()`, date functions, and sprint functions work on both platforms.
+
 ## Sources
 
+**Cloud:**
 - [JQL Operators](https://support.atlassian.com/jira-software-cloud/docs/jql-operators/)
 - [JQL Functions](https://support.atlassian.com/jira-software-cloud/docs/jql-functions/)
 - [JQL Keywords](https://support.atlassian.com/jira-software-cloud/docs/jql-keywords/)
+
+**Server/Data Center:**
+- [JQL Operators (Server/DC)](https://confluence.atlassian.com/jirasoftwareserver/advanced-searching-operators-reference-939938753.html)
+- [JQL Functions (Server/DC)](https://confluence.atlassian.com/jirasoftwareserver/advanced-searching-functions-reference-939938746.html)
+- [JQL Keywords (Server/DC)](https://confluence.atlassian.com/jirasoftwareserver/advanced-searching-keywords-reference-939938757.html)

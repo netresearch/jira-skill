@@ -24,7 +24,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.config import load_config
+from lib.config import _normalize_netloc, load_config
 from lib.output import error, success
 
 # Chunk size for streaming large file downloads (1 MB)
@@ -37,22 +37,6 @@ DOWNLOAD_TIMEOUT = (10, 300)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Security Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-def _normalize_netloc(url: str) -> str:
-    """Normalize a URL's netloc by lowercasing and stripping default ports.
-
-    Default ports (:443 for https, :80 for http) are removed so that
-    ``https://jira.example.com:443`` matches ``https://jira.example.com``.
-    """
-    parsed = urlparse(url)
-    host = parsed.netloc.lower()
-    scheme = parsed.scheme.lower()
-    if scheme == "https" and host.endswith(":443"):
-        host = host[:-4]
-    elif scheme == "http" and host.endswith(":80"):
-        host = host[:-3]
-    return host
 
 
 def validate_attachment_url(attachment_url: str, jira_url: str) -> bool:

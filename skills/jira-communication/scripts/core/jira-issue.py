@@ -54,8 +54,6 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--expand", "-e", help="Fields to expand (changelog,transitions,renderedFields)")
 @click.option("--truncate", type=int, metavar="N", help="Truncate description to N characters")
 @click.option("--full", is_flag=True, help="[DEPRECATED] Show full content (now default behavior)")
-@click.option("--json", "cmd_json", is_flag=True, help="Output as JSON")
-@click.option("--quiet", "-q", "cmd_quiet", is_flag=True, help="Minimal output")
 @click.pass_context
 def get(
     ctx,
@@ -64,8 +62,6 @@ def get(
     expand: str | None,
     truncate: int | None,
     full: bool,
-    cmd_json: bool,
-    cmd_quiet: bool,
 ):
     """Get issue details.
 
@@ -97,13 +93,9 @@ def get(
 
         issue = client.issue(issue_key, **params)
 
-        # Command-level flags override group-level flags
-        use_json = cmd_json or ctx.obj["json"]
-        use_quiet = cmd_quiet or ctx.obj["quiet"]
-
-        if use_json:
+        if ctx.obj["json"]:
             format_output(issue, as_json=True)
-        elif use_quiet:
+        elif ctx.obj["quiet"]:
             print(issue["key"])
         else:
             _print_issue(issue, truncate=truncate, requested_fields=fields)
