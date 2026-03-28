@@ -24,7 +24,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.config import _normalize_netloc, load_config
+from lib.config import normalize_netloc, load_config
 from lib.output import error, success
 
 # Chunk size for streaming large file downloads (1 MB)
@@ -56,7 +56,7 @@ def validate_attachment_url(attachment_url: str, jira_url: str) -> bool:
     if not attachment_url.startswith(("http://", "https://")):
         return True
 
-    return _normalize_netloc(attachment_url) == _normalize_netloc(jira_url)
+    return normalize_netloc(attachment_url) == normalize_netloc(jira_url)
 
 
 def validate_output_path(output_file: str, working_dir: str) -> Path | None:

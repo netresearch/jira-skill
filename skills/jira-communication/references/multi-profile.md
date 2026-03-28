@@ -46,20 +46,16 @@ uv run scripts/core/jira-search.py --profile server query "project = OPS"
 }
 ```
 
-### Required Fields
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `url` | Jira instance URL |
-| `auth` | `"cloud"` or `"pat"` (default: `"pat"`) |
-| `token` | Personal access token (Server/DC with `auth: "pat"`) |
-| `username` + `api_token` | Cloud credentials (with `auth: "cloud"`) |
-
-### Optional Fields
-
-| Field | Description |
-|-------|-------------|
-| `projects` | List of project prefixes for auto-resolution from issue keys |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | Always | Jira instance URL |
+| `auth` | No | `"cloud"` or `"pat"` (default: `"pat"`) |
+| `token` | If `auth: "pat"` | Personal access token (Server/DC) |
+| `username` | If `auth: "cloud"` | Atlassian account email |
+| `api_token` | If `auth: "cloud"` | Atlassian API token |
+| `projects` | No | List of project prefixes for auto-resolution from issue keys |
 
 ### Top-Level Keys
 

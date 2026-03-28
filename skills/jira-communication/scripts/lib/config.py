@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 # === INLINE_START: config ===
 
 
-def _normalize_netloc(url: str) -> str:
+def normalize_netloc(url: str) -> str:
     """Normalize a URL's netloc by lowercasing and stripping default ports."""
     parsed = urlparse(url)
     host = parsed.netloc.lower()
@@ -201,10 +201,10 @@ def resolve_profile(
 
     # Step 2: Full Jira URL → match host (normalized to strip default ports)
     if url:
-        input_host = _normalize_netloc(url)
+        input_host = normalize_netloc(url)
         if input_host:
             for name, prof in profiles.items():
-                prof_host = _normalize_netloc(prof.get("url", ""))
+                prof_host = normalize_netloc(prof.get("url", ""))
                 if prof_host and prof_host == input_host:
                     result = dict(prof)
                     result["name"] = name
