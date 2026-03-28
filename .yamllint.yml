@@ -1,6 +1,5 @@
 extends: default
 rules:
-  line-length: disable
-  truthy: disable
+  line-length: {max: 160}
+  truthy: {allowed-values: ['true', 'false', 'on']}
   document-start: disable
-  comments-indentation: disable
