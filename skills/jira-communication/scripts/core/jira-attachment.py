@@ -24,7 +24,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.config import normalize_netloc, load_config
+from lib.config import load_config, normalize_netloc
 from lib.output import error, success
 
 # Chunk size for streaming large file downloads (1 MB)
