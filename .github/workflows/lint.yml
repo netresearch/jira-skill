@@ -11,4 +11,4 @@ permissions:
 jobs:
   validate:
     name: Skill Validation
-    uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@064040acf9ebf262ee737357febd4ba71b200581 # main 2026-03-27
+    uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@30bf8a094c7fda2e1855cec9c149235bb6fdbfca # main 2026-03-27
