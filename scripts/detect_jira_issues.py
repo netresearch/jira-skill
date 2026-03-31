@@ -6,6 +6,7 @@ and resolves Jira profiles when multi-profile support is configured.
 """
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -147,15 +148,29 @@ def main():
         if profile_name:
             profile_hint = f"\nSuggested profile: {profile_name}\nUse: --profile {profile_name}"
 
+        # Resolve the plugin root so commands include absolute paths.
+        # During hook execution CLAUDE_PLUGIN_ROOT is set by the harness;
+        # fall back to deriving it from this script's own location.
+        plugin_root = os.environ.get(
+            "CLAUDE_PLUGIN_ROOT",
+            str(Path(__file__).resolve().parent.parent),
+        )
+        scripts_dir = f"{plugin_root}/skills/jira-communication/scripts"
+
         print(f"""<system-reminder>
 Detected Jira issue reference(s): {keys_str}
 {profile_hint}
-The jira-integration skill can help:
-- Fetch issue details: jira-issue.py get KEY
-- Search issues: jira-search.py query "JQL"
-- Transition status: jira-transition.py do KEY "Status"
-- Add comments: jira-comment.py add KEY "text"
-- Log work: jira-worklog.py add KEY "2h"
+The jira-communication skill can help. Use the Skill tool to invoke it,
+or run scripts directly via uv run (NOT python3):
+
+- Fetch issue details: uv run {scripts_dir}/core/jira-issue.py get KEY
+- Search issues: uv run {scripts_dir}/core/jira-search.py query "JQL"
+- Transition status: uv run {scripts_dir}/workflow/jira-transition.py do KEY "Status"
+- Add comments: uv run {scripts_dir}/workflow/jira-comment.py add KEY "text"
+- Log work: uv run {scripts_dir}/core/jira-worklog.py add KEY "2h"
+
+IMPORTANT: Always use `uv run`, never `python3` — scripts declare inline
+dependencies (PEP 723) that uv resolves automatically.
 
 Use Jira wiki markup (not Markdown) for descriptions and comments.
 </system-reminder>""")

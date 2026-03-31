@@ -226,3 +226,22 @@ class TestMainOutput:
         captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
         assert "jira-issue.py" in captured.out
         assert "jira-search.py" in captured.out
+
+    def test_output_uses_uv_run(self, tmp_path, capsys):
+        """Hook output must use 'uv run', never bare 'python3' invocation."""
+        captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
+        assert "uv run" in captured.out
+        # Every script reference should be prefixed with 'uv run'
+        for script in ["jira-issue.py", "jira-comment.py", "jira-search.py"]:
+            assert f"uv run" in captured.out.split(script)[0].split("\n")[-1]
+
+    def test_output_includes_full_paths(self, tmp_path, capsys):
+        """Hook output must include full paths to scripts, not bare filenames."""
+        captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
+        assert "/core/jira-issue.py" in captured.out
+        assert "/workflow/jira-comment.py" in captured.out
+
+    def test_output_warns_against_python3(self, tmp_path, capsys):
+        """Hook output should warn against using python3 directly."""
+        captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
+        assert "never" in captured.out.lower() and "python3" in captured.out
