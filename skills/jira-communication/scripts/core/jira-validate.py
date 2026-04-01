@@ -26,7 +26,7 @@ import json as json_module
 
 import click
 import requests
-from lib.client import _sanitize_error, get_jira_client
+from lib.client import LazyJiraClient, _sanitize_error
 from lib.config import (
     DEFAULT_ENV_FILE,
     PROFILES_FILE,
@@ -162,7 +162,7 @@ def check_connectivity(
 
     # Test authentication
     try:
-        client = get_jira_client(env_file=env_file, profile=profile)
+        client = LazyJiraClient(env_file=env_file, profile=profile)
         user = client.myself()
         display_name = user.get("displayName", user.get("name", "Unknown"))
         email = user.get("emailAddress", "N/A")
