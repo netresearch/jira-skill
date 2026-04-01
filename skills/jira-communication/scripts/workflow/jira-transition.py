@@ -199,7 +199,10 @@ def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, re
             success(f"Transitioned {issue_key}")
             print(f"  Status: {_get_to_status(matching)}")
             if comment:
-                print(f"  Comment added: {comment[:50]}...")
+                if len(comment) > 50:
+                    print(f"  Comment added: {comment[:50]}...")
+                else:
+                    print(f"  Comment added: {comment}")
 
     except Exception as e:
         if ctx.obj["debug"]:
