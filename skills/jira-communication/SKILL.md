@@ -2,12 +2,12 @@
 name: jira-communication
 description: "Use when interacting with Jira issues - searching, creating, updating, moving, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, web links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires python 3.10+, uv, curl. Jira Server/DC or Cloud instance with API access."
+compatibility: "Requires python 3.10+, uv. Jira Server/DC or Cloud instance with API access."
 metadata:
   author: Netresearch DTT GmbH
   version: "3.12.0"
   repository: https://github.com/netresearch/jira-skill
-allowed-tools: Bash(python:*) Bash(uv:*) Bash(curl:*) Read Write
+allowed-tools: Bash(python:*) Bash(uv:*) Read Write
 ---
 
 # Jira Communication
