@@ -359,12 +359,7 @@ def delete(ctx, issue_key: str, delete_subtasks: bool, dry_run: bool):
                             "or deletion will fail.")
             return
 
-        # Build delete URL with optional subtask deletion
-        url = f"rest/api/2/issue/{issue_key}"
-        if delete_subtasks:
-            url += "?deleteSubtasks=true"
-
-        client.delete(url)
+        client.delete_issue(issue_key, delete_subtasks=delete_subtasks)
 
         if ctx.obj["quiet"]:
             print("ok")

@@ -31,7 +31,7 @@ All in `scripts/core/`, `scripts/workflow/`, or `scripts/utility/`.
 
 ## Execution Style
 
-**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`). Destructive operations (delete, move) support `--dry-run` for preview.
+**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`). Destructive operations support `--dry-run`.
 
 Global flags go **before** the subcommand:
 ```bash
@@ -49,15 +49,14 @@ uv run scripts/core/jira-issue.py --json get PROJ-123
 uv run scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed"
 uv run scripts/core/jira-search.py query "project = PROJ ORDER BY updated DESC" -n 5 -f key,summary,status,priority
 
-# Update fields / assign (use --fields-json for description and custom fields)
+# Update fields / assign (--fields-json for description and custom fields)
 uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
 uv run scripts/core/jira-issue.py update PROJ-123 --priority Critical --summary "New title"
-uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New description"}'
+uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New desc"}'
 
-# Delete issue (requires Jira delete permission)
+# Delete issue (use --dry-run to preview, --delete-subtasks for parent issues)
 uv run scripts/core/jira-issue.py delete PROJ-123 --dry-run
 uv run scripts/core/jira-issue.py delete PROJ-123
-uv run scripts/core/jira-issue.py delete PROJ-123 --delete-subtasks
 
 # Comment (add/edit/list — use --json list to get IDs for edit/delete)
 uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
@@ -73,9 +72,9 @@ uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 # Log work
 uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 
-# Create (--type auto-resolves to subtask type when --parent given)
+# Create (--type auto-resolves to subtask when --parent given)
 uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
-uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100 --assignee me
+uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100
 
 # Move / link / types
 uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
@@ -97,4 +96,4 @@ uv run scripts/utility/jira-fields.py types PROJ
 
 ## Authentication
 
-Cloud: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`. Server/DC: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`. Config via `~/.env.jira` or `~/.jira/profiles.json` (auto-resolves from issue key).
+Cloud: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`. Server/DC: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`. Config via `~/.env.jira` or `~/.jira/profiles.json`.
