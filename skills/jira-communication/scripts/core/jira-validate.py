@@ -98,12 +98,13 @@ def check_environment(env_file: str | None, profile: str | None = None, verbose:
                 error(f"Configuration error: {err}")
             return None
 
+        if env_file and profile:
+            warning("--profile is ignored because --env-file was provided")
+
         if verbose:
             if env_file:
                 path = Path(env_file)
                 success(f"Environment file: {path}")
-                if profile:
-                    warning("--profile is ignored because --env-file was provided")
             elif profile:
                 success(f"Profile: {profile} (from {PROFILES_FILE})")
             else:
