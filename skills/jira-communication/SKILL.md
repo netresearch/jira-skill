@@ -12,13 +12,13 @@ allowed-tools: Bash(python:*) Bash(uv:*) Bash(curl:*) Read Write
 
 # Jira Communication
 
-CLI scripts for Jira operations via `uv run`. All scripts support `--help`, `--json`, `--quiet`, `--debug`.
+CLI scripts via `uv run`. All support `--help`, `--json`, `--quiet`, `--debug`.
 
 **Paths** are relative to `skills/jira-communication/`.
 
 ## Auto-Trigger
 
-On Jira URL or issue key (PROJ-123) → `jira-issue.py get PROJ-123`. Auth failure → `jira-setup.py`.
+On Jira URL or issue key (PROJ-123) → `jira-issue.py get PROJ-123`. Auth issues → `jira-setup.py`.
 
 ## Scripts
 
@@ -31,7 +31,7 @@ All in `scripts/core/`, `scripts/workflow/`, or `scripts/utility/`.
 
 ## Execution Style
 
-**Be direct.** Run the command — scripts confirm success (`✓`) or report errors (`✗`). Destructive operations support `--dry-run`.
+**Be direct.** Run the command — scripts confirm success (`✓`) or errors (`✗`). Destructive operations support `--dry-run`.
 
 Global flags go **before** the subcommand:
 ```bash
@@ -76,23 +76,24 @@ uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 uv run scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100
 
-# Move / link / types
+# Move / change type / link
 uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
+uv run scripts/workflow/jira-move.py issue NRS-100 NRS --issue-type Task
 uv run scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks"
 uv run scripts/utility/jira-fields.py types PROJ
 ```
 
-`--assignee me` resolves to the authenticated user on any script.
+`--assignee me` resolves to the authenticated user.
 
 ## Related Skills
 
-**jira-syntax**: For descriptions/comments. Jira uses wiki markup, NOT Markdown.
+**jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.
 
 ## References
 
 - `references/jql-quick-reference.md` - JQL syntax
-- `references/multi-profile.md` - Multi-profile configuration and auto-resolution
-- `references/troubleshooting.md` - Setup and auth issues
+- `references/multi-profile.md` - Multi-profile and auto-resolution
+- `references/troubleshooting.md` - Setup and auth
 
 ## Authentication
 

@@ -7,7 +7,7 @@
 #     "requests>=2.31.0,<3",
 # ]
 # ///
-"""Jira issue move - move issues between projects."""
+"""Jira issue move - move issues between projects or change issue type."""
 
 import sys
 from pathlib import Path
@@ -56,20 +56,20 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
 def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None, dry_run: bool):
-    """Move an issue to a different project.
+    """Move an issue to a different project or change its type.
 
     ISSUE_KEY: The Jira issue key to move (e.g., NRS-4301)
 
-    TARGET_PROJECT: Target project key (e.g., SRVUC)
-
-    The issue gets a new key in the target project. Jira preserves most fields
-    and creates a redirect from the old key.
+    TARGET_PROJECT: Target project key (e.g., SRVUC). Use the same project
+    key to change issue type without moving.
 
     Examples:
 
       jira-move issue NRS-4301 SRVUC
 
       jira-move issue NRS-4301 SRVUC --issue-type Bug
+
+      jira-move issue NRS-4301 PROJ --issue-type Task  (change type, same project)
 
       jira-move issue NRS-4301 SRVUC --dry-run
     """
@@ -85,30 +85,39 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         summary = fields["summary"]
         status = fields["status"]["name"]
 
-        if current_project.upper() == target_project.upper():
-            error(f"{issue_key} is already in project {target_project}")
+        same_project = current_project.upper() == target_project.upper()
+
+        if same_project and not issue_type:
+            error(f"{issue_key} is already in project {target_project} (use --issue-type to change type)")
             sys.exit(1)
 
         target_type = issue_type or current_type
 
+        if same_project and target_type == current_type:
+            error(f"{issue_key} is already type {current_type} in project {target_project}")
+            sys.exit(1)
+
         # Dry run
         if dry_run:
             warning("DRY RUN - No changes will be made")
-            print(f"\nWould move {issue_key}:")
-            print(f"  Summary:  {summary}")
-            print(f"  From:     {current_project} ({current_type})")
-            print(f"  To:       {target_project} ({target_type})")
+            if same_project:
+                print(f"\nWould change type of {issue_key}:")
+                print(f"  Summary:  {summary}")
+                print(f"  From:     {current_type}")
+                print(f"  To:       {target_type}")
+            else:
+                print(f"\nWould move {issue_key}:")
+                print(f"  Summary:  {summary}")
+                print(f"  From:     {current_project} ({current_type})")
+                print(f"  To:       {target_project} ({target_type})")
             print(f"  Status:   {status}")
             return
 
         # Use the REST API directly — atlassian-python-api doesn't have a move method
         # PUT /rest/api/2/issue/{issueKey} with project + issuetype change
-        update_fields = {
-            "fields": {
-                "project": {"key": target_project.upper()},
-                "issuetype": {"name": target_type},
-            }
-        }
+        update_fields = {"fields": {"issuetype": {"name": target_type}}}
+        if not same_project:
+            update_fields["fields"]["project"] = {"key": target_project.upper()}
 
         url = f"{client.url}/rest/api/2/issue/{issue_key}"
         # atlassian-python-api has no public method for issue move/edit.
@@ -117,29 +126,47 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         response = client._session.put(url, json=update_fields)
 
         if response.status_code == 204:
-            # Issue moved — fetch new key (Jira may reassign the key)
-            # The old key redirects, so we can fetch it to get the new key
-            moved = client.issue(issue_key, fields="project")
-            new_key = moved["key"]
-
-            if ctx.obj["quiet"]:
-                print(new_key)
-            elif ctx.obj["json"]:
-                format_output(
-                    {
-                        "old_key": issue_key,
-                        "new_key": new_key,
-                        "project": target_project.upper(),
-                        "issue_type": target_type,
-                        "summary": summary,
-                    },
-                    as_json=True,
-                )
+            if same_project:
+                # Type change within same project — key stays the same
+                if ctx.obj["quiet"]:
+                    print(issue_key)
+                elif ctx.obj["json"]:
+                    format_output(
+                        {
+                            "key": issue_key,
+                            "old_type": current_type,
+                            "new_type": target_type,
+                            "project": current_project,
+                            "summary": summary,
+                        },
+                        as_json=True,
+                    )
+                else:
+                    success(f"Changed {issue_key} type: {current_type} → {target_type}")
+                    print(f"  Summary:    {summary}")
             else:
-                success(f"Moved {issue_key} → {new_key}")
-                print(f"  Project:    {target_project.upper()}")
-                print(f"  Type:       {target_type}")
-                print(f"  Summary:    {summary}")
+                # Cross-project move — fetch new key (Jira may reassign it)
+                moved = client.issue(issue_key, fields="project")
+                new_key = moved["key"]
+
+                if ctx.obj["quiet"]:
+                    print(new_key)
+                elif ctx.obj["json"]:
+                    format_output(
+                        {
+                            "old_key": issue_key,
+                            "new_key": new_key,
+                            "project": target_project.upper(),
+                            "issue_type": target_type,
+                            "summary": summary,
+                        },
+                        as_json=True,
+                    )
+                else:
+                    success(f"Moved {issue_key} → {new_key}")
+                    print(f"  Project:    {target_project.upper()}")
+                    print(f"  Type:       {target_type}")
+                    print(f"  Summary:    {summary}")
         elif response.status_code == 400:
             # Common: issue type not available in target project
             detail = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
