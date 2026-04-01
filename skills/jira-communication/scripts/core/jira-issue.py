@@ -355,8 +355,7 @@ def delete(ctx, issue_key: str, delete_subtasks: bool, dry_run: bool):
                     st_summary = st.get("fields", {}).get("summary", "No summary")
                     print(f"    {st['key']}: {st_summary}")
                 if not delete_subtasks:
-                    warning("Subtasks exist. Use --delete-subtasks to delete them too, "
-                            "or deletion will fail.")
+                    warning("Subtasks exist. Use --delete-subtasks to delete them too, or deletion will fail.")
             return
 
         client.delete_issue(issue_key, delete_subtasks=delete_subtasks)
