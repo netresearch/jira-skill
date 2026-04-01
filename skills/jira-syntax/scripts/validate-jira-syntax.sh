@@ -75,7 +75,7 @@ validate_file() {
     fi
 
     # Check for Markdown-style inline code (` instead of {{)
-    if echo "$content" | grep -qE "\`[^\`]+\`" && ! echo "$content" | grep -qE "{{[^}]+}}"; then
+    if echo "$content" | grep -qE "\`[^\`]+\`"; then
         warning "Found Markdown inline code (\`code\`). Consider Jira format: {{code}}"
     fi
 
