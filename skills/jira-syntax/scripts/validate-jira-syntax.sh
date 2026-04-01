@@ -104,17 +104,18 @@ validate_file() {
     fi
 
     # Check for unclosed {code} blocks
-    local code_open=$(echo "$content" | grep -c "{code")
-    local code_close=$(echo "$content" | grep -c "{/code}")
-    if [ "$code_open" -ne "$code_close" ]; then
-        error "Mismatched {code} tags: $code_open opening, $code_close closing"
+    # Jira wiki markup uses {code} as both the opening and closing tag, so a
+    # correctly paired block always produces an even occurrence count.
+    local code_count=$(echo "$content" | grep -c "{code")
+    if [ $((code_count % 2)) -ne 0 ]; then
+        error "Mismatched {code} tags: odd number ($code_count) of occurrences (expected pairs)"
     fi
 
     # Check for unclosed {panel} blocks
-    local panel_open=$(echo "$content" | grep -c "{panel")
-    local panel_close=$(echo "$content" | grep -c "{/panel}")
-    if [ "$panel_open" -ne "$panel_close" ]; then
-        error "Mismatched {panel} tags: $panel_open opening, $panel_close closing"
+    # Same rule applies: {panel} opens and closes the block.
+    local panel_count=$(echo "$content" | grep -c "{panel")
+    if [ $((panel_count % 2)) -ne 0 ]; then
+        error "Mismatched {panel} tags: odd number ($panel_count) of occurrences (expected pairs)"
     fi
 
     # Check for unclosed {color} blocks
