@@ -51,9 +51,10 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("jql")
 @click.option("--max-results", "-n", default=50, help="Maximum results to return")
 @click.option("--fields", "-f", default="key,summary,status,assignee,priority", help="Comma-separated fields to return")
+@click.option("--start-at", default=0, type=int, help="Starting index for pagination (0-based)")
 @click.option("--truncate", type=int, metavar="N", help="Truncate field values to N characters")
 @click.pass_context
-def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
+def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate: int | None):
     """Search issues using JQL.
 
     JQL: Jira Query Language query string (passed directly to Jira API — treat as trusted input)
@@ -85,7 +86,7 @@ def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
         field_list = [f.strip() for f in fields.split(",")]
 
         # Execute search
-        results = client.jql(jql, limit=max_results, fields=field_list)
+        results = client.jql(jql, limit=max_results, start=start_at, fields=field_list)
         issues = results.get("issues", [])
 
         if ctx.obj["json"]:
@@ -99,7 +100,8 @@ def query(ctx, jql: str, max_results: int, fields: str, truncate: int | None):
                 print("No issues found")
             else:
                 _print_results_table(issues, field_list, truncate=truncate)
-                print(f"\n({len(issues)} issue{'s' if len(issues) != 1 else ''} found)")
+                total = results.get("total", len(issues))
+                print(f"\n(showing {start_at + 1}-{start_at + len(issues)} of {total} issues)")
 
     except Exception as e:
         if ctx.obj["debug"]:
