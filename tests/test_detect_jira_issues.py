@@ -233,7 +233,7 @@ class TestMainOutput:
         assert "uv run" in captured.out
         # Every script reference should be prefixed with 'uv run'
         for script in ["jira-issue.py", "jira-comment.py", "jira-search.py"]:
-            assert f"uv run" in captured.out.split(script)[0].split("\n")[-1]
+            assert "uv run" in captured.out.split(script)[0].split("\n")[-1]
 
     def test_output_includes_full_paths(self, tmp_path, capsys):
         """Hook output must include full paths to scripts, not bare filenames."""
