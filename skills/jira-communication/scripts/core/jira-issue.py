@@ -6,7 +6,7 @@
 #     "click>=8.1.0,<9",
 # ]
 # ///
-"""Jira issue operations - get and update issue details."""
+"""Jira issue operations - get, update, and delete issue details."""
 
 import json
 import sys
@@ -21,7 +21,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, resolve_assignee
+from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee
 from lib.output import error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -39,7 +39,7 @@ from lib.output import error, extract_adf_text, format_output, success, warning
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue operations.
 
-    Get and update Jira issue details.
+    Get, update, and delete Jira issue details.
     """
     ctx.ensure_object(dict)
     ctx.obj["json"] = output_json
@@ -314,6 +314,71 @@ def update(
         if ctx.obj["debug"]:
             raise
         error(f"Failed to update {issue_key}: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.option("--delete-subtasks", is_flag=True, help="Also delete subtasks of the issue")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without making changes")
+@click.pass_context
+def delete(ctx, issue_key: str, delete_subtasks: bool, dry_run: bool):
+    """Delete an issue.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    Requires delete permission in the Jira project. Use --dry-run to preview.
+
+    Examples:
+
+      jira-issue delete PROJ-123
+
+      jira-issue delete PROJ-123 --dry-run
+
+      jira-issue delete PROJ-123 --delete-subtasks
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        # Fetch issue summary for confirmation output
+        issue = client.issue(issue_key, fields="summary,subtasks")
+        summary = issue.get("fields", {}).get("summary", "No summary")
+        subtasks = issue.get("fields", {}).get("subtasks", [])
+
+        if dry_run:
+            warning("DRY RUN - No issue will be deleted")
+            print(f"\nWould delete {issue_key}: {summary}")
+            if subtasks:
+                print(f"\n  Subtasks ({len(subtasks)}):")
+                for st in subtasks:
+                    st_summary = st.get("fields", {}).get("summary", "No summary")
+                    print(f"    {st['key']}: {st_summary}")
+                if not delete_subtasks:
+                    warning("Subtasks exist. Use --delete-subtasks to delete them too, "
+                            "or deletion will fail.")
+            return
+
+        # Build delete URL with optional subtask deletion
+        url = f"rest/api/2/issue/{issue_key}"
+        if delete_subtasks:
+            url += "?deleteSubtasks=true"
+
+        client.delete(url)
+
+        if ctx.obj["quiet"]:
+            print("ok")
+        elif ctx.obj["json"]:
+            format_output({"key": issue_key, "deleted": True, "subtasks_deleted": delete_subtasks}, as_json=True)
+        else:
+            success(f"Deleted {issue_key}: {summary}")
+            if subtasks and delete_subtasks:
+                print(f"  Also deleted {len(subtasks)} subtask(s)")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to delete {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 

@@ -22,7 +22,7 @@ On Jira URL or issue key (PROJ-123) → `jira-issue.py get PROJ-123`. Auth failu
 
 ## Scripts
 
-**Core**: `jira-issue.py` (get/update), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
+**Core**: `jira-issue.py` (get/update/delete), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
 **Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/delete/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
 **Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`
 
@@ -53,6 +53,11 @@ uv run scripts/core/jira-search.py query "project = PROJ ORDER BY updated DESC" 
 uv run scripts/core/jira-issue.py update PROJ-123 --assignee me
 uv run scripts/core/jira-issue.py update PROJ-123 --priority Critical --summary "New title"
 uv run scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New description"}'
+
+# Delete issue (requires Jira delete permission)
+uv run scripts/core/jira-issue.py delete PROJ-123 --dry-run
+uv run scripts/core/jira-issue.py delete PROJ-123
+uv run scripts/core/jira-issue.py delete PROJ-123 --delete-subtasks
 
 # Comment (add/edit/list — use --json list to get IDs for edit/delete)
 uv run scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
