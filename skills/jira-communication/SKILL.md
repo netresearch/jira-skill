@@ -22,7 +22,7 @@ On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues →
 
 **Core**: `jira-issue.py` (get/update/delete), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
 **Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/delete/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
-**Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`
+**Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`, `jira-worklog-query.py`
 
 Scripts in `${CLAUDE_SKILL_DIR}/scripts/` under `core/`, `workflow/`, or `utility/`.
 
@@ -52,16 +52,13 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --priority Critical --summary "New title"
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New desc"}'
 
-# Delete issue (use --dry-run to preview, --delete-subtasks for parent issues)
+# Delete issue (--dry-run to preview, --delete-subtasks for parents)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py delete PROJ-123 --dry-run
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py delete PROJ-123
 
-# Comment (add/edit/list — use --json list to get IDs for edit/delete)
+# Comment (add/edit/list — --json list to get IDs for edit/delete)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
 cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 -
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py --json list PROJ-123
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py edit PROJ-123 COMMENT_ID "Updated text"
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 COMMENT_ID --dry-run
 
 # Transition (use "list" to see available transitions)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py list PROJ-123
@@ -69,6 +66,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In P
 
 # Log work
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
+
+# Query worklogs (default: my current week)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py --project HMKG --detail
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py --from 2026-03-01 --to 2026-03-31 --json
 
 # Create (--type auto-resolves to subtask when --parent given)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
