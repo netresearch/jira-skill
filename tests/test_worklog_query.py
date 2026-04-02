@@ -143,6 +143,65 @@ SAMPLE_WORKLOGS = [
 ]
 
 
+ISSUE_MAP = {
+    "HMKG-100": "Fix login validation",
+    "HMKG-200": "Update API docs",
+}
+
+
+class TestFormatSummary:
+    """Test summary output formatting."""
+
+    def test_groups_by_issue(self):
+        wls = SAMPLE_WORKLOGS[:3]  # exclude the out-of-range one
+        output = _mod.format_summary(wls, ISSUE_MAP)
+        assert "HMKG-100" in output
+        assert "HMKG-200" in output
+        assert "Fix login validation" in output
+
+    def test_shows_total_per_issue(self):
+        wls = SAMPLE_WORKLOGS[:3]
+        output = _mod.format_summary(wls, ISSUE_MAP)
+        # HMKG-100 has 1h + 2h = 3h
+        assert "3h" in output
+
+    def test_shows_grand_total(self):
+        wls = SAMPLE_WORKLOGS[:3]
+        output = _mod.format_summary(wls, ISSUE_MAP)
+        # 1h + 2h + 1h30m = 4h 30m
+        assert "4h 30m" in output
+
+    def test_empty_worklogs(self):
+        output = _mod.format_summary([], {})
+        assert "no worklogs" in output.lower()
+
+
+class TestFormatDetail:
+    """Test detail output formatting."""
+
+    def test_shows_individual_entries(self):
+        wls = SAMPLE_WORKLOGS[:3]
+        output = _mod.format_detail(wls)
+        assert "Code review" in output
+        assert "Implementation" in output
+        assert "Testing" in output
+
+    def test_shows_date_and_author(self):
+        wls = SAMPLE_WORKLOGS[:1]
+        output = _mod.format_detail(wls)
+        assert "2026-03-30" in output
+        assert "Paul Siedler" in output
+
+    def test_shows_issue_key(self):
+        wls = SAMPLE_WORKLOGS[:1]
+        output = _mod.format_detail(wls)
+        assert "HMKG-100" in output
+
+    def test_empty_worklogs(self):
+        output = _mod.format_detail([])
+        assert "no worklogs" in output.lower()
+
+
 class TestFilterWorklogs:
     """Test client-side worklog filtering."""
 
