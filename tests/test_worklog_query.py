@@ -73,3 +73,30 @@ class TestBuildJql:
         assert "sprint" in jql
         # All clauses joined with AND
         assert jql.count(" AND ") == 6
+
+
+class TestSecondsToHuman:
+    """Test time formatting."""
+
+    def test_hours_and_minutes(self):
+        assert _mod.seconds_to_human(9000) == "2h 30m"
+
+    def test_hours_only(self):
+        assert _mod.seconds_to_human(7200) == "2h"
+
+    def test_minutes_only(self):
+        assert _mod.seconds_to_human(1800) == "30m"
+
+    def test_days(self):
+        # 8h workday
+        assert _mod.seconds_to_human(28800) == "1d"
+
+    def test_days_and_hours(self):
+        assert _mod.seconds_to_human(36000) == "1d 2h"
+
+    def test_zero(self):
+        assert _mod.seconds_to_human(0) == "0m"
+
+    def test_complex(self):
+        # 1d 3h 15m = 28800 + 10800 + 900 = 40500
+        assert _mod.seconds_to_human(40500) == "1d 3h 15m"
