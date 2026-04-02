@@ -1,9 +1,13 @@
 """Tests for jira-worklog-query.py — cross-cutting worklog query tool."""
 
 import importlib.util
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
+
+import click.testing
 
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
@@ -309,3 +313,42 @@ class TestFetchWorklogs:
         }
         result = _mod.fetch_worklogs(mock_client, "HMKG-999", 0, 9999999999999)
         assert result[0]["_issue_key"] == "HMKG-999"
+
+
+class TestCli:
+    """Test CLI end-to-end with mocked client."""
+
+    def test_default_query(self):
+        mock_client = mock.MagicMock()
+        mock_client.myself.return_value = {"name": "psiedler", "displayName": "Paul Siedler"}
+        mock_client.jql.return_value = {
+            "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
+            "total": 1, "startAt": 0, "maxResults": 50,
+        }
+        mock_client.issue_get_worklog.return_value = {
+            "worklogs": [{
+                "id": "1001", "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT09:00:00.000+0200"),
+                "timeSpentSeconds": 3600, "timeSpent": "1h",
+                "author": {"displayName": "Paul Siedler", "name": "psiedler"},
+                "comment": "Work done",
+            }],
+            "total": 1, "maxResults": 1048576,
+        }
+
+        with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
+            runner = click.testing.CliRunner()
+            result = runner.invoke(_mod.cli, [])
+            assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+            assert "HMKG-100" in result.output
+
+    def test_json_output(self):
+        mock_client = mock.MagicMock()
+        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_client.jql.return_value = {"issues": [], "total": 0, "startAt": 0, "maxResults": 50}
+
+        with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
+            runner = click.testing.CliRunner()
+            result = runner.invoke(_mod.cli, ["--json"])
+            assert result.exit_code == 0
+            parsed = json.loads(result.output)
+            assert isinstance(parsed, list)

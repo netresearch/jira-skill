@@ -19,8 +19,11 @@ _lib_path = _script_dir.parent / "lib"
 if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
+from datetime import date, datetime, timedelta, timezone
+
 import click
-from lib.output import warning
+from lib.client import LazyJiraClient
+from lib.output import error, format_json, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Query building
@@ -207,8 +210,6 @@ def fetch_worklogs(client, issue_key: str, started_after: int, started_before: i
 
 def fetch_all_worklogs(client, issues: list[dict], from_date: str, to_date: str) -> list[dict]:
     """Fetch worklogs for all issues, with progress indicator."""
-    from datetime import datetime, timezone
-
     # Convert dates to epoch ms for the API (used for potential future optimization)
     started_after = int(datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
     started_before = int(
@@ -260,7 +261,72 @@ def cli(from_date, to_date, user, project, issue, epic, sprint, detail, output_j
       jira-worklog-query.py --project HMKG            # my week on HMKG
       jira-worklog-query.py --from 2026-03-01 --to 2026-03-31 --detail
     """
-    pass
+    client = LazyJiraClient(env_file=env_file, profile=profile)
+
+    try:
+        # Resolve defaults
+        today = date.today()
+        if not from_date:
+            monday = today - timedelta(days=today.weekday())
+            from_date = monday.isoformat()
+        if not to_date:
+            to_date = today.isoformat()
+
+        # Resolve user default
+        effective_user = user
+        if not effective_user:
+            me = client.myself()
+            effective_user = me.get("name") or me.get("accountId", "")
+
+        # Parse issue list
+        issue_list = [k.strip() for k in issue.split(",")] if issue else None
+
+        # Build JQL and search
+        jql = build_jql(from_date, to_date, user=effective_user, project=project,
+                        issues=issue_list, epic=epic, sprint=sprint)
+
+        if debug:
+            click.echo(f"JQL: {jql}", err=True)
+
+        issues = search_issues(client, jql)
+
+        if not issues:
+            if output_json:
+                click.echo("[]")
+            elif not quiet:
+                click.echo(f"No issues found with worklogs for {from_date} to {to_date}")
+            return
+
+        # Fetch all worklogs
+        all_worklogs = fetch_all_worklogs(client, issues, from_date, to_date)
+
+        # Client-side filter
+        filtered = filter_worklogs(all_worklogs, user=effective_user,
+                                   from_date=from_date, to_date=to_date)
+
+        # Output
+        if output_json:
+            click.echo(format_json(filtered))
+        elif quiet:
+            total_seconds = sum(wl.get("timeSpentSeconds", 0) for wl in filtered)
+            click.echo(seconds_to_human(total_seconds))
+        elif detail:
+            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}"
+            click.echo(header)
+            click.echo()
+            click.echo(format_detail(filtered))
+        else:
+            issue_map = {i["key"]: i["summary"] for i in issues}
+            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}"
+            click.echo(header)
+            click.echo()
+            click.echo(format_summary(filtered, issue_map))
+
+    except Exception as e:
+        if debug:
+            raise
+        error(f"Failed to query worklogs: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
