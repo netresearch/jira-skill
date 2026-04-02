@@ -304,7 +304,8 @@ def fetch_worklogs_tempo(
     issue_keys = {wl["_issue_key"] for wl in all_worklogs if wl["_issue_key"] != "Unknown"}
     issue_map: dict[str, str] = {}
     if issue_keys:
-        jql = f"issueKey in ({', '.join(sorted(issue_keys))})"
+        quoted = ", ".join(f'"{_jql_escape(k)}"' for k in sorted(issue_keys))
+        jql = f"issueKey in ({quoted})"
         try:
             found = search_issues(client, jql)
             issue_map = {i["key"]: i["summary"] for i in found}
