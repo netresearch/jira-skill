@@ -115,12 +115,59 @@ def seconds_to_human(seconds: int) -> str:
 
 def format_summary(worklogs: list[dict], issues: dict[str, str]) -> str:
     """Format worklogs as summary table grouped by issue."""
-    raise NotImplementedError
+    if not worklogs:
+        return "No worklogs found."
+
+    # Group by issue
+    by_issue: dict[str, int] = {}
+    for wl in worklogs:
+        key = wl.get("_issue_key", "Unknown")
+        by_issue[key] = by_issue.get(key, 0) + wl.get("timeSpentSeconds", 0)
+
+    lines = []
+    lines.append(f"{'Issue':<14} {'Summary':<40} {'Time Spent':>10}")
+    lines.append(f"{'-'*14} {'-'*40} {'-'*10}")
+
+    total_seconds = 0
+    for key in sorted(by_issue):
+        summary = issues.get(key, "")
+        if len(summary) > 40:
+            summary = summary[:37] + "..."
+        seconds = by_issue[key]
+        total_seconds += seconds
+        lines.append(f"{key:<14} {summary:<40} {seconds_to_human(seconds):>10}")
+
+    lines.append(f"{'':>14} {'':>40} {'─'*10}")
+    lines.append(f"{'':>14} {'Total:':>40} {seconds_to_human(total_seconds):>10}")
+    return "\n".join(lines)
 
 
 def format_detail(worklogs: list[dict]) -> str:
     """Format worklogs as detailed table with individual entries."""
-    raise NotImplementedError
+    if not worklogs:
+        return "No worklogs found."
+
+    lines = []
+    lines.append(f"{'Issue':<14} {'Date':<12} {'Author':<20} {'Time':>8} {'Comment'}")
+    lines.append(f"{'-'*14} {'-'*12} {'-'*20} {'-'*8} {'-'*30}")
+
+    for wl in sorted(worklogs, key=lambda w: w.get("started", "")):
+        key = wl.get("_issue_key", "Unknown")
+        date_str = wl.get("started", "")[:10]
+        author = wl.get("author", {}).get("displayName", "Unknown")
+        if len(author) > 20:
+            author = author[:17] + "..."
+        time_str = seconds_to_human(wl.get("timeSpentSeconds", 0))
+        comment = wl.get("comment", "")
+        if isinstance(comment, dict):
+            # ADF format — extract text
+            from lib.output import extract_adf_text
+            comment = extract_adf_text(comment)
+        if len(comment) > 50:
+            comment = comment[:47] + "..."
+        lines.append(f"{key:<14} {date_str:<12} {author:<20} {time_str:>8} {comment}")
+
+    return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
