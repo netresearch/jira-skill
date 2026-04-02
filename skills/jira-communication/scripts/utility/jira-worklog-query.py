@@ -78,8 +78,23 @@ def filter_worklogs(
 
 
 def seconds_to_human(seconds: int) -> str:
-    """Convert seconds to human-readable time (e.g., '2h 30m')."""
-    raise NotImplementedError
+    """Convert seconds to human-readable time (e.g., '2h 30m').
+
+    Uses 8h workday for day calculation (Jira default).
+    """
+    if seconds <= 0:
+        return "0m"
+    days, remainder = divmod(seconds, 28800)  # 8h workday
+    hours, remainder = divmod(remainder, 3600)
+    minutes = remainder // 60
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    return " ".join(parts) or "0m"
 
 
 def format_summary(worklogs: list[dict], issues: dict[str, str]) -> str:
