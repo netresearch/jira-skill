@@ -100,3 +100,79 @@ class TestSecondsToHuman:
     def test_complex(self):
         # 1d 3h 15m = 28800 + 10800 + 900 = 40500
         assert _mod.seconds_to_human(40500) == "1d 3h 15m"
+
+
+# Test fixture data
+SAMPLE_WORKLOGS = [
+    {
+        "author": {"displayName": "Paul Siedler", "name": "psiedler", "accountId": "abc123"},
+        "started": "2026-03-30T09:00:00.000+0200",
+        "timeSpentSeconds": 3600,
+        "timeSpent": "1h",
+        "comment": "Code review",
+        "id": "1001",
+        "_issue_key": "HMKG-100",
+    },
+    {
+        "author": {"displayName": "Jane Doe", "name": "jdoe", "accountId": "def456"},
+        "started": "2026-03-31T10:00:00.000+0200",
+        "timeSpentSeconds": 7200,
+        "timeSpent": "2h",
+        "comment": "Implementation",
+        "id": "1002",
+        "_issue_key": "HMKG-100",
+    },
+    {
+        "author": {"displayName": "Paul Siedler", "name": "psiedler", "accountId": "abc123"},
+        "started": "2026-04-01T14:00:00.000+0200",
+        "timeSpentSeconds": 5400,
+        "timeSpent": "1h 30m",
+        "comment": "Testing",
+        "id": "1003",
+        "_issue_key": "HMKG-200",
+    },
+    {
+        "author": {"displayName": "Paul Siedler", "name": "psiedler", "accountId": "abc123"},
+        "started": "2026-04-10T09:00:00.000+0200",
+        "timeSpentSeconds": 1800,
+        "timeSpent": "30m",
+        "comment": "Outside date range",
+        "id": "1004",
+        "_issue_key": "HMKG-300",
+    },
+]
+
+
+class TestFilterWorklogs:
+    """Test client-side worklog filtering."""
+
+    def test_no_filters_returns_all(self):
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS)
+        assert len(result) == 4
+
+    def test_filter_by_user_name(self):
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="psiedler")
+        assert len(result) == 3
+        assert all(w["author"]["name"] == "psiedler" for w in result)
+
+    def test_filter_by_account_id(self):
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="abc123")
+        assert len(result) == 3
+
+    def test_filter_by_display_name(self):
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="Jane Doe")
+        assert len(result) == 1
+
+    def test_filter_by_date_range(self):
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, from_date="2026-03-30", to_date="2026-04-01")
+        assert len(result) == 3
+        assert "1004" not in [w["id"] for w in result]
+
+    def test_filter_by_user_and_date(self):
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="psiedler", from_date="2026-03-30", to_date="2026-04-01")
+        assert len(result) == 2
+        assert all(w["author"]["name"] == "psiedler" for w in result)
+
+    def test_empty_list(self):
+        result = _mod.filter_worklogs([])
+        assert result == []
