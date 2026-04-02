@@ -3,6 +3,7 @@
 import importlib.util
 import sys
 from pathlib import Path
+from unittest import mock
 
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
@@ -235,3 +236,76 @@ class TestFilterWorklogs:
     def test_empty_list(self):
         result = _mod.filter_worklogs([])
         assert result == []
+
+
+class TestSearchIssues:
+    """Test issue search with mocked client."""
+
+    def test_single_page(self):
+        mock_client = mock.MagicMock()
+        mock_client.jql.return_value = {
+            "issues": [
+                {"key": "HMKG-100", "fields": {"summary": "Fix login"}},
+                {"key": "HMKG-200", "fields": {"summary": "Update docs"}},
+            ],
+            "total": 2,
+            "startAt": 0,
+            "maxResults": 50,
+        }
+        result = _mod.search_issues(mock_client, 'worklogDate >= "2026-03-30"')
+        assert len(result) == 2
+        assert result[0]["key"] == "HMKG-100"
+        assert result[0]["summary"] == "Fix login"
+
+    def test_pagination(self):
+        mock_client = mock.MagicMock()
+        mock_client.jql.side_effect = [
+            {
+                "issues": [{"key": f"HMKG-{i}", "fields": {"summary": f"Issue {i}"}} for i in range(50)],
+                "total": 75,
+                "startAt": 0,
+                "maxResults": 50,
+            },
+            {
+                "issues": [{"key": f"HMKG-{i}", "fields": {"summary": f"Issue {i}"}} for i in range(50, 75)],
+                "total": 75,
+                "startAt": 50,
+                "maxResults": 50,
+            },
+        ]
+        result = _mod.search_issues(mock_client, "some jql")
+        assert len(result) == 75
+
+    def test_empty_result(self):
+        mock_client = mock.MagicMock()
+        mock_client.jql.return_value = {"issues": [], "total": 0, "startAt": 0, "maxResults": 50}
+        result = _mod.search_issues(mock_client, "some jql")
+        assert result == []
+
+
+class TestFetchWorklogs:
+    """Test per-issue worklog fetch with mocked client."""
+
+    def test_basic_fetch(self):
+        mock_client = mock.MagicMock()
+        mock_client.issue_get_worklog.return_value = {
+            "worklogs": [
+                {"id": "1001", "started": "2026-03-30T09:00:00.000+0200", "timeSpentSeconds": 3600,
+                 "author": {"displayName": "Paul", "name": "psiedler"}},
+            ],
+            "total": 1,
+            "maxResults": 1048576,
+        }
+        result = _mod.fetch_worklogs(mock_client, "HMKG-100", 1743289200000, 1743548400000)
+        assert len(result) == 1
+        assert result[0]["_issue_key"] == "HMKG-100"
+
+    def test_adds_issue_key_to_worklogs(self):
+        mock_client = mock.MagicMock()
+        mock_client.issue_get_worklog.return_value = {
+            "worklogs": [{"id": "1001", "started": "2026-03-30T09:00:00.000+0200"}],
+            "total": 1,
+            "maxResults": 1048576,
+        }
+        result = _mod.fetch_worklogs(mock_client, "HMKG-999", 0, 9999999999999)
+        assert result[0]["_issue_key"] == "HMKG-999"
