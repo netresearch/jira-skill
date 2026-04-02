@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-04-02
+
+### Added
+
+- **`jira-worklog-query.py`**: Cross-cutting worklog query tool with date range, user, project, issue, epic, and sprint filters. Supports summary, detail, JSON, and quiet output modes. Auto-detects Tempo Timesheets plugin for faster server-side filtering with fallback to Jira REST API. ([#59](https://github.com/netresearch/jira-skill/pull/59))
+
+### Fixed
+
+- Use `${CLAUDE_SKILL_DIR}` for script paths in SKILL.md for portability ([#58](https://github.com/netresearch/jira-skill/pull/58))
+
 ## [3.7.0] - 2026-04-02
 
 ### Added
