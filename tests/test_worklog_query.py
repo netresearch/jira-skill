@@ -246,6 +246,87 @@ class TestFilterWorklogs:
         assert result == []
 
 
+class TestDetectTempo:
+    """Test Tempo plugin detection."""
+
+    def test_tempo_available(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_client._session.get.return_value = mock_response
+        assert _mod.detect_tempo(mock_client) is True
+
+    def test_tempo_not_available(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 404
+        mock_client._session.get.return_value = mock_response
+        assert _mod.detect_tempo(mock_client) is False
+
+    def test_tempo_auth_failure(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 403
+        mock_client._session.get.return_value = mock_response
+        assert _mod.detect_tempo(mock_client) is False
+
+    def test_tempo_connection_error(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_client._session.get.side_effect = Exception("Connection refused")
+        assert _mod.detect_tempo(mock_client) is False
+
+
+class TestNormalizeTempoWorklog:
+    """Test Tempo-to-Jira worklog normalization."""
+
+    def test_basic_normalization(self):
+        tempo_wl = {
+            "tempoWorklogId": 12345,
+            "issue": {"key": "PROJ-123", "id": 10456},
+            "timeSpentSeconds": 3600,
+            "started": "2026-04-01",
+            "comment": "Work done",
+            "author": {"name": "jdoe", "displayName": "John Doe"},
+        }
+        result = _mod.normalize_tempo_worklog(tempo_wl)
+        assert result["id"] == "12345"
+        assert result["_issue_key"] == "PROJ-123"
+        assert result["timeSpentSeconds"] == 3600
+        assert result["comment"] == "Work done"
+        assert result["author"]["name"] == "jdoe"
+
+    def test_date_padded_to_timestamp(self):
+        tempo_wl = {
+            "tempoWorklogId": 1,
+            "issue": {"key": "X-1"},
+            "started": "2026-04-01",
+        }
+        result = _mod.normalize_tempo_worklog(tempo_wl)
+        assert result["started"] == "2026-04-01T00:00:00.000+0000"
+        # Still works with [:10] slicing for date comparison
+        assert result["started"][:10] == "2026-04-01"
+
+    def test_already_timestamp_not_padded(self):
+        tempo_wl = {
+            "tempoWorklogId": 1,
+            "issue": {"key": "X-1"},
+            "started": "2026-04-01T09:30:00.000+0200",
+        }
+        result = _mod.normalize_tempo_worklog(tempo_wl)
+        assert result["started"] == "2026-04-01T09:30:00.000+0200"
+
+    def test_missing_fields(self):
+        result = _mod.normalize_tempo_worklog({})
+        assert result["id"] == ""
+        assert result["_issue_key"] == "Unknown"
+        assert result["timeSpentSeconds"] == 0
+        assert result["comment"] == ""
+
+
 class TestSearchIssues:
     """Test issue search with mocked client."""
 

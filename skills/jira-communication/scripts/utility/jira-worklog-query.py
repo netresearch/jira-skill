@@ -235,6 +235,51 @@ def fetch_all_worklogs(client, issues: list[dict], from_date: str, to_date: str)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Tempo backend
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def detect_tempo(client) -> bool:
+    """Check if Tempo Timesheets plugin is available.
+
+    Tries a minimal request to the Tempo REST API. Returns True if Tempo
+    responds (200), False if the endpoint doesn't exist (404) or auth fails.
+    """
+    try:
+        base_url = client.url.rstrip("/")
+        url = f"{base_url}/rest/tempo-timesheets/4/worklogs"
+        today = date.today().isoformat()
+        params = {"dateFrom": today, "dateTo": today, "limit": 1}
+
+        response = client._session.get(url, params=params, timeout=5)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def normalize_tempo_worklog(tempo_wl: dict) -> dict:
+    """Convert a Tempo worklog to Jira-compatible format.
+
+    Normalizes field names and adds _issue_key so existing filter/format
+    functions work unchanged.
+    """
+    started = tempo_wl.get("started", "")
+    # Tempo returns date-only "2026-04-01"; pad to ISO timestamp for consistency
+    if len(started) == 10:
+        started = f"{started}T00:00:00.000+0000"
+
+    return {
+        "id": str(tempo_wl.get("tempoWorklogId", "")),
+        "started": started,
+        "timeSpentSeconds": tempo_wl.get("timeSpentSeconds", 0),
+        "timeSpent": "",
+        "comment": tempo_wl.get("comment", ""),
+        "author": tempo_wl.get("author", {}),
+        "_issue_key": tempo_wl.get("issue", {}).get("key", "Unknown"),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
