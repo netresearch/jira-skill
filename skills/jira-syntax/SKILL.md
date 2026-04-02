@@ -46,7 +46,7 @@ Sections: Overview, User Stories, Acceptance Criteria, Technical Approach, Succe
 
 Run before submitting to Jira:
 ```bash
-scripts/validate-jira-syntax.sh path/to/content.txt
+${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh path/to/content.txt
 ```
 
 ### Validation Checklist
@@ -75,13 +75,13 @@ scripts/validate-jira-syntax.sh path/to/content.txt
 **Workflow:**
 1. Get template from jira-syntax
 2. Fill content using Jira wiki markup
-3. Validate with `scripts/validate-jira-syntax.sh`
-4. Submit via jira-communication scripts (e.g., `uv run scripts/workflow/jira-create.py`)
+3. Validate with `${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh`
+4. Submit via jira-communication skill
 
 ## References
 
 - `references/jira-syntax-quick-reference.md` - Complete syntax documentation
 - `templates/bug-report-template.md` - Bug report template
 - `templates/feature-request-template.md` - Feature request template
-- `scripts/validate-jira-syntax.sh` - Automated syntax checker
+- `${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh` - Automated syntax checker
 - [Official Jira Wiki Markup](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
