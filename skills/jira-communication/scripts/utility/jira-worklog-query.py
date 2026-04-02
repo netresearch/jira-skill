@@ -20,6 +20,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
+from lib.output import warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Query building
@@ -177,17 +178,56 @@ def format_detail(worklogs: list[dict]) -> str:
 
 def search_issues(client, jql: str) -> list[dict]:
     """Search issues matching JQL, paginated. Returns list of {key, summary}."""
-    raise NotImplementedError
+    issues = []
+    start_at = 0
+    page_size = 50
+    while True:
+        result = client.jql(jql, start=start_at, limit=page_size, fields="key,summary")
+        for issue in result.get("issues", []):
+            issues.append({
+                "key": issue["key"],
+                "summary": issue.get("fields", {}).get("summary", ""),
+            })
+        total = result.get("total", 0)
+        start_at += page_size
+        if start_at >= total:
+            break
+    return issues
 
 
 def fetch_worklogs(client, issue_key: str, started_after: int, started_before: int) -> list[dict]:
     """Fetch worklogs for a single issue within time bounds. Returns raw worklog dicts."""
-    raise NotImplementedError
+    result = client.issue_get_worklog(issue_key)
+    worklogs = result.get("worklogs", [])
+    # Tag each worklog with its issue key for later grouping
+    for wl in worklogs:
+        wl["_issue_key"] = issue_key
+    return worklogs
 
 
 def fetch_all_worklogs(client, issues: list[dict], from_date: str, to_date: str) -> list[dict]:
     """Fetch worklogs for all issues, with progress indicator."""
-    raise NotImplementedError
+    from datetime import datetime, timezone
+
+    # Convert dates to epoch ms for the API (used for potential future optimization)
+    started_after = int(datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
+    started_before = int(
+        datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc).timestamp()
+        * 1000
+    )
+
+    total = len(issues)
+    if total > 100:
+        warning(f"Fetching worklogs for {total} issues — this may take a while...")
+
+    all_worklogs = []
+    for i, issue in enumerate(issues):
+        if total > 10 and (i + 1) % 10 == 0:
+            click.echo(f"  Fetching worklogs... {i + 1}/{total}", err=True)
+        worklogs = fetch_worklogs(client, issue["key"], started_after, started_before)
+        all_worklogs.extend(worklogs)
+
+    return all_worklogs
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
