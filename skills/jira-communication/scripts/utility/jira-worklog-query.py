@@ -19,7 +19,7 @@ _lib_path = _script_dir.parent / "lib"
 if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 import click
 from lib.client import LazyJiraClient
@@ -186,7 +186,7 @@ def search_issues(client, jql: str) -> list[dict]:
     start_at = 0
     page_size = 50
     while True:
-        result = client.jql(jql, start=start_at, limit=page_size, fields="key,summary")
+        result = client.jql(jql, start=start_at, limit=page_size, fields=["key", "summary"])
         for issue in result.get("issues", []):
             issues.append(
                 {
@@ -201,8 +201,8 @@ def search_issues(client, jql: str) -> list[dict]:
     return issues
 
 
-def fetch_worklogs(client, issue_key: str, started_after: int, started_before: int) -> list[dict]:
-    """Fetch worklogs for a single issue within time bounds. Returns raw worklog dicts."""
+def fetch_worklogs(client, issue_key: str) -> list[dict]:
+    """Fetch all worklogs for a single issue. Returns raw worklog dicts."""
     result = client.issue_get_worklog(issue_key)
     worklogs = result.get("worklogs", [])
     # Tag each worklog with its issue key for later grouping
@@ -211,15 +211,8 @@ def fetch_worklogs(client, issue_key: str, started_after: int, started_before: i
     return worklogs
 
 
-def fetch_all_worklogs(client, issues: list[dict], from_date: str, to_date: str) -> list[dict]:
+def fetch_all_worklogs(client, issues: list[dict]) -> list[dict]:
     """Fetch worklogs for all issues, with progress indicator."""
-    # Convert dates to epoch ms for the API (used for potential future optimization)
-    started_after = int(datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
-    started_before = int(
-        datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc).timestamp()
-        * 1000
-    )
-
     total = len(issues)
     if total > 100:
         warning(f"Fetching worklogs for {total} issues — this may take a while...")
@@ -228,7 +221,7 @@ def fetch_all_worklogs(client, issues: list[dict], from_date: str, to_date: str)
     for i, issue in enumerate(issues):
         if total > 10 and (i + 1) % 10 == 0:
             click.echo(f"  Fetching worklogs... {i + 1}/{total}", err=True)
-        worklogs = fetch_worklogs(client, issue["key"], started_after, started_before)
+        worklogs = fetch_worklogs(client, issue["key"])
         all_worklogs.extend(worklogs)
 
     return all_worklogs
@@ -453,7 +446,7 @@ def cli(
                     click.echo(f"No issues found with worklogs for {from_date} to {to_date}")
                 return
 
-            all_worklogs = fetch_all_worklogs(client, issues, from_date, to_date)
+            all_worklogs = fetch_all_worklogs(client, issues)
             filtered = filter_worklogs(all_worklogs, user=effective_user, from_date=from_date, to_date=to_date)
             issue_map = {i["key"]: i["summary"] for i in issues}
 
