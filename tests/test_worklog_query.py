@@ -3,7 +3,6 @@
 import importlib.util
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -522,7 +521,7 @@ class TestFetchWorklogs:
             "total": 1,
             "maxResults": 1048576,
         }
-        result = _mod.fetch_worklogs(mock_client, "HMKG-100", 1743289200000, 1743548400000)
+        result = _mod.fetch_worklogs(mock_client, "HMKG-100")
         assert len(result) == 1
         assert result[0]["_issue_key"] == "HMKG-100"
 
@@ -533,7 +532,7 @@ class TestFetchWorklogs:
             "total": 1,
             "maxResults": 1048576,
         }
-        result = _mod.fetch_worklogs(mock_client, "HMKG-999", 0, 9999999999999)
+        result = _mod.fetch_worklogs(mock_client, "HMKG-999")
         assert result[0]["_issue_key"] == "HMKG-999"
 
 
@@ -553,7 +552,7 @@ class TestCli:
             "worklogs": [
                 {
                     "id": "1001",
-                    "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT09:00:00.000+0200"),
+                    "started": "2026-04-01T09:00:00.000+0200",
                     "timeSpentSeconds": 3600,
                     "timeSpent": "1h",
                     "author": {"displayName": "Paul Siedler", "name": "psiedler"},
@@ -566,7 +565,7 @@ class TestCli:
 
         with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
             runner = click.testing.CliRunner()
-            result = runner.invoke(_mod.cli, [])
+            result = runner.invoke(_mod.cli, ["--from", "2026-04-01", "--to", "2026-04-01"])
             assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
             assert "HMKG-100" in result.output
 
@@ -649,7 +648,7 @@ class TestCliTempo:
             "worklogs": [
                 {
                     "id": "1001",
-                    "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT09:00:00.000+0200"),
+                    "started": "2026-04-01T09:00:00.000+0200",
                     "timeSpentSeconds": 3600,
                     "author": {"displayName": "Paul Siedler", "name": "psiedler"},
                     "comment": "Work done",
@@ -660,7 +659,7 @@ class TestCliTempo:
         }
 
         runner = click.testing.CliRunner()
-        result = runner.invoke(_mod.cli, ["--backend", "jira"])
+        result = runner.invoke(_mod.cli, ["--backend", "jira", "--from", "2026-04-01", "--to", "2026-04-01"])
         assert result.exit_code == 0
         assert "HMKG-100" in result.output
         assert "via Tempo" not in result.output
