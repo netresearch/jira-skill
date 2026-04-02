@@ -327,6 +327,119 @@ class TestNormalizeTempoWorklog:
         assert result["comment"] == ""
 
 
+SAMPLE_TEMPO_RESPONSE = [
+    {
+        "tempoWorklogId": 101,
+        "issue": {"key": "HMKG-100", "id": 10001},
+        "timeSpentSeconds": 3600,
+        "started": "2026-04-01",
+        "comment": "Feature work",
+        "author": {"name": "psiedler", "displayName": "Paul Siedler"},
+    },
+    {
+        "tempoWorklogId": 102,
+        "issue": {"key": "HMKG-200", "id": 10002},
+        "timeSpentSeconds": 5400,
+        "started": "2026-04-02",
+        "comment": "Code review",
+        "author": {"name": "psiedler", "displayName": "Paul Siedler"},
+    },
+]
+
+
+class TestFetchWorklogsTempo:
+    """Test Tempo worklog fetching."""
+
+    def test_basic_fetch(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_TEMPO_RESPONSE
+        mock_client._session.get.return_value = mock_response
+
+        def _mock_issue(key, fields=None):
+            summaries = {"HMKG-100": "Fix login", "HMKG-200": "Update docs"}
+            return {"fields": {"summary": summaries.get(key, "")}}
+
+        mock_client.issue.side_effect = _mock_issue
+
+        worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02", user="psiedler")
+        assert len(worklogs) == 2
+        assert worklogs[0]["_issue_key"] == "HMKG-100"
+        assert worklogs[0]["timeSpentSeconds"] == 3600
+        assert issue_map["HMKG-100"] == "Fix login"
+        assert issue_map["HMKG-200"] == "Update docs"
+
+    def test_passes_filters_to_api(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.json.return_value = []
+        mock_client._session.get.return_value = mock_response
+
+        _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30", user="psiedler", project="HMKG")
+
+        call_args = mock_client._session.get.call_args
+        params = call_args[1].get("params") or call_args[0][1] if len(call_args[0]) > 1 else call_args[1]["params"]
+        assert params["dateFrom"] == "2026-04-01"
+        assert params["dateTo"] == "2026-04-30"
+        assert params["worker"] == "psiedler"
+        assert params["projectKey"] == "HMKG"
+
+    def test_paginated_response(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+
+        page1_response = mock.MagicMock()
+        page1_response.json.return_value = {
+            "results": SAMPLE_TEMPO_RESPONSE[:1],
+            "metadata": {"count": 2, "offset": 0, "limit": 1, "next": "/rest/tempo-timesheets/4/worklogs?offset=1"},
+        }
+        page2_response = mock.MagicMock()
+        page2_response.json.return_value = {
+            "results": SAMPLE_TEMPO_RESPONSE[1:],
+            "metadata": {"count": 2, "offset": 1, "limit": 1},
+        }
+        mock_client._session.get.side_effect = [page1_response, page2_response]
+        mock_client.issue.return_value = {"fields": {"summary": "Issue"}}
+
+        worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
+        assert len(worklogs) == 2
+        assert mock_client._session.get.call_count == 2
+
+    def test_empty_result(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.json.return_value = []
+        mock_client._session.get.return_value = mock_response
+
+        worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
+        assert worklogs == []
+        assert issue_map == {}
+
+    def test_normalizes_to_jira_format(self):
+        """Verify returned worklogs work with existing filter/format functions."""
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.json.return_value = SAMPLE_TEMPO_RESPONSE
+        mock_client._session.get.return_value = mock_response
+        mock_client.issue.return_value = {"fields": {"summary": "Test"}}
+
+        worklogs, _ = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
+
+        # Should work with filter_worklogs
+        filtered = _mod.filter_worklogs(worklogs, user="psiedler")
+        assert len(filtered) == 2
+
+        # Should work with format_detail
+        output = _mod.format_detail(worklogs)
+        assert "HMKG-100" in output
+        assert "Paul Siedler" in output
+
+
 class TestSearchIssues:
     """Test issue search with mocked client."""
 

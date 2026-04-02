@@ -257,6 +257,64 @@ def detect_tempo(client) -> bool:
         return False
 
 
+def fetch_worklogs_tempo(
+    client,
+    from_date: str,
+    to_date: str,
+    user: str | None = None,
+    project: str | None = None,
+) -> tuple[list[dict], dict[str, str]]:
+    """Fetch worklogs from Tempo REST API with native date/user/project filtering.
+
+    Returns (worklogs, issue_map) where worklogs are normalized to Jira format
+    and issue_map maps issue keys to summaries.
+    """
+    base_url = client.url.rstrip("/")
+    url = f"{base_url}/rest/tempo-timesheets/4/worklogs"
+    params: dict = {
+        "dateFrom": from_date,
+        "dateTo": to_date,
+        "limit": 1000,
+        "offset": 0,
+    }
+    if user:
+        params["worker"] = user
+    if project:
+        params["projectKey"] = project
+
+    all_worklogs = []
+    while True:
+        response = client._session.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        # Handle both array response and paginated object response
+        if isinstance(data, list):
+            entries = data
+            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
+            break  # Array response = no pagination
+        else:
+            entries = data.get("results", data.get("worklogs", []))
+            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
+            metadata = data.get("metadata", {})
+            if not metadata.get("next"):
+                break
+            params["offset"] = metadata.get("offset", 0) + metadata.get("limit", 1000)
+
+    # Build issue_map from unique issue keys (Tempo doesn't return summaries,
+    # so we fetch them separately for the ones we found)
+    issue_keys = {wl["_issue_key"] for wl in all_worklogs if wl["_issue_key"] != "Unknown"}
+    issue_map: dict[str, str] = {}
+    for key in issue_keys:
+        try:
+            issue = client.issue(key, fields="summary")
+            issue_map[key] = issue.get("fields", {}).get("summary", "")
+        except Exception:
+            issue_map[key] = ""
+
+    return all_worklogs, issue_map
+
+
 def normalize_tempo_worklog(tempo_wl: dict) -> dict:
     """Convert a Tempo worklog to Jira-compatible format.
 
