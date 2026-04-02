@@ -561,3 +561,97 @@ class TestCli:
             assert result.exit_code == 0
             parsed = json.loads(result.output)
             assert isinstance(parsed, list)
+
+
+class TestCliTempo:
+    """Test CLI with Tempo backend."""
+
+    def _make_tempo_client(self, mock_client):
+        """Set up mock client for Tempo path."""
+        mock_client.url = "https://jira.example.com"
+        mock_client.myself.return_value = {"name": "psiedler", "displayName": "Paul Siedler"}
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [
+            {
+                "tempoWorklogId": 101,
+                "issue": {"key": "HMKG-100", "id": 10001},
+                "timeSpentSeconds": 3600,
+                "started": "2026-04-01",
+                "comment": "Feature work",
+                "author": {"name": "psiedler", "displayName": "Paul Siedler"},
+            },
+        ]
+        mock_client._session.get.return_value = mock_response
+        mock_client.issue.return_value = {"fields": {"summary": "Fix login"}}
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_tempo_backend_flag(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_tempo_client(mock_client)
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--backend", "tempo"])
+        assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+        assert "HMKG-100" in result.output
+        assert "via Tempo" in result.output
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_auto_detect_uses_tempo(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_tempo_client(mock_client)
+        # detect_tempo will use the same _session.get mock which returns 200
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--backend", "auto"])
+        assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+        assert "HMKG-100" in result.output
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_jira_backend_flag_skips_tempo(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_client.jql.return_value = {
+            "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
+            "total": 1,
+            "startAt": 0,
+            "maxResults": 50,
+        }
+        mock_client.issue_get_worklog.return_value = {
+            "worklogs": [
+                {
+                    "id": "1001",
+                    "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT09:00:00.000+0200"),
+                    "timeSpentSeconds": 3600,
+                    "author": {"displayName": "Paul Siedler", "name": "psiedler"},
+                    "comment": "Work done",
+                }
+            ],
+            "total": 1,
+            "maxResults": 1048576,
+        }
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--backend", "jira"])
+        assert result.exit_code == 0
+        assert "HMKG-100" in result.output
+        assert "via Tempo" not in result.output
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_tempo_empty_result(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.url = "https://jira.example.com"
+        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = []
+        mock_client._session.get.return_value = mock_response
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--backend", "tempo"])
+        assert result.exit_code == 0
+        assert "No worklogs found" in result.output

@@ -356,7 +356,28 @@ def normalize_tempo_worklog(tempo_wl: dict) -> dict:
 @click.option("--env-file", type=click.Path(), help="Environment file path")
 @click.option("--profile", "-P", help="Jira profile name")
 @click.option("--debug", is_flag=True, help="Show debug information on errors")
-def cli(from_date, to_date, user, project, issue, epic, sprint, detail, output_json, quiet, env_file, profile, debug):
+@click.option(
+    "--backend",
+    type=click.Choice(["auto", "jira", "tempo"]),
+    default="auto",
+    help="Backend: auto (detect Tempo), jira (force JQL), tempo (force Tempo)",
+)
+def cli(
+    from_date,
+    to_date,
+    user,
+    project,
+    issue,
+    epic,
+    sprint,
+    detail,
+    output_json,
+    quiet,
+    env_file,
+    profile,
+    debug,
+    backend,
+):
     """Query worklogs across issues with flexible filters.
 
     Default: current user's worklogs for the current week, grouped by issue.
@@ -387,28 +408,61 @@ def cli(from_date, to_date, user, project, issue, epic, sprint, detail, output_j
         # Parse issue list
         issue_list = [k.strip() for k in issue.split(",")] if issue else None
 
-        # Build JQL and search
-        jql = build_jql(
-            from_date, to_date, user=effective_user, project=project, issues=issue_list, epic=epic, sprint=sprint
-        )
+        # Determine backend
+        use_tempo = False
+        if backend == "tempo":
+            use_tempo = True
+        elif backend == "auto":
+            use_tempo = detect_tempo(client)
+            if use_tempo and debug:
+                click.echo("Tempo detected — using Tempo API", err=True)
 
-        if debug:
-            click.echo(f"JQL: {jql}", err=True)
+        if use_tempo:
+            # Tempo path: native filtering, no JQL needed
+            # Note: Tempo doesn't support issue/epic/sprint filters natively,
+            # so we warn if those are specified
+            if issue_list or epic or sprint:
+                warning("Tempo backend does not support --issue, --epic, or --sprint filters. Ignoring them.")
 
-        issues = search_issues(client, jql)
+            if debug:
+                click.echo(f"Tempo query: {from_date} to {to_date}, user={effective_user}, project={project}", err=True)
 
-        if not issues:
+            all_worklogs, issue_map = fetch_worklogs_tempo(
+                client, from_date, to_date, user=effective_user, project=project
+            )
+
+            # Client-side filter (Tempo already filters by user/date/project,
+            # but we still filter for consistency and to handle edge cases)
+            filtered = filter_worklogs(all_worklogs, user=effective_user, from_date=from_date, to_date=to_date)
+        else:
+            # Jira REST path: JQL search + per-issue fetch
+            jql = build_jql(
+                from_date, to_date, user=effective_user, project=project, issues=issue_list, epic=epic, sprint=sprint
+            )
+
+            if debug:
+                click.echo(f"JQL: {jql}", err=True)
+
+            issues = search_issues(client, jql)
+
+            if not issues:
+                if output_json:
+                    click.echo("[]")
+                elif not quiet:
+                    click.echo(f"No issues found with worklogs for {from_date} to {to_date}")
+                return
+
+            all_worklogs = fetch_all_worklogs(client, issues, from_date, to_date)
+            filtered = filter_worklogs(all_worklogs, user=effective_user, from_date=from_date, to_date=to_date)
+            issue_map = {i["key"]: i["summary"] for i in issues}
+
+        # Handle empty results (common path for both backends)
+        if not filtered:
             if output_json:
                 click.echo("[]")
             elif not quiet:
-                click.echo(f"No issues found with worklogs for {from_date} to {to_date}")
+                click.echo(f"No worklogs found for {from_date} to {to_date}")
             return
-
-        # Fetch all worklogs
-        all_worklogs = fetch_all_worklogs(client, issues, from_date, to_date)
-
-        # Client-side filter
-        filtered = filter_worklogs(all_worklogs, user=effective_user, from_date=from_date, to_date=to_date)
 
         # Output
         if output_json:
@@ -417,13 +471,14 @@ def cli(from_date, to_date, user, project, issue, epic, sprint, detail, output_j
             total_seconds = sum(wl.get("timeSpentSeconds", 0) for wl in filtered)
             click.echo(seconds_to_human(total_seconds))
         elif detail:
-            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}"
+            backend_label = " (via Tempo)" if use_tempo else ""
+            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}{backend_label}"
             click.echo(header)
             click.echo()
             click.echo(format_detail(filtered))
         else:
-            issue_map = {i["key"]: i["summary"] for i in issues}
-            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}"
+            backend_label = " (via Tempo)" if use_tempo else ""
+            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}{backend_label}"
             click.echo(header)
             click.echo()
             click.echo(format_summary(filtered, issue_map))
