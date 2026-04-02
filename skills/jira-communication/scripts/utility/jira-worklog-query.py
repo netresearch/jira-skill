@@ -141,7 +141,7 @@ def format_summary(worklogs: list[dict], issues: dict[str, str]) -> str:
         total_seconds += seconds
         lines.append(f"{key:<14} {summary:<40} {seconds_to_human(seconds):>10}")
 
-    lines.append(f"{'':>14} {'':>40} {'─' * 10}")
+    lines.append(f"{'':>14} {'':>40} {'-' * 10}")
     lines.append(f"{'':>14} {'Total:':>40} {seconds_to_human(total_seconds):>10}")
     return "\n".join(lines)
 
@@ -195,8 +195,9 @@ def search_issues(client, jql: str) -> list[dict]:
                 }
             )
         total = result.get("total", 0)
-        start_at += page_size
-        if start_at >= total:
+        fetched = len(result.get("issues", []))
+        start_at += fetched if fetched else page_size
+        if start_at >= total or fetched == 0:
             break
     return issues
 
@@ -400,7 +401,7 @@ def cli(
             effective_user = me.get("name") or me.get("accountId", "")
 
         # Parse issue list
-        issue_list = [k.strip() for k in issue.split(",")] if issue else None
+        issue_list = [k.strip() for k in issue.split(",") if k.strip()] if issue else None
 
         # Determine backend
         use_tempo = False
