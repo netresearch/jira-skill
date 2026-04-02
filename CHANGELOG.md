@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-04-02
+
+### Added
+
+- **`jira-issue.py delete`**: Delete issues with `--dry-run` preview and `--delete-subtasks` support. Uses library's native `delete_issue()` method. Closes [#54](https://github.com/netresearch/jira-skill/issues/54). ([#56](https://github.com/netresearch/jira-skill/pull/56))
+- **`jira-move.py` type change**: Support changing issue type within the same project via `--issue-type` flag (e.g., `jira-move issue PROJ-123 PROJ --issue-type Task`). Matches Jira's own "Move" semantics. Closes [#55](https://github.com/netresearch/jira-skill/issues/55). ([#57](https://github.com/netresearch/jira-skill/pull/57))
+
+### Fixed
+
+- Hook output shows absolute `uv run` commands instead of bare script names
+- Pre-existing ruff lint error in test file (extraneous f-string prefix)
+
+## [3.6.1] - 2026-03-26
+
+### Fixed
+
+- Resolve all open issues: multi-profile auto-resolution, error sanitization, validate script improvements ([#47](https://github.com/netresearch/jira-skill/pull/47), [#48](https://github.com/netresearch/jira-skill/pull/48))
+- Pin reusable workflow reference to commit SHA ([#49](https://github.com/netresearch/jira-skill/pull/49))
+- Use branch ref for org-internal reusable workflows ([#52](https://github.com/netresearch/jira-skill/pull/52))
+
+### Changed
+
+- Update astral-sh/setup-uv action to v8 ([#53](https://github.com/netresearch/jira-skill/pull/53))
+
 ## [3.6.0] - 2026-03-22
 
 ### Added
