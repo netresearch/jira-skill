@@ -69,7 +69,23 @@ def filter_worklogs(
     to_date: str | None = None,
 ) -> list[dict]:
     """Client-side filter worklogs by author and date range."""
-    raise NotImplementedError
+    result = worklogs
+    if user:
+
+        def _match_user(wl: dict) -> bool:
+            author = wl.get("author", {})
+            return user in (
+                author.get("name", ""),
+                author.get("accountId", ""),
+                author.get("displayName", ""),
+            )
+
+        result = [wl for wl in result if _match_user(wl)]
+    if from_date:
+        result = [wl for wl in result if wl.get("started", "")[:10] >= from_date]
+    if to_date:
+        result = [wl for wl in result if wl.get("started", "")[:10] <= to_date]
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
