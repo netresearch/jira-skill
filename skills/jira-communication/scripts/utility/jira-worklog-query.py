@@ -36,7 +36,25 @@ def build_jql(
     sprint: str | None = None,
 ) -> str:
     """Build JQL query from worklog filters."""
-    raise NotImplementedError
+    clauses = [
+        f'worklogDate >= "{from_date}"',
+        f'worklogDate <= "{to_date}"',
+    ]
+    if user:
+        clauses.append(f'worklogAuthor = "{user}"')
+    if project:
+        clauses.append(f'project = "{project}"')
+    if issues:
+        quoted = ", ".join(f'"{k}"' for k in issues)
+        clauses.append(f"issueKey in ({quoted})")
+    if epic:
+        clauses.append(f'"Epic Link" = "{epic}"')
+    if sprint:
+        if sprint.isdigit():
+            clauses.append(f"sprint = {sprint}")
+        else:
+            clauses.append(f'sprint = "{sprint}"')
+    return " AND ".join(clauses)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
