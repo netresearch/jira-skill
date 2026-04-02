@@ -82,6 +82,15 @@ class TestBuildJql:
         # All clauses joined with AND
         assert jql.count(" AND ") == 6
 
+    def test_escapes_quotes_in_values(self):
+        """Values with double quotes are escaped to prevent JQL injection."""
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", sprint='Sprint "42"')
+        assert 'sprint = "Sprint \\"42\\""' in jql
+
+    def test_escapes_backslash_in_values(self):
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", user="domain\\user")
+        assert 'worklogAuthor = "domain\\\\user"' in jql
+
 
 class TestSecondsToHuman:
     """Test time formatting."""
@@ -383,8 +392,7 @@ class TestFetchWorklogsTempo:
 
         _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30", user="psiedler", project="HMKG")
 
-        call_args = mock_client._session.get.call_args
-        params = call_args[1].get("params") or call_args[0][1] if len(call_args[0]) > 1 else call_args[1]["params"]
+        params = mock_client._session.get.call_args.kwargs["params"]
         assert params["dateFrom"] == "2026-04-01"
         assert params["dateTo"] == "2026-04-30"
         assert params["worker"] == "psiedler"
