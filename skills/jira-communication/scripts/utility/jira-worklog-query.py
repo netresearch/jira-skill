@@ -130,7 +130,7 @@ def format_summary(worklogs: list[dict], issues: dict[str, str]) -> str:
 
     lines = []
     lines.append(f"{'Issue':<14} {'Summary':<40} {'Time Spent':>10}")
-    lines.append(f"{'-'*14} {'-'*40} {'-'*10}")
+    lines.append(f"{'-' * 14} {'-' * 40} {'-' * 10}")
 
     total_seconds = 0
     for key in sorted(by_issue):
@@ -141,7 +141,7 @@ def format_summary(worklogs: list[dict], issues: dict[str, str]) -> str:
         total_seconds += seconds
         lines.append(f"{key:<14} {summary:<40} {seconds_to_human(seconds):>10}")
 
-    lines.append(f"{'':>14} {'':>40} {'─'*10}")
+    lines.append(f"{'':>14} {'':>40} {'─' * 10}")
     lines.append(f"{'':>14} {'Total:':>40} {seconds_to_human(total_seconds):>10}")
     return "\n".join(lines)
 
@@ -153,7 +153,7 @@ def format_detail(worklogs: list[dict]) -> str:
 
     lines = []
     lines.append(f"{'Issue':<14} {'Date':<12} {'Author':<20} {'Time':>8} {'Comment'}")
-    lines.append(f"{'-'*14} {'-'*12} {'-'*20} {'-'*8} {'-'*30}")
+    lines.append(f"{'-' * 14} {'-' * 12} {'-' * 20} {'-' * 8} {'-' * 30}")
 
     for wl in sorted(worklogs, key=lambda w: w.get("started", "")):
         key = wl.get("_issue_key", "Unknown")
@@ -166,6 +166,7 @@ def format_detail(worklogs: list[dict]) -> str:
         if isinstance(comment, dict):
             # ADF format — extract text
             from lib.output import extract_adf_text
+
             comment = extract_adf_text(comment)
         if len(comment) > 50:
             comment = comment[:47] + "..."
@@ -187,10 +188,12 @@ def search_issues(client, jql: str) -> list[dict]:
     while True:
         result = client.jql(jql, start=start_at, limit=page_size, fields="key,summary")
         for issue in result.get("issues", []):
-            issues.append({
-                "key": issue["key"],
-                "summary": issue.get("fields", {}).get("summary", ""),
-            })
+            issues.append(
+                {
+                    "key": issue["key"],
+                    "summary": issue.get("fields", {}).get("summary", ""),
+                }
+            )
         total = result.get("total", 0)
         start_at += page_size
         if start_at >= total:
@@ -282,8 +285,9 @@ def cli(from_date, to_date, user, project, issue, epic, sprint, detail, output_j
         issue_list = [k.strip() for k in issue.split(",")] if issue else None
 
         # Build JQL and search
-        jql = build_jql(from_date, to_date, user=effective_user, project=project,
-                        issues=issue_list, epic=epic, sprint=sprint)
+        jql = build_jql(
+            from_date, to_date, user=effective_user, project=project, issues=issue_list, epic=epic, sprint=sprint
+        )
 
         if debug:
             click.echo(f"JQL: {jql}", err=True)
@@ -301,8 +305,7 @@ def cli(from_date, to_date, user, project, issue, epic, sprint, detail, output_j
         all_worklogs = fetch_all_worklogs(client, issues, from_date, to_date)
 
         # Client-side filter
-        filtered = filter_worklogs(all_worklogs, user=effective_user,
-                                   from_date=from_date, to_date=to_date)
+        filtered = filter_worklogs(all_worklogs, user=effective_user, from_date=from_date, to_date=to_date)
 
         # Output
         if output_json:
