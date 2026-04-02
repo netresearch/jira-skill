@@ -358,11 +358,15 @@ class TestFetchWorklogsTempo:
         mock_response.json.return_value = SAMPLE_TEMPO_RESPONSE
         mock_client._session.get.return_value = mock_response
 
-        def _mock_issue(key, fields=None):
-            summaries = {"HMKG-100": "Fix login", "HMKG-200": "Update docs"}
-            return {"fields": {"summary": summaries.get(key, "")}}
-
-        mock_client.issue.side_effect = _mock_issue
+        mock_client.jql.return_value = {
+            "issues": [
+                {"key": "HMKG-100", "fields": {"summary": "Fix login"}},
+                {"key": "HMKG-200", "fields": {"summary": "Update docs"}},
+            ],
+            "total": 2,
+            "startAt": 0,
+            "maxResults": 50,
+        }
 
         worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02", user="psiedler")
         assert len(worklogs) == 2
@@ -402,7 +406,15 @@ class TestFetchWorklogsTempo:
             "metadata": {"count": 2, "offset": 1, "limit": 1},
         }
         mock_client._session.get.side_effect = [page1_response, page2_response]
-        mock_client.issue.return_value = {"fields": {"summary": "Issue"}}
+        mock_client.jql.return_value = {
+            "issues": [
+                {"key": "HMKG-100", "fields": {"summary": "Issue"}},
+                {"key": "HMKG-200", "fields": {"summary": "Issue"}},
+            ],
+            "total": 2,
+            "startAt": 0,
+            "maxResults": 50,
+        }
 
         worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
         assert len(worklogs) == 2
@@ -426,7 +438,15 @@ class TestFetchWorklogsTempo:
         mock_response = mock.MagicMock()
         mock_response.json.return_value = SAMPLE_TEMPO_RESPONSE
         mock_client._session.get.return_value = mock_response
-        mock_client.issue.return_value = {"fields": {"summary": "Test"}}
+        mock_client.jql.return_value = {
+            "issues": [
+                {"key": "HMKG-100", "fields": {"summary": "Test"}},
+                {"key": "HMKG-200", "fields": {"summary": "Test"}},
+            ],
+            "total": 2,
+            "startAt": 0,
+            "maxResults": 50,
+        }
 
         worklogs, _ = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
 
@@ -583,7 +603,12 @@ class TestCliTempo:
             },
         ]
         mock_client._session.get.return_value = mock_response
-        mock_client.issue.return_value = {"fields": {"summary": "Fix login"}}
+        mock_client.jql.return_value = {
+            "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
+            "total": 1,
+            "startAt": 0,
+            "maxResults": 50,
+        }
 
     @mock.patch.object(_mod, "LazyJiraClient")
     def test_tempo_backend_flag(self, mock_client_cls):

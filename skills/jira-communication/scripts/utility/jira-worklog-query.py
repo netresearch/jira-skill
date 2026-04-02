@@ -301,16 +301,17 @@ def fetch_worklogs_tempo(
                 break
             params["offset"] = metadata.get("offset", 0) + metadata.get("limit", 1000)
 
-    # Build issue_map from unique issue keys (Tempo doesn't return summaries,
-    # so we fetch them separately for the ones we found)
+    # Build issue_map via batch JQL instead of N+1 individual fetches
     issue_keys = {wl["_issue_key"] for wl in all_worklogs if wl["_issue_key"] != "Unknown"}
     issue_map: dict[str, str] = {}
-    for key in issue_keys:
+    if issue_keys:
+        jql = f"issueKey in ({', '.join(sorted(issue_keys))})"
         try:
-            issue = client.issue(key, fields="summary")
-            issue_map[key] = issue.get("fields", {}).get("summary", "")
+            found = search_issues(client, jql)
+            issue_map = {i["key"]: i["summary"] for i in found}
         except Exception:
-            issue_map[key] = ""
+            # Fallback: empty summaries if batch fetch fails
+            issue_map = {k: "" for k in issue_keys}
 
     return all_worklogs, issue_map
 
