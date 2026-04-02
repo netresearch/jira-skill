@@ -41,6 +41,7 @@ _board_mod = _load_script("jira-board", "workflow")
 _fields_mod = _load_script("jira-fields", "utility")
 _user_mod = _load_script("jira-user", "utility")
 _link_mod = _load_script("jira-link", "utility")
+_worklog_query_mod = _load_script("jira-worklog-query", "utility")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -100,6 +101,10 @@ class TestHelpOutput:
     def test_link_help(self):
         output = self._run_help(_link_mod.cli)
         assert "link" in output.lower()
+
+    def test_worklog_query_help(self):
+        output = self._run_help(_worklog_query_mod.cli)
+        assert "worklog" in output.lower() or "query" in output.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
