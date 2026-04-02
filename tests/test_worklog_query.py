@@ -624,7 +624,7 @@ class TestCliTempo:
         self._make_tempo_client(mock_client)
 
         runner = click.testing.CliRunner()
-        result = runner.invoke(_mod.cli, ["--backend", "tempo"])
+        result = runner.invoke(_mod.cli, ["--backend", "tempo", "--from", "2026-04-01", "--to", "2026-04-01"])
         assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
         assert "HMKG-100" in result.output
         assert "via Tempo" in result.output
@@ -637,7 +637,7 @@ class TestCliTempo:
         # detect_tempo will use the same _session.get mock which returns 200
 
         runner = click.testing.CliRunner()
-        result = runner.invoke(_mod.cli, ["--backend", "auto"])
+        result = runner.invoke(_mod.cli, ["--backend", "auto", "--from", "2026-04-01", "--to", "2026-04-01"])
         assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
         assert "HMKG-100" in result.output
 

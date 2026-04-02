@@ -400,14 +400,19 @@ def cli(
         if not to_date:
             to_date = today.isoformat()
 
+        # Parse issue list early for profile resolution
+        issue_list = [k.strip() for k in issue.split(",") if k.strip()] if issue else None
+
+        # Set client context for multi-profile resolution before any API call
+        context_key = epic or (issue_list[0] if issue_list else None)
+        if context_key:
+            client.with_context(issue_key=context_key)
+
         # Resolve user default
         effective_user = user
         if not effective_user:
             me = client.myself()
             effective_user = me.get("name") or me.get("accountId", "")
-
-        # Parse issue list
-        issue_list = [k.strip() for k in issue.split(",") if k.strip()] if issue else None
 
         # Determine backend
         use_tempo = False
