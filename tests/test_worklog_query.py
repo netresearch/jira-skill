@@ -66,9 +66,13 @@ class TestBuildJql:
 
     def test_all_filters_combined(self):
         jql = _mod.build_jql(
-            "2026-03-30", "2026-04-02",
-            user="psiedler", project="HMKG",
-            issues=["HMKG-123"], epic="HMKG-1940", sprint="Sprint 42",
+            "2026-03-30",
+            "2026-04-02",
+            user="psiedler",
+            project="HMKG",
+            issues=["HMKG-123"],
+            epic="HMKG-1940",
+            sprint="Sprint 42",
         )
         assert "worklogDate" in jql
         assert "worklogAuthor" in jql
@@ -294,8 +298,12 @@ class TestFetchWorklogs:
         mock_client = mock.MagicMock()
         mock_client.issue_get_worklog.return_value = {
             "worklogs": [
-                {"id": "1001", "started": "2026-03-30T09:00:00.000+0200", "timeSpentSeconds": 3600,
-                 "author": {"displayName": "Paul", "name": "psiedler"}},
+                {
+                    "id": "1001",
+                    "started": "2026-03-30T09:00:00.000+0200",
+                    "timeSpentSeconds": 3600,
+                    "author": {"displayName": "Paul", "name": "psiedler"},
+                },
             ],
             "total": 1,
             "maxResults": 1048576,
@@ -323,16 +331,23 @@ class TestCli:
         mock_client.myself.return_value = {"name": "psiedler", "displayName": "Paul Siedler"}
         mock_client.jql.return_value = {
             "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
-            "total": 1, "startAt": 0, "maxResults": 50,
+            "total": 1,
+            "startAt": 0,
+            "maxResults": 50,
         }
         mock_client.issue_get_worklog.return_value = {
-            "worklogs": [{
-                "id": "1001", "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT09:00:00.000+0200"),
-                "timeSpentSeconds": 3600, "timeSpent": "1h",
-                "author": {"displayName": "Paul Siedler", "name": "psiedler"},
-                "comment": "Work done",
-            }],
-            "total": 1, "maxResults": 1048576,
+            "worklogs": [
+                {
+                    "id": "1001",
+                    "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT09:00:00.000+0200"),
+                    "timeSpentSeconds": 3600,
+                    "timeSpent": "1h",
+                    "author": {"displayName": "Paul Siedler", "name": "psiedler"},
+                    "comment": "Work done",
+                }
+            ],
+            "total": 1,
+            "maxResults": 1048576,
         }
 
         with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
