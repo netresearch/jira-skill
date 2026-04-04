@@ -1,4 +1,5 @@
 name: Harness Verification
+
 on:
   pull_request:
     branches: [main]
@@ -7,81 +8,6 @@ permissions:
   contents: read
 
 jobs:
-  verify-harness:
-    name: Verify Harness Consistency
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 2  # Need parent commit for drift detection
+  harness-verify:
+    uses: netresearch/skill-repo-skill/.github/workflows/harness-verify.yml@main
 
-      - name: Verify AGENTS.md exists
-        run: |
-          if [ ! -f AGENTS.md ]; then
-            echo "::error::AGENTS.md is missing — create one using the agent-harness skill or manually"
-            exit 1
-          fi
-
-      - name: Verify AGENTS.md is index format
-        run: |
-          LINES=$(wc -l < AGENTS.md)
-          if [ "$LINES" -gt 150 ]; then
-            echo "::error::AGENTS.md is too long ($LINES lines). It should be a compact index (<150 lines). Move detail to docs/"
-            exit 1
-          fi
-
-      - name: Verify AGENTS.md references
-        run: |
-          ERRORS=0
-          while IFS= read -r ref; do
-            [[ "$ref" == http* ]] && continue
-            [[ "$ref" == \#* ]] && continue
-            ref="${ref%%#*}"  # strip anchor
-            ref="${ref%%\?*}"  # strip query
-            if [ ! -e "$ref" ]; then
-              echo "::error file=AGENTS.md::Dead reference: $ref"
-              ERRORS=$((ERRORS + 1))
-            fi
-          done < <(grep -oP '\[.*?\]\(\K[^)]+' AGENTS.md 2>/dev/null || true)
-          exit $ERRORS
-
-      - name: Verify documented commands
-        run: |
-          if [ -f Makefile ]; then
-            grep -oP '`make (\w[\w-]*)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
-              TARGET="${cmd#make }"
-              if ! grep -q "^${TARGET}:" Makefile; then
-                echo "::warning file=AGENTS.md::Documented command '$cmd' has no matching Makefile target"
-              fi
-            done
-          fi
-          if [ -f composer.json ]; then
-            grep -oP '`composer ([\w:.-]+)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
-              SCRIPT="${cmd#composer }"
-              if ! python3 -c "import json,sys; d=json.load(open('composer.json')); sys.exit(0 if '$SCRIPT' in d.get('scripts',{}) else 1)" 2>/dev/null; then
-                echo "::warning file=AGENTS.md::Documented command '$cmd' not found in composer.json scripts"
-              fi
-            done
-          fi
-          if [ -f package.json ]; then
-            grep -oP '`npm run ([\w:.-]+)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
-              SCRIPT="${cmd#npm run }"
-              if ! python3 -c "import json,sys; d=json.load(open('package.json')); sys.exit(0 if '$SCRIPT' in d.get('scripts',{}) else 1)" 2>/dev/null; then
-                echo "::warning file=AGENTS.md::Documented command '$cmd' not found in package.json scripts"
-              fi
-            done
-          fi
-
-      - name: Check for documentation drift
-        run: |
-          if git diff --name-only HEAD~1 2>/dev/null | grep -qE '(Makefile|composer\.json|package\.json|\.github/workflows/)'; then
-            if ! git diff --name-only HEAD~1 | grep -q 'AGENTS.md'; then
-              echo "::warning::Build/CI files changed but AGENTS.md was not updated — check for drift"
-            fi
-          fi
-
-      - name: Verify docs structure
-        run: |
-          if [ ! -f docs/ARCHITECTURE.md ]; then
-            echo "::warning::docs/ARCHITECTURE.md is missing — recommended for Level 2+ harness maturity"
-          fi
