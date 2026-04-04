@@ -10,4 +10,3 @@ permissions:
 jobs:
   harness-verify:
     uses: netresearch/skill-repo-skill/.github/workflows/harness-verify.yml@main
-
