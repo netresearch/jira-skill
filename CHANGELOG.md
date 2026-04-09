@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-04-09
+
+### Added
+
+- **`jira-weblink.py`**: Full CRUD for Jira web links (remote links) — `add`, `list`, `update`, `delete` subcommands for managing external URLs on issues. Supports identification by link ID or URL with proper conflict detection. ([#60](https://github.com/netresearch/jira-skill/pull/60))
+- **`jira-issue.py get`**: Now displays issue links (with directional arrows `→`/`←`) and web links (`[id] title — url`) in both text and JSON output. Web links available as `webLinks` key in JSON. ([#60](https://github.com/netresearch/jira-skill/pull/60))
+- `--fields weblinks` pseudo-field to explicitly request web link fetching when filtering fields
+
+### Fixed
+
+- `--fields` parsing now filters empty tokens and preserves field order
+- Removed duplicate `LICENSE` file (split licensing already covered by `LICENSE-MIT` and `LICENSE-CC-BY-SA-4.0`)
+- Corrected `composer.json` license field to `(MIT AND CC-BY-SA-4.0)`
+- Added CLAUDE.md symlinks in skill directories for agent discovery
+- CI: use reusable harness-verify workflow from skill-repo-skill
+
 ## [3.8.0] - 2026-04-02
 
 ### Added
