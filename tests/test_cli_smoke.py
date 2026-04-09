@@ -205,6 +205,7 @@ class TestMockedCommands:
             "key": "TEST-1",
             "fields": {"summary": "Test issue", "status": {"name": "Open"}},
         }
+        mock_client.get_issue_remote_links.return_value = []
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(_issue_mod.cli, ["--json", "get", "TEST-1"])
