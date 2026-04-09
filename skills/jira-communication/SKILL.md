@@ -1,6 +1,6 @@
 ---
 name: jira-communication
-description: "Use when interacting with Jira issues - searching, creating, updating, moving, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
+description: "Use when interacting with Jira issues - searching, creating, updating, moving, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, web links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python 3.10+, uv, curl. Jira Server/DC or Cloud instance with API access."
 metadata:
@@ -22,7 +22,7 @@ On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues →
 
 **Core**: `jira-issue.py` (get/update/delete), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
 **Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/delete/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
-**Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`, `jira-worklog-query.py`
+**Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`, `jira-weblink.py` (web link CRUD), `jira-worklog-query.py`
 
 Scripts in `${CLAUDE_SKILL_DIR}/scripts/` under `core/`, `workflow/`, or `utility/`.
 
@@ -80,6 +80,13 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" 
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 SRVUC
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 NRS --issue-type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks"
+
+# Web links (external URLs on issues)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py add PROJ-123 --url https://example.com/doc --title "Design Doc"
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py list PROJ-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py update PROJ-123 --id 42 --title "Updated Title"
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py delete PROJ-123 --id 42
+
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py types PROJ
 ```
 
