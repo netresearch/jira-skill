@@ -37,9 +37,10 @@ Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On 
 2. Backfill any missing CHANGELOG entries
 3. Update CHANGELOG.md with new version entry
 4. Bump version in `.claude-plugin/plugin.json`
-5. Commit: `git commit -m "chore: release v<version>"`
-6. Tag: `git tag v<version>`
-7. Push: `git push origin main --tags`
+5. Bump `metadata.version` in **both** `skills/*/SKILL.md` to match (CI validates consistency)
+6. Commit: `git commit -m "chore: release v<version>"`
+7. Tag: `git tag v<version>`
+8. Push: `git push origin main --tags`
 
 The GitHub Action automatically creates the release with all 3 download packages.
 
