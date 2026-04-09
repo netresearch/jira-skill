@@ -498,6 +498,17 @@ class TestEdgeCases:
         assert "WEB LINKS" not in result.output
         mc.get_issue_remote_links.assert_not_called()
 
+    def test_fields_weblinks_only(self):
+        """--fields weblinks should fetch web links but not crash on missing fields."""
+        mc = _make_mock_client()
+        mc.issue.return_value = _make_issue()
+        links = [_link(10, "https://x.com", "X")]
+        mc.get_issue_remote_links.return_value = links
+        result, _ = _run_issue(["get", "TEST-1", "--fields", "weblinks"], mc)
+        assert result.exit_code == 0, result.output
+        assert "WEB LINKS" in result.output
+        mc.get_issue_remote_links.assert_called_once()
+
     def test_add_api_exception_shows_error(self):
         """API failure in add should exit 1 with error message."""
         mc = _make_mock_client()

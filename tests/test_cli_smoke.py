@@ -42,6 +42,7 @@ _fields_mod = _load_script("jira-fields", "utility")
 _user_mod = _load_script("jira-user", "utility")
 _link_mod = _load_script("jira-link", "utility")
 _worklog_query_mod = _load_script("jira-worklog-query", "utility")
+_weblink_mod = _load_script("jira-weblink", "utility")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -105,6 +106,10 @@ class TestHelpOutput:
     def test_worklog_query_help(self):
         output = self._run_help(_worklog_query_mod.cli)
         assert "worklog" in output.lower() or "query" in output.lower()
+
+    def test_weblink_help(self):
+        output = self._run_help(_weblink_mod.cli)
+        assert "web link" in output.lower() or "remote link" in output.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

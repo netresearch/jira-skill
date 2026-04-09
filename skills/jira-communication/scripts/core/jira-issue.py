@@ -83,18 +83,19 @@ def get(
         warning("--full is deprecated (full content is now shown by default). Use --truncate N to limit output.")
 
     try:
-        # Build parameters
+        # Normalize requested fields once — used for both fetch gating and display
+        requested = set(f.strip() for f in fields.split(",")) if fields else None
+
+        # Build parameters — strip our pseudo-field "weblinks" before sending to Jira
         params = {}
         if fields:
-            # Jira API expects fields as comma-separated string, not list
-            params["fields"] = fields
+            api_fields = ",".join(f for f in requested if f != "weblinks")
+            if api_fields:
+                params["fields"] = api_fields
         if expand:
             params["expand"] = expand
 
         issue = client.issue(issue_key, **params)
-
-        # Normalize requested fields once — used for both fetch gating and display
-        requested = set(f.strip() for f in fields.split(",")) if fields else None
 
         # Fetch web links (separate API call, not a field on the issue)
         # Skip if --quiet or if --fields was given without "weblinks"
@@ -138,7 +139,11 @@ def _print_issue(
         web_links: List of remote link dicts from a separate API call
     """
     fields = issue.get("fields", {})
-    requested = requested_fields
+    # Accept both set and comma-separated string for backwards compatibility
+    if isinstance(requested_fields, str):
+        requested = set(f.strip() for f in requested_fields.split(","))
+    else:
+        requested = requested_fields
 
     def should_show(field_name: str) -> bool:
         """Check if a field should be shown based on requested fields."""

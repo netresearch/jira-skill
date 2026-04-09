@@ -214,8 +214,12 @@ def update(ctx, issue_key: str, link_id: int | None, url: str | None, title: str
         current = client.get_issue_remote_link_by_id(issue_key, link_id)
         current_obj = current.get("object", {})
 
-        final_url = new_url if new_url is not None else current_obj.get("url", "")
-        final_title = title if title is not None else current_obj.get("title", "")
+        final_url = new_url if new_url is not None else current_obj.get("url")
+        final_title = title if title is not None else current_obj.get("title")
+
+        if not final_url or not final_title:
+            error("Cannot update: current link is missing url or title. Provide both --new-url and --title.")
+            sys.exit(1)
 
         client.update_issue_remote_link_by_id(issue_key, link_id, final_url, final_title)
 
