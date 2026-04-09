@@ -90,9 +90,7 @@ class TestWeblinkAdd:
         assert result.exit_code == 0, result.output
         assert "Added web link" in result.output
         assert "TEST-1" in result.output
-        mc.create_or_update_issue_remote_links.assert_called_once_with(
-            "TEST-1", "https://example.com", "My Link"
-        )
+        mc.create_or_update_issue_remote_links.assert_called_once_with("TEST-1", "https://example.com", "My Link")
 
     def test_add_json_output(self):
         mc = _make_mock_client()
@@ -196,9 +194,7 @@ class TestWeblinkUpdate:
         )
         assert result.exit_code == 0, result.output
         assert "Updated web link" in result.output
-        mc.update_issue_remote_link_by_id.assert_called_once_with(
-            "TEST-1", 42, "https://old.com", "New Title"
-        )
+        mc.update_issue_remote_link_by_id.assert_called_once_with("TEST-1", 42, "https://old.com", "New Title")
 
     def test_update_by_url(self):
         mc = _make_mock_client()
@@ -209,9 +205,7 @@ class TestWeblinkUpdate:
             mc,
         )
         assert result.exit_code == 0, result.output
-        mc.update_issue_remote_link_by_id.assert_called_once_with(
-            "TEST-1", 7, "https://new.com", "T"
-        )
+        mc.update_issue_remote_link_by_id.assert_called_once_with("TEST-1", 7, "https://new.com", "T")
 
     def test_update_missing_id_and_url(self):
         result, mc = _run_weblink(["update", "TEST-1", "--title", "X"])
@@ -310,9 +304,7 @@ class TestUrlLookup:
         mc.get_issue_remote_links.return_value = [
             _link(1, "https://other.com", "Other"),
         ]
-        result, _ = _run_weblink(
-            ["delete", "TEST-1", "--url", "https://missing.com"], mc
-        )
+        result, _ = _run_weblink(["delete", "TEST-1", "--url", "https://missing.com"], mc)
         assert result.exit_code == 1
         assert "No web link found" in result.output
 
@@ -322,9 +314,7 @@ class TestUrlLookup:
             _link(1, "https://dup.com", "Dup A"),
             _link(2, "https://dup.com", "Dup B"),
         ]
-        result, _ = _run_weblink(
-            ["delete", "TEST-1", "--url", "https://dup.com"], mc
-        )
+        result, _ = _run_weblink(["delete", "TEST-1", "--url", "https://dup.com"], mc)
         assert result.exit_code == 1
         assert "Multiple web links" in result.output
         assert "--id" in result.output
@@ -336,9 +326,7 @@ class TestUrlLookup:
             _link(5, "https://target.com", "Target"),
         ]
         mc.get_issue_remote_link_by_id.return_value = _link(5, "https://target.com", "Target")
-        result, _ = _run_weblink(
-            ["delete", "TEST-1", "--url", "https://target.com"], mc
-        )
+        result, _ = _run_weblink(["delete", "TEST-1", "--url", "https://target.com"], mc)
         assert result.exit_code == 0, result.output
         mc.delete_issue_remote_link_by_id.assert_called_once_with("TEST-1", 5)
 
@@ -471,9 +459,7 @@ class TestEdgeCases:
 
     def test_link_missing_title(self):
         mc = _make_mock_client()
-        mc.get_issue_remote_links.return_value = [
-            {"id": 3, "object": {"url": "https://no-title.com"}}
-        ]
+        mc.get_issue_remote_links.return_value = [{"id": 3, "object": {"url": "https://no-title.com"}}]
         result, _ = _run_weblink(["list", "TEST-1"], mc)
         assert result.exit_code == 0, result.output
         assert "(untitled)" in result.output
@@ -482,9 +468,7 @@ class TestEdgeCases:
         """API returning non-dict (e.g. string) should not crash."""
         mc = _make_mock_client()
         mc.create_or_update_issue_remote_links.return_value = "ok"
-        result, _ = _run_weblink(
-            ["add", "TEST-1", "--url", "https://x.com", "--title", "X"], mc
-        )
+        result, _ = _run_weblink(["add", "TEST-1", "--url", "https://x.com", "--title", "X"], mc)
         assert result.exit_code == 0, result.output
 
     def test_web_link_fetch_failure_in_issue_get(self):
@@ -499,12 +483,14 @@ class TestEdgeCases:
     def test_fields_filter_suppresses_issue_links(self):
         """--fields summary should suppress the ISSUE LINKS section."""
         mc = _make_mock_client()
-        issue = _make_issue(issue_links=[
-            {
-                "type": {"name": "Blocks", "outward": "blocks"},
-                "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Other"}},
-            }
-        ])
+        issue = _make_issue(
+            issue_links=[
+                {
+                    "type": {"name": "Blocks", "outward": "blocks"},
+                    "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Other"}},
+                }
+            ]
+        )
         mc.issue.return_value = issue
         result, _ = _run_issue(["get", "TEST-1", "--fields", "summary"], mc)
         assert result.exit_code == 0, result.output
@@ -516,8 +502,6 @@ class TestEdgeCases:
         """API failure in add should exit 1 with error message."""
         mc = _make_mock_client()
         mc.create_or_update_issue_remote_links.side_effect = Exception("403 Forbidden")
-        result, _ = _run_weblink(
-            ["add", "TEST-1", "--url", "https://x.com", "--title", "X"], mc
-        )
+        result, _ = _run_weblink(["add", "TEST-1", "--url", "https://x.com", "--title", "X"], mc)
         assert result.exit_code == 1
         assert "Failed to add web link" in result.output
