@@ -336,7 +336,7 @@ class TestUrlLookup:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _make_issue(key="TEST-1", issue_links=None, web_links=None):
+def _make_issue(key="TEST-1", issue_links=None):
     """Build a minimal issue dict with optional links."""
     fields = {
         "summary": "Test issue",
