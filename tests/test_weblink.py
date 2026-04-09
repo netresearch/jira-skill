@@ -139,16 +139,18 @@ class TestWeblinkAdd:
 class TestWeblinkList:
     def test_list_text_output(self):
         mc = _make_mock_client()
+        url_a = "https://a.com"
+        url_b = "https://b.com"
         mc.get_issue_remote_links.return_value = [
-            _link(1, "https://a.com", "Link A"),
-            _link(2, "https://b.com", "Link B"),
+            _link(1, url_a, "Link A"),
+            _link(2, url_b, "Link B"),
         ]
         result, _ = _run_weblink(["list", "TEST-1"], mc)
         assert result.exit_code == 0, result.output
         assert "Web links for TEST-1" in result.output
         assert "[1]" in result.output
         assert "Link A" in result.output
-        assert "https://a.com" in result.output
+        assert url_a in result.output
         assert "[2]" in result.output
 
     def test_list_json_output(self):
@@ -170,12 +172,13 @@ class TestWeblinkList:
 
     def test_list_quiet(self):
         mc = _make_mock_client()
+        url_q = "https://q.com"
         mc.get_issue_remote_links.return_value = [
-            _link(5, "https://q.com", "Q"),
+            _link(5, url_q, "Q"),
         ]
         result, _ = _run_weblink(["--quiet", "list", "TEST-1"], mc)
         assert result.exit_code == 0
-        assert "5 https://q.com" in result.output
+        assert f"5 {url_q}" in result.output
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -395,7 +398,7 @@ class TestIssueGetLinks:
         mc = _make_mock_client()
         mc.issue.return_value = _make_issue()
         mc.get_issue_remote_links.return_value = [
-            _link(10, "https://docs.example.com", "Design Doc"),
+            _link(10, docs_url := "https://docs.example.com", "Design Doc"),
             _link(20, "https://ci.example.com", "CI Build"),
         ]
         result, _ = _run_issue(["get", "TEST-1"], mc)
@@ -403,7 +406,7 @@ class TestIssueGetLinks:
         assert "WEB LINKS" in result.output
         assert "[10]" in result.output
         assert "Design Doc" in result.output
-        assert "https://docs.example.com" in result.output
+        assert docs_url in result.output
         assert "[20]" in result.output
 
     def test_empty_issue_links_not_shown(self):
@@ -503,10 +506,11 @@ class TestEdgeCases:
             }
         ])
         mc.issue.return_value = issue
-        mc.get_issue_remote_links.return_value = []
         result, _ = _run_issue(["get", "TEST-1", "--fields", "summary"], mc)
         assert result.exit_code == 0, result.output
         assert "ISSUE LINKS" not in result.output
+        assert "WEB LINKS" not in result.output
+        mc.get_issue_remote_links.assert_not_called()
 
     def test_add_api_exception_shows_error(self):
         """API failure in add should exit 1 with error message."""
