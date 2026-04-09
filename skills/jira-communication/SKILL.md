@@ -39,53 +39,37 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123
 ## Common Tasks
 
 ```bash
-# Read issue
+# Read / search
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed" -n 5 -f key,summary,status
 
-# Search (use -f for fields, -n for limit)
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed"
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "project = PROJ ORDER BY updated DESC" -n 5 -f key,summary,status,priority
-
-# Update fields / assign (--fields-json for description and custom fields)
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --priority Critical --summary "New title"
+# Update / assign (--fields-json for description and custom fields)
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me --priority Critical
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New desc"}'
 
-# Delete issue (--dry-run to preview, --delete-subtasks for parents)
+# Delete (--dry-run to preview, --delete-subtasks for parents)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py delete PROJ-123 --dry-run
 
-# Comment (add/edit/list — --json list to get IDs for edit/delete)
+# Comment (add/edit/list -- use --json list to get IDs for edit/delete)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
-cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 -
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py --json list PROJ-123
 
 # Transition (use "list" to see available transitions)
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py list PROJ-123
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 
-# Log work
+# Log work / query worklogs (default: my current week)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
-
-# Query worklogs (default: my current week)
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py --project HMKG --detail
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py --from 2026-03-01 --to 2026-03-31 --json
 
 # Create (--type auto-resolves to subtask when --parent given)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100
 
-# Move / change type / link
+# Move / link / web links
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 SRVUC
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 NRS --issue-type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks"
-
-# Web links (external URLs on issues)
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py add PROJ-123 --url https://example.com/doc --title "Design Doc"
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py list PROJ-123
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py update PROJ-123 --id 42 --title "Updated Title"
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py delete PROJ-123 --id 42
 
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py types PROJ
 ```
