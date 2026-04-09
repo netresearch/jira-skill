@@ -93,10 +93,12 @@ def get(
 
         issue = client.issue(issue_key, **params)
 
+        # Normalize requested fields once — used for both fetch gating and display
+        requested = set(f.strip() for f in fields.split(",")) if fields else None
+
         # Fetch web links (separate API call, not a field on the issue)
         # Skip if --quiet or if --fields was given without "weblinks"
         web_links = []
-        requested = set(f.strip().lower() for f in fields.split(",")) if fields else None
         if not ctx.obj["quiet"] and (requested is None or "weblinks" in requested):
             try:
                 web_links = client.get_issue_remote_links(issue_key)
@@ -112,7 +114,7 @@ def get(
         elif ctx.obj["quiet"]:
             print(issue["key"])
         else:
-            _print_issue(issue, truncate=truncate, requested_fields=fields, web_links=web_links)
+            _print_issue(issue, truncate=truncate, requested_fields=requested, web_links=web_links)
 
     except Exception as e:
         if ctx.obj["debug"]:
@@ -124,7 +126,7 @@ def get(
 def _print_issue(
     issue: dict,
     truncate: int | None = None,
-    requested_fields: str | None = None,
+    requested_fields: set | None = None,
     web_links: list | None = None,
 ) -> None:
     """Pretty print issue details.
@@ -132,11 +134,11 @@ def _print_issue(
     Args:
         issue: The issue dict from Jira API
         truncate: If set, truncate description to this many characters
-        requested_fields: Comma-separated fields that were requested (affects output)
+        requested_fields: Pre-parsed set of field names to display (None = show all)
         web_links: List of remote link dicts from a separate API call
     """
     fields = issue.get("fields", {})
-    requested = set(requested_fields.split(",")) if requested_fields else None
+    requested = requested_fields
 
     def should_show(field_name: str) -> bool:
         """Check if a field should be shown based on requested fields."""
