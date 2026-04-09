@@ -84,12 +84,13 @@ def get(
 
     try:
         # Normalize requested fields once — used for both fetch gating and display
-        requested = set(f.strip() for f in fields.split(",")) if fields else None
+        parsed = [f.strip() for f in fields.split(",") if f.strip()] if fields else []
+        requested = set(parsed) if parsed else None
 
         # Build parameters — strip our pseudo-field "weblinks" before sending to Jira
         params = {}
-        if fields:
-            api_fields = ",".join(f for f in requested if f != "weblinks")
+        if parsed:
+            api_fields = ",".join(f for f in parsed if f != "weblinks")
             if api_fields:
                 params["fields"] = api_fields
         if expand:
