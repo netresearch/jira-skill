@@ -93,12 +93,23 @@ def get(
 
         issue = client.issue(issue_key, **params)
 
+        # Fetch web links (separate API call, not a field on the issue)
+        web_links = []
+        if not ctx.obj["quiet"]:
+            try:
+                web_links = client.get_issue_remote_links(issue_key)
+            except Exception:
+                if ctx.obj["debug"]:
+                    raise
+                web_links = []
+
         if ctx.obj["json"]:
+            issue["webLinks"] = web_links
             format_output(issue, as_json=True)
         elif ctx.obj["quiet"]:
             print(issue["key"])
         else:
-            _print_issue(issue, truncate=truncate, requested_fields=fields)
+            _print_issue(issue, truncate=truncate, requested_fields=fields, web_links=web_links)
 
     except Exception as e:
         if ctx.obj["debug"]:
@@ -107,13 +118,19 @@ def get(
         sys.exit(1)
 
 
-def _print_issue(issue: dict, truncate: int | None = None, requested_fields: str | None = None) -> None:
+def _print_issue(
+    issue: dict,
+    truncate: int | None = None,
+    requested_fields: str | None = None,
+    web_links: list | None = None,
+) -> None:
     """Pretty print issue details.
 
     Args:
         issue: The issue dict from Jira API
         truncate: If set, truncate description to this many characters
         requested_fields: Comma-separated fields that were requested (affects output)
+        web_links: List of remote link dicts from a separate API call
     """
     fields = issue.get("fields", {})
     requested = set(requested_fields.split(",")) if requested_fields else None
@@ -223,6 +240,40 @@ def _print_issue(issue: dict, truncate: int | None = None, requested_fields: str
                 filename = att.get("filename", "Unknown")
                 url = att.get("content", "")
                 print(f"  • {filename} - {url}")
+
+    # Issue Links
+    if should_show("issuelinks") and field_available("issuelinks"):
+        issue_links = fields.get("issuelinks", [])
+        if issue_links:
+            print("\n" + "=" * 60)
+            print("ISSUE LINKS")
+            print("=" * 60)
+            for link in issue_links:
+                link_type = link.get("type", {})
+                if "outwardIssue" in link:
+                    outward = link["outwardIssue"]
+                    label = link_type.get("outward", "links to")
+                    key = outward.get("key", "?")
+                    summary = outward.get("fields", {}).get("summary", "")
+                    print(f"  {label} \u2192 {key}: {summary}")
+                if "inwardIssue" in link:
+                    inward = link["inwardIssue"]
+                    label = link_type.get("inward", "is linked by")
+                    key = inward.get("key", "?")
+                    summary = inward.get("fields", {}).get("summary", "")
+                    print(f"  {label} \u2190 {key}: {summary}")
+
+    # Web Links (from separate API call, not gated by --fields)
+    if web_links:
+        print("\n" + "=" * 60)
+        print("WEB LINKS")
+        print("=" * 60)
+        for link in web_links:
+            link_id = link.get("id", "?")
+            obj = link.get("object", {})
+            title = obj.get("title", "(untitled)")
+            link_url = obj.get("url", "")
+            print(f"  [{link_id}] {title} \u2014 {link_url}")
 
     print()
 
