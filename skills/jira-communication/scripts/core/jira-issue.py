@@ -94,13 +94,16 @@ def get(
         issue = client.issue(issue_key, **params)
 
         # Fetch web links (separate API call, not a field on the issue)
+        # Skip if --quiet or if --fields was given without "weblinks"
         web_links = []
-        if not ctx.obj["quiet"]:
+        requested = set(f.strip().lower() for f in fields.split(",")) if fields else None
+        if not ctx.obj["quiet"] and (requested is None or "weblinks" in requested):
             try:
                 web_links = client.get_issue_remote_links(issue_key)
             except Exception:
                 if ctx.obj["debug"]:
                     raise
+                warning("Failed to fetch web links")
                 web_links = []
 
         if ctx.obj["json"]:
@@ -263,8 +266,8 @@ def _print_issue(
                     summary = inward.get("fields", {}).get("summary", "")
                     print(f"  {label} \u2190 {key}: {summary}")
 
-    # Web Links (from separate API call, not gated by --fields)
-    if web_links:
+    # Web Links (from separate API call, gated by --fields like issue links)
+    if web_links and should_show("weblinks"):
         print("\n" + "=" * 60)
         print("WEB LINKS")
         print("=" * 60)
