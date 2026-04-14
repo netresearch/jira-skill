@@ -1,10 +1,39 @@
 """Output formatting utilities for Jira CLI scripts."""
 
+import io
 import json
 import sys
 from typing import Any
 
 # === INLINE_START: output ===
+
+
+def _ensure_utf8_streams() -> None:
+    """Reconfigure stdout/stderr to UTF-8 on Windows.
+
+    Windows consoles default to a locale-specific encoding (e.g. cp1252)
+    that cannot represent Unicode symbols used in status messages (✓, ✗, ⚠).
+    This causes 'charmap' codec errors *after* a Jira API call has already
+    succeeded, making the script exit non-zero and tempting callers to retry
+    — which creates duplicate issues/comments.
+
+    Called once at module import so every script that imports output.py
+    benefits automatically.
+    """
+    if sys.platform == "win32":
+        for stream_name in ("stdout", "stderr"):
+            stream = getattr(sys, stream_name)
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            elif hasattr(stream, "buffer"):
+                setattr(
+                    sys,
+                    stream_name,
+                    io.TextIOWrapper(stream.buffer, encoding="utf-8", errors="replace"),
+                )
+
+
+_ensure_utf8_streams()
 
 
 def format_json(data: Any, indent: int = 2) -> str:
