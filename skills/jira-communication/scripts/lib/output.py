@@ -1,6 +1,5 @@
 """Output formatting utilities for Jira CLI scripts."""
 
-import io
 import json
 import sys
 from typing import Any
@@ -25,12 +24,6 @@ def _ensure_utf8_streams() -> None:
             stream = getattr(sys, stream_name)
             if hasattr(stream, "reconfigure"):
                 stream.reconfigure(encoding="utf-8", errors="replace")
-            elif hasattr(stream, "buffer"):
-                setattr(
-                    sys,
-                    stream_name,
-                    io.TextIOWrapper(stream.buffer, encoding="utf-8", errors="replace"),
-                )
 
 
 _ensure_utf8_streams()
