@@ -71,6 +71,20 @@
       "prompt": "Show me the last 5 issues updated in TEST project with their status and priority",
       "expected_output": "Agent runs jira-search.py with appropriate JQL, fields, and limit",
       "ideal_tools": 1
+    },
+    {
+      "id": 11,
+      "name": "create-issue-with-reporter",
+      "prompt": "Create a Task in TEST project with summary 'Eval: reporter test' and set doreen.wienhold as reporter",
+      "expected_output": "Agent runs jira-create.py issue TEST 'Eval: reporter test' --type Task --reporter doreen.wienhold",
+      "ideal_tools": 1
+    },
+    {
+      "id": 12,
+      "name": "user-search",
+      "prompt": "Search for Jira users matching 'doreen'",
+      "expected_output": "Agent runs jira-user.py search doreen and shows matching users",
+      "ideal_tools": 1
     }
   ]
 }

@@ -20,7 +20,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, is_account_id
+from lib.client import CaptchaError, LazyJiraClient, _sanitize_error, is_account_id
 from lib.output import error, format_output
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -166,6 +166,113 @@ def get(ctx, identifier: str):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to get user {identifier}: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--limit", "-n", default=10, help="Maximum number of results")
+@click.pass_context
+def search(ctx, query: str, limit: int):
+    """Search for users by name, username, or email.
+
+    QUERY: Search term (matches display name, username, or email)
+
+    Examples:
+
+      jira-user search doreen
+
+      jira-user search "john doe"
+
+      jira-user --json search admin -n 5
+    """
+    client = ctx.obj["client"]
+
+    try:
+        users = []
+        api_errors = []
+
+        # Try Server/DC user search API first
+        try:
+            results = client.get(
+                "rest/api/2/user/search",
+                params={"username": query, "maxResults": limit},
+            )
+            if results and isinstance(results, list):
+                # Ensure all results are dicts (Server/DC may return strings)
+                for r in results:
+                    if isinstance(r, dict):
+                        users.append(r)
+                    elif isinstance(r, str):
+                        if not ctx.obj["quiet"]:
+                            try:
+                                users.append(client.user(username=r))
+                            except CaptchaError:
+                                raise
+                            except Exception as e:
+                                if ctx.obj["debug"]:
+                                    print(f"  [debug] Failed to resolve user '{r}': {e}", file=sys.stderr)
+                        else:
+                            users.append({"name": r})
+        except CaptchaError:
+            raise
+        except Exception as e:
+            api_errors.append(_sanitize_error(str(e)))
+            if ctx.obj["debug"]:
+                print(f"  [debug] user/search API failed: {e}", file=sys.stderr)
+
+        # Fallback to Cloud user search
+        if not users:
+            try:
+                results = client.user_find_by_user_string(query=query, maxResults=limit)
+                if results and isinstance(results, list):
+                    for r in results:
+                        if isinstance(r, dict):
+                            users.append(r)
+                        elif isinstance(r, str) and not r.startswith("Username"):
+                            if not ctx.obj["quiet"]:
+                                try:
+                                    users.append(client.user(username=r))
+                                except CaptchaError:
+                                    raise
+                                except Exception as e:
+                                    if ctx.obj["debug"]:
+                                        print(f"  [debug] Failed to resolve user '{r}': {e}", file=sys.stderr)
+                            else:
+                                users.append({"name": r})
+            except CaptchaError:
+                raise
+            except Exception as e:
+                api_errors.append(_sanitize_error(str(e)))
+                if ctx.obj["debug"]:
+                    print(f"  [debug] user_find_by_user_string failed: {e}", file=sys.stderr)
+
+        if not users:
+            if api_errors:
+                error(f"User search failed — all API attempts errored:\n  " + "\n  ".join(api_errors))
+            else:
+                error(f"No users found matching: {query}")
+            sys.exit(1)
+
+        if ctx.obj["json"]:
+            format_output(users, as_json=True)
+        elif ctx.obj["quiet"]:
+            for u in users:
+                print(u.get("accountId", u.get("name", "")))
+        else:
+            print(f"Found {len(users)} user(s) matching '{query}':\n")
+            for u in users:
+                name = u.get("displayName", "Unknown")
+                uid = u.get("name", u.get("key", u.get("accountId", "N/A")))
+                email = u.get("emailAddress", "N/A")
+                active = "Yes" if u.get("active", True) else "No"
+                print(f"  {name} ({uid})")
+                print(f"    Email: {email}  Active: {active}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to search users: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 

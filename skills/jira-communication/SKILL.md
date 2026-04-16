@@ -22,7 +22,7 @@ On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues →
 
 **Core**: `jira-issue.py` (get/update/delete), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
 **Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/delete/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
-**Utility**: `jira-user.py`, `jira-fields.py` (search/types), `jira-link.py`, `jira-weblink.py` (web link CRUD), `jira-worklog-query.py`
+**Utility**: `jira-user.py` (get/search/me), `jira-fields.py` (search/types), `jira-link.py`, `jira-weblink.py` (web link CRUD), `jira-worklog-query.py`
 
 Scripts in `${CLAUDE_SKILL_DIR}/scripts/` under `core/`, `workflow/`, or `utility/`.
 
@@ -63,7 +63,13 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py --project HMKG 
 
 # Create (--type auto-resolves to subtask when --parent given)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task --reporter jane.doe
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100
+
+# User lookup
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py get john.doe
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py search doreen
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py me
 
 # Move / link / web links
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 SRVUC

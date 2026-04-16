@@ -1,0 +1,27 @@
+Eval 11: create-issue-with-reporter (BASELINE)
+Prompt: "Create a Task in TEST project with summary 'Eval: reporter test' and set doreen.wienhold as reporter"
+
+SKILL.md has no --reporter flag documented. Agent must discover workaround.
+
+Attempt 1 — Direct approach (FAILS):
+Command:
+uv run scripts/workflow/jira-create.py issue TEST "Eval baseline: reporter test" --type Task --reporter doreen.wienhold --dry-run
+
+Output:
+Error: No such option: --reporter Did you mean --priority?
+EXIT: 2
+
+Workaround — Agent must either:
+  a) Use --fields-json (requires knowing Jira API field format): 2 tool calls minimum (--help + create)
+  b) Create issue then update reporter separately: 3+ tool calls (create + user lookup + update)
+
+Workaround used (--fields-json):
+Command:
+uv run scripts/workflow/jira-create.py issue TEST "Eval baseline: reporter test" --type Task --fields-json '{"reporter": {"name": "doreen.wienhold"}}'
+
+Output:
+✓ Created issue: TEST-140
+
+Actual tool calls needed: 2-4 (error + recovery + possible help check + actual create)
+Ideal tool calls: 1
+Result: DEGRADED — works via workaround but requires error recovery and API knowledge

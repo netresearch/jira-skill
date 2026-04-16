@@ -56,6 +56,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--priority", "-p", help="Priority name (High, Medium, Low, etc.)")
 @click.option("--labels", "-l", help="Comma-separated labels")
 @click.option("--assignee", "-a", help="Assignee username or email")
+@click.option("--reporter", "-r", help="Reporter username or email")
 @click.option("--parent", help="Parent issue key (creates a subtask)")
 @click.option("--components", help="Comma-separated component names")
 @click.option("--fields-json", help="JSON string of additional fields")
@@ -70,6 +71,7 @@ def issue(
     priority: str | None,
     labels: str | None,
     assignee: str | None,
+    reporter: str | None,
     parent: str | None,
     components: str | None,
     fields_json: str | None,
@@ -88,6 +90,8 @@ def issue(
       jira-create issue PROJ "New feature" --type Story --parent PROJ-100
 
       jira-create issue PROJ "API documentation" --type Task -d "Update API docs" -l docs,api
+
+      jira-create issue PROJ "Bug from QA" --type Bug --reporter jane.doe
 
       jira-create issue PROJ "Sprint goal" --type Epic
 
@@ -113,6 +117,9 @@ def issue(
 
     if assignee:
         fields["assignee"] = resolve_assignee(client, assignee)
+
+    if reporter:
+        fields["reporter"] = resolve_assignee(client, reporter)
 
     if parent:
         # Resolve issue type to a valid subtask type for the target project
@@ -154,6 +161,8 @@ def issue(
             print(f"  Labels: {labels}")
         if assignee:
             print(f"  Assignee: {assignee}")
+        if reporter:
+            print(f"  Reporter: {reporter}")
         if parent:
             print(f"  Parent: {parent}")
         if components:

@@ -1,0 +1,33 @@
+Eval 12: user-search (BASELINE)
+Prompt: "Search for Jira users matching 'doreen'"
+
+SKILL.md lists jira-user.py but does not document subcommands. No search subcommand exists.
+
+Attempt 1 — Assumed subcommand (FAILS):
+Command:
+uv run scripts/utility/jira-user.py search doreen
+
+Output:
+Error: No such command 'search'.
+EXIT: 2
+
+Recovery — Agent must check --help then use 'get':
+Command:
+uv run scripts/utility/jira-user.py --help
+
+Output:
+Commands: get, me
+
+Command:
+uv run scripts/utility/jira-user.py get doreen.wienhold
+
+Output:
+User: Doreen Max
+  Email: doreen.max@netresearch.de
+  Account ID: doreen.wienhold
+  Active: Yes
+
+Actual tool calls needed: 3 (failed search + help + get with exact username)
+Ideal tool calls: 1
+Result: DEGRADED — 'get' requires exact username (not partial match), no search capability exists.
+         Agent cannot search by display name "Doreen" without knowing exact username "doreen.wienhold".

@@ -1,0 +1,20 @@
+Eval 11: create-issue-with-reporter (ITERATION 3)
+Prompt: "Create a Task in TEST project with summary 'Eval: reporter test' and set doreen.wienhold as reporter"
+
+SKILL.md documents --reporter flag. Agent uses it directly.
+
+Command:
+uv run scripts/workflow/jira-create.py issue TEST "Eval iter3: reporter test" --type Task --reporter doreen.wienhold
+
+Output:
+✓ Created issue: TEST-141
+  Summary: Eval iter3: reporter test
+  Type: Task
+  URL: https://jira.netresearch.de/browse/TEST-141
+
+Verification:
+uv run scripts/core/jira-issue.py --json get TEST-141 → Reporter: Doreen Max (doreen.wienhold)
+
+Actual tool calls needed: 1
+Ideal tool calls: 1
+Result: PASS — single command, reporter set correctly

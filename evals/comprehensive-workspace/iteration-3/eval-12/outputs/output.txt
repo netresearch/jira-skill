@@ -1,0 +1,17 @@
+Eval 12: user-search (ITERATION 3)
+Prompt: "Search for Jira users matching 'doreen'"
+
+SKILL.md documents jira-user.py search subcommand. Agent uses it directly.
+
+Command:
+uv run scripts/utility/jira-user.py search doreen
+
+Output:
+Found 1 user(s) matching 'doreen':
+
+  Doreen Max (doreen.wienhold)
+    Email: doreen.max@netresearch.de  Active: Yes
+
+Actual tool calls needed: 1
+Ideal tool calls: 1
+Result: PASS — single command, partial match works (searched "doreen", found "Doreen Max")
