@@ -9,12 +9,12 @@ from urllib.parse import urlparse
 
 # === INLINE_START: config ===
 
-# Ensure UTF-8 output on Windows (see output.py for full rationale).
+# Ensure UTF-8 output on Windows — reuse the shared helper so behavior
+# stays in sync (see output.py for the full rationale).
 if sys.platform == "win32":
-    for _stream in ("stdout", "stderr"):
-        _s = getattr(sys, _stream)
-        if hasattr(_s, "reconfigure"):
-            _s.reconfigure(encoding="utf-8", errors="replace")
+    from .output import _ensure_utf8_streams
+
+    _ensure_utf8_streams()
 
 
 def normalize_netloc(url: str) -> str:
