@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-04-16
+
+### Added
+
+- **`jira-attachment.py add`**: Upload files as Jira issue attachments with `--dry-run` preview. Supports `--json`, `--quiet`, and default output modes. ([#64](https://github.com/netresearch/jira-skill/pull/64))
+- **`jira-create.py --reporter`**: Set issue reporter at creation time via `--reporter` / `-r` flag, reusing `resolve_assignee()` for user resolution. ([#62](https://github.com/netresearch/jira-skill/pull/62))
+- **`jira-user.py search`**: Search users by partial name, username, or email with `--limit` option. Server/DC and Cloud API fallback. ([#62](https://github.com/netresearch/jira-skill/pull/62))
+- Evals 11-13 with baseline/iteration proofs for reporter, user search, and attachment upload
+
+### Fixed
+
+- CI: renamed `lint.yml` to `validate.yml` per skill-repo convention ([#63](https://github.com/netresearch/jira-skill/pull/63))
+
 ## [3.9.0] - 2026-04-09
 
 ### Added
