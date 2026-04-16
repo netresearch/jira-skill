@@ -20,7 +20,7 @@ On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues →
 
 ## Scripts
 
-**Core**: `jira-issue.py` (get/update/delete), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
+**Core**: `jira-issue.py` (get/update/delete), `jira-search.py` (JQL), `jira-worklog.py`, `jira-attachment.py` (add/download), `jira-setup.py`, `jira-validate.py`
 **Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py` (add/edit/delete/list), `jira-move.py`, `jira-sprint.py`, `jira-board.py`
 **Utility**: `jira-user.py` (get/search/me), `jira-fields.py` (search/types), `jira-link.py`, `jira-weblink.py` (web link CRUD), `jira-worklog-query.py`
 
@@ -78,6 +78,10 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py add PROJ-123 --url ht
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py list PROJ-123
 
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py types PROJ
+
+# Attachments
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 /tmp/report.pdf --dry-run
 ```
 
 `--assignee me` resolves to the authenticated user.

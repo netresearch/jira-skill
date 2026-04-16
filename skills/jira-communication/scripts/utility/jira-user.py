@@ -249,7 +249,7 @@ def search(ctx, query: str, limit: int):
 
         if not users:
             if api_errors:
-                error(f"User search failed — all API attempts errored:\n  " + "\n  ".join(api_errors))
+                error("User search failed — all API attempts errored:\n  " + "\n  ".join(api_errors))
             else:
                 error(f"No users found matching: {query}")
             sys.exit(1)

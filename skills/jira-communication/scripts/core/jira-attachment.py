@@ -7,7 +7,7 @@
 #     "requests>=2.31.0,<3",
 # ]
 # ///
-"""Jira attachment operations - download attachments."""
+"""Jira attachment operations - download and upload attachments."""
 
 import json
 import sys
@@ -24,8 +24,9 @@ if _lib_path.exists():
 
 import click
 import requests
+from lib.client import CaptchaError, LazyJiraClient, _sanitize_error
 from lib.config import load_config, normalize_netloc
-from lib.output import error, success
+from lib.output import error, success, warning
 
 # Chunk size for streaming large file downloads (1 MB)
 CHUNK_SIZE = 1048576
@@ -96,7 +97,7 @@ def validate_output_path(output_file: str, working_dir: str) -> Path | None:
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira attachment operations.
 
-    Download attachments from Jira issues.
+    Download and upload Jira issue attachments.
     """
     ctx.ensure_object(dict)
     ctx.obj["json"] = output_json
@@ -104,6 +105,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["env_file"] = env_file
     ctx.obj["profile"] = profile
     ctx.obj["debug"] = debug
+    ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
 @cli.command()
@@ -234,6 +236,58 @@ def download(ctx, attachment_url: str, output_file: str):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to download attachment: {e}")
+        sys.exit(1)
+
+
+@cli.command("add")
+@click.argument("issue_key")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False, readable=True))
+@click.option("--dry-run", is_flag=True, help="Validate file without uploading")
+@click.pass_context
+def add(ctx, issue_key: str, file_path: str, dry_run: bool):
+    """Upload an attachment to a Jira issue.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    FILE_PATH: Path to the file to attach
+
+    Examples:
+
+      jira-attachment add PROJ-123 screenshot.png
+
+      jira-attachment add PROJ-123 /tmp/report.pdf --dry-run
+    """
+    client = ctx.obj["client"]
+    client.with_context(issue_key=issue_key)
+
+    path = Path(file_path)
+    file_size = path.stat().st_size
+
+    if dry_run:
+        warning("DRY RUN — would upload:")
+        print(f"  File: {path.name} ({file_size:,} bytes)")
+        print(f"  Issue: {issue_key}")
+        return
+
+    try:
+        result = client.add_attachment(issue_key, str(path))
+
+        if ctx.obj["quiet"]:
+            if isinstance(result, list) and result and isinstance(result[0], dict):
+                print(result[0].get("id", ""))
+            else:
+                print("")
+        elif ctx.obj["json"]:
+            print(json.dumps(result if isinstance(result, list) else [result], indent=2))
+        else:
+            success(f"Attached {path.name} ({file_size:,} bytes) to {issue_key}")
+
+    except CaptchaError:
+        raise
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to upload attachment: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 

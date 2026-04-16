@@ -1,0 +1,15 @@
+Eval 13: upload-attachment (BASELINE)
+Prompt: "Attach the file /tmp/eval-attachment-test.txt to TEST-135"
+
+No 'add' subcommand exists on jira-attachment.py.
+
+Command:
+uv run scripts/core/jira-attachment.py add TEST-135 /tmp/eval-attachment-test.txt
+
+Output:
+Error: No such command 'add'.
+EXIT: 2
+
+Actual tool calls needed: N/A (impossible without --fields-json workaround or manual API call)
+Ideal tool calls: 1
+Result: FAIL — no upload capability exists

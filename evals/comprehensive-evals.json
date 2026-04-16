@@ -85,6 +85,13 @@
       "prompt": "Search for Jira users matching 'doreen'",
       "expected_output": "Agent runs jira-user.py search doreen and shows matching users",
       "ideal_tools": 1
+    },
+    {
+      "id": 13,
+      "name": "upload-attachment",
+      "prompt": "Attach the file /tmp/eval-attachment-test.txt to TEST-135",
+      "expected_output": "Agent runs jira-attachment.py add TEST-135 /tmp/eval-attachment-test.txt",
+      "ideal_tools": 1
     }
   ]
 }

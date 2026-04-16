@@ -1,0 +1,14 @@
+Eval 13: upload-attachment (ITERATION 4)
+Prompt: "Attach the file /tmp/eval-attachment-test.txt to TEST-135"
+
+SKILL.md documents jira-attachment.py add subcommand. Agent uses it directly.
+
+Command:
+uv run scripts/core/jira-attachment.py add TEST-135 /tmp/eval-attachment-test.txt
+
+Output:
+✓ Attached eval-attachment-test.txt (18 bytes) to TEST-135
+
+Actual tool calls needed: 1
+Ideal tool calls: 1
+Result: PASS — single command, file uploaded successfully
