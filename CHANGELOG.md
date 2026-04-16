@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.1] - 2026-04-16
+
+### Fixed
+
+- Windows: ensure UTF-8 stdout/stderr to prevent `charmap` codec errors that caused duplicate Jira operations (issues, comments, transitions) when Unicode status symbols failed to print after successful API calls ([#61](https://github.com/netresearch/jira-skill/pull/61))
+- DRY up Windows UTF-8 stream configuration — `config.py` now reuses `output._ensure_utf8_streams()` instead of duplicating the logic
+- Fix ruff F541 lint error (f-string without placeholders) in `jira-user.py`
+
 ## [3.10.0] - 2026-04-16
 
 ### Added
