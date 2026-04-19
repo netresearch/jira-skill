@@ -10,6 +10,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 
 # Jira issue key pattern: PROJECT-123
@@ -69,7 +70,7 @@ def extract_jira_hosts(text: str) -> list[str]:
     return sorted(hosts)
 
 
-def resolve_profile_suggestion(issue_keys: list[str], hosts: list[str]) -> str | None:
+def resolve_profile_suggestion(issue_keys: list[str], hosts: list[str]) -> Optional[str]:
     """Try to resolve a profile name from issue keys or hosts.
 
     Returns:
