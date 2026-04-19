@@ -8,6 +8,8 @@
 # ///
 """Jira board operations - list boards and get board issues."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

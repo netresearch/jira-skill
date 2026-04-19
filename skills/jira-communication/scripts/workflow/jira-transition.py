@@ -8,6 +8,8 @@
 # ///
 """Jira issue transitions - list available transitions and change issue status."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

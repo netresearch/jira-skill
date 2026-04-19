@@ -1,12 +1,30 @@
 """Jira client initialization for CLI scripts."""
 
+from __future__ import annotations
+
 import re
+from typing import Optional
 from urllib.parse import urlparse
 
-from atlassian import Jira
-from requests import Response
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+try:
+    from atlassian import Jira
+except ImportError:
+    Jira = None
+
+try:
+    from requests import Response
+except ImportError:
+    Response = None
+
+try:
+    from requests.adapters import HTTPAdapter
+except ImportError:
+    HTTPAdapter = None
+
+try:
+    from urllib3.util.retry import Retry
+except ImportError:
+    Retry = None
 
 from .config import get_auth_mode, is_cloud_url, load_config, validate_config
 

@@ -8,6 +8,8 @@
 # ///
 """Jira search operations - query issues using JQL."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

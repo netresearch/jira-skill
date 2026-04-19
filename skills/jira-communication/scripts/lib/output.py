@@ -2,7 +2,7 @@
 
 import json
 import sys
-from typing import Any
+from typing import Any, Optional
 
 # === INLINE_START: output ===
 
@@ -42,7 +42,7 @@ def format_json(data: Any, indent: int = 2) -> str:
     return json.dumps(data, indent=indent, default=str)
 
 
-def format_table(data: list, columns: list | None = None) -> str:
+def format_table(data: list, columns: Optional[list] = None) -> str:
     """Format list of dicts as ASCII table.
 
     Args:
@@ -136,7 +136,7 @@ def _print_dict(data: dict, indent: int = 0) -> None:
             print(f"{prefix}{key}: {value}")
 
 
-def error(message: str, suggestion: str | None = None) -> None:
+def error(message: str, suggestion: Optional[str] = None) -> None:
     """Print error message with optional suggestion.
 
     Args:

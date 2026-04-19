@@ -8,6 +8,8 @@
 # ///
 """Jira issue creation - create new issues with various types and fields."""
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path

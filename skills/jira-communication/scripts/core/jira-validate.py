@@ -9,6 +9,8 @@
 # ///
 """Jira environment validation - verify runtime, configuration, and connectivity."""
 
+from __future__ import annotations
+
 import shutil
 import subprocess
 import sys

@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 
 # === INLINE_START: config ===
@@ -41,7 +42,7 @@ OPTIONAL_VARS = ["JIRA_CLOUD"]
 ALL_VARS = [REQUIRED_URL] + CLOUD_VARS + SERVER_VARS + OPTIONAL_VARS
 
 
-def load_env(env_file: str | None = None) -> dict:
+def load_env(env_file: Optional[str] = None) -> dict:
     """Load configuration from file with environment variable fallback.
 
     Priority order:
@@ -170,7 +171,7 @@ def load_profiles() -> dict:
 
 
 def resolve_profile(
-    issue_key: str | None = None, url: str | None = None, profile: str | None = None, project_dir: str | None = None
+    issue_key: Optional[str] = None, url: Optional[str] = None, profile: Optional[str] = None, project_dir: Optional[str] = None
 ) -> dict:
     """Resolve a Jira profile using the priority algorithm.
 
@@ -312,7 +313,7 @@ def profile_to_config(prof: dict) -> dict:
 
 
 def load_config(
-    profile: str | None = None, env_file: str | None = None, issue_key: str | None = None, url: str | None = None
+    profile: Optional[str] = None, env_file: Optional[str] = None, issue_key: Optional[str] = None, url: Optional[str] = None
 ) -> dict:
     """Unified configuration loader combining profiles and legacy env files.
 
