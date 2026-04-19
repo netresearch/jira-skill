@@ -8,6 +8,8 @@
 # ///
 """Jira field operations - search and list fields."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

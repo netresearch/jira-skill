@@ -8,6 +8,8 @@
 # ///
 """Cross-cutting worklog query — fetch worklogs by date range, user, project, and more."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

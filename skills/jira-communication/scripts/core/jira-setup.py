@@ -9,6 +9,8 @@
 # ///
 """Interactive Jira credential setup - configure authentication interactively."""
 
+from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path
@@ -25,7 +27,12 @@ import json
 
 import click
 import requests
-from atlassian import Jira
+
+try:
+    from atlassian import Jira
+except ImportError:
+    Jira = None
+
 from lib.client import JIRA_TIMEOUT, _sanitize_error
 from lib.config import DEFAULT_ENV_FILE, PROFILES_FILE, is_cloud_url, load_env
 from lib.output import error, success, warning

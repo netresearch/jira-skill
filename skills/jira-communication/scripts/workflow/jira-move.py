@@ -9,6 +9,8 @@
 # ///
 """Jira issue move - move issues between projects or change issue type."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

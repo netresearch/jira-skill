@@ -8,6 +8,8 @@
 # ///
 """Jira sprint operations - list sprints and get sprint issues."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

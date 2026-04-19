@@ -8,6 +8,8 @@
 # ///
 """Jira issue operations - get, update, and delete issue details."""
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path

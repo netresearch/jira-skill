@@ -9,6 +9,8 @@
 # ///
 """Jira attachment operations - download and upload attachments."""
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path

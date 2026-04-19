@@ -8,6 +8,8 @@
 # ///
 """Jira user operations - get user information."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
