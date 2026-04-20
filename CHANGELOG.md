@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- SKILL.md now documents the full CRUD surface for both `jira-link` and `jira-weblink`. The web-link `update` and `delete` subcommands existed previously but were undocumented, causing agents to fall back to raw REST API calls.
+- SKILL.md: add examples for the new `jira-link list`/`delete` subcommands and the previously-undocumented `jira-weblink delete`. Full CRUD for both scripts is still discoverable via `--help`; SKILL.md shows the operations most relevant to the new delete workflow within the 500-word cap.
 
 ## [3.10.1] - 2026-04-16
 
