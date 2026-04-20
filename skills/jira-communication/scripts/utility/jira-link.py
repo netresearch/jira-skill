@@ -188,9 +188,7 @@ def list_cmd(ctx, issue_key: str):
             format_output(links, as_json=True)
         elif ctx.obj["quiet"]:
             for link_entry in links:
-                print(
-                    f"{link_entry['id']} {link_entry['type']} {link_entry['direction']} {link_entry['other_key']}"
-                )
+                print(f"{link_entry['id']} {link_entry['type']} {link_entry['direction']} {link_entry['other_key']}")
         else:
             if not links:
                 print(f"No issue links on {issue_key}")
