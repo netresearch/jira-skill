@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`jira-link.py list`**: List all issue links on an issue with IDs, link type, direction, and related issue key/summary/status. Supports `--json` and `--quiet` output modes.
+- **`jira-link.py delete`**: Remove an issue link by `--id` or by the combination of `--to`/`--type`. Detects ambiguous matches and requires `--id` to disambiguate. Supports `--dry-run` preview.
+
+### Changed
+
+- SKILL.md now documents the full CRUD surface for both `jira-link` and `jira-weblink`. The web-link `update` and `delete` subcommands existed previously but were undocumented, causing agents to fall back to raw REST API calls.
+
 ## [3.10.1] - 2026-04-16
 
 ### Fixed

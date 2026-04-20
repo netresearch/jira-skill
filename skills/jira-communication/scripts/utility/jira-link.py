@@ -131,5 +131,193 @@ def list_types(ctx):
         sys.exit(1)
 
 
+@cli.command("list")
+@click.argument("issue_key")
+@click.pass_context
+def list_cmd(ctx, issue_key: str):
+    """List all issue links on an issue.
+
+    ISSUE_KEY: The Jira issue key (e.g. PROJ-123)
+
+    Shows link ID, direction, link type, and the other issue's key and summary.
+
+    Example:
+
+      jira-link list PROJ-123
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        issue = client.issue(issue_key, fields="issuelinks")
+        raw_links = (issue.get("fields") or {}).get("issuelinks") or []
+
+        links = []
+        for link in raw_links:
+            link_id = link.get("id", "")
+            type_obj = link.get("type") or {}
+            type_name = type_obj.get("name", "")
+            if "outwardIssue" in link:
+                other = link["outwardIssue"]
+                direction = "outward"
+                relation = type_obj.get("outward", "")
+            elif "inwardIssue" in link:
+                other = link["inwardIssue"]
+                direction = "inward"
+                relation = type_obj.get("inward", "")
+            else:
+                other = {}
+                direction = ""
+                relation = ""
+            other_key = other.get("key", "")
+            other_summary = ((other.get("fields") or {}).get("summary")) or ""
+            other_status = (((other.get("fields") or {}).get("status")) or {}).get("name", "")
+            links.append(
+                {
+                    "id": link_id,
+                    "type": type_name,
+                    "direction": direction,
+                    "relation": relation,
+                    "other_key": other_key,
+                    "other_summary": other_summary,
+                    "other_status": other_status,
+                }
+            )
+
+        if ctx.obj["json"]:
+            format_output(links, as_json=True)
+        elif ctx.obj["quiet"]:
+            for link_entry in links:
+                print(
+                    f"{link_entry['id']} {link_entry['type']} {link_entry['direction']} {link_entry['other_key']}"
+                )
+        else:
+            if not links:
+                print(f"No issue links on {issue_key}")
+                return
+            rows = [
+                {
+                    "ID": link_entry["id"],
+                    "Type": link_entry["type"],
+                    "Direction": link_entry["direction"],
+                    "Other": link_entry["other_key"],
+                    "Summary": link_entry["other_summary"][:60],
+                    "Status": link_entry["other_status"],
+                }
+                for link_entry in links
+            ]
+            print(format_table(rows, ["ID", "Type", "Direction", "Other", "Summary", "Status"]))
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to list issue links for {issue_key}: {e}")
+        sys.exit(1)
+
+
+def _link_matches(link: dict, to_key: str, link_type: str) -> bool:
+    """Return True if an issue link targets to_key with link_type (case-insensitive)."""
+    type_name = (link.get("type") or {}).get("name", "")
+    if type_name.lower() != link_type.lower():
+        return False
+    other = link.get("outwardIssue") or link.get("inwardIssue") or {}
+    return other.get("key") == to_key
+
+
+def _format_link_display(link: dict) -> str:
+    """Format an issue link for human-readable output (e.g. 'blocks TEST-2')."""
+    type_obj = link.get("type") or {}
+    type_name = type_obj.get("name", "")
+    if "outwardIssue" in link:
+        other = link["outwardIssue"].get("key", "?")
+        relation = type_obj.get("outward", type_name)
+        return f"{relation} {other}"
+    if "inwardIssue" in link:
+        other = link["inwardIssue"].get("key", "?")
+        relation = type_obj.get("inward", type_name)
+        return f"{relation} {other}"
+    return type_name
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.option("--id", "link_id", type=str, help="Issue link ID (from `jira-link list`)")
+@click.option("--to", "to_key", help="Other issue key to identify the link by")
+@click.option("--type", "-t", "link_type", help="Link type name (used with --to)")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
+@click.pass_context
+def delete(
+    ctx,
+    issue_key: str,
+    link_id: str | None,
+    to_key: str | None,
+    link_type: str | None,
+    dry_run: bool,
+):
+    """Delete an issue link.
+
+    ISSUE_KEY: The Jira issue key that owns the link (e.g. PROJ-123)
+
+    Identify the link by either --id or the combination of --to and --type.
+
+    Examples:
+
+      jira-link delete PROJ-123 --id 10042
+
+      jira-link delete PROJ-123 --to PROJ-456 --type "Blocks" --dry-run
+    """
+    if link_id is None and not (to_key and link_type):
+        error("Provide --id, or both --to and --type, to identify the link")
+        sys.exit(1)
+    if link_id is not None and (to_key or link_type):
+        error("Use --id OR (--to and --type), not both")
+        sys.exit(1)
+
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        # Resolve to a single link_id + display string
+        if link_id is not None:
+            link = client.get_issue_link(link_id)
+            display = _format_link_display(link)
+        else:
+            issue = client.issue(issue_key, fields="issuelinks")
+            raw_links = (issue.get("fields") or {}).get("issuelinks") or []
+            matches = [lnk for lnk in raw_links if _link_matches(lnk, to_key, link_type)]
+            if not matches:
+                error(f"No {link_type!r} link from {issue_key} to {to_key}")
+                sys.exit(1)
+            if len(matches) > 1:
+                ids = ", ".join(m.get("id", "?") for m in matches)
+                error(f"Multiple matching links (ids: {ids}); use --id to disambiguate")
+                sys.exit(1)
+            link = matches[0]
+            link_id = link.get("id")
+            display = _format_link_display(link)
+
+        if dry_run:
+            warning("DRY RUN - No link will be deleted")
+            print(f"Would delete [{link_id}] {display}")
+            return
+
+        client.remove_issue_link(link_id)
+
+        if ctx.obj["json"]:
+            format_output({"key": issue_key, "id": link_id, "deleted": True}, as_json=True)
+        elif ctx.obj["quiet"]:
+            print("ok")
+        else:
+            success(f"Deleted link [{link_id}] {display}")
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to delete issue link: {e}")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     cli()
