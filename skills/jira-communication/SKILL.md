@@ -71,19 +71,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py get john.doe
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py search doreen
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py me
 
-# Move
+# Move / link / web links
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 SRVUC
-
-# Issue links (issue <-> issue)
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type "Blocks"
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type Blocks
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py list PROJ-123
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py delete PROJ-123 --id 10042
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py delete PROJ-123 --to PROJ-456 --type "Blocks" --dry-run
-
-# Web links (external URLs on an issue)
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py add PROJ-123 --url https://example.com/doc --title "Design Doc"
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py list PROJ-123
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py update PROJ-123 --id 42 --title "Renamed"
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py delete PROJ-123 --id 42
 
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py types PROJ

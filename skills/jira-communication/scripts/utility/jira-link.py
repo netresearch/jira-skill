@@ -20,7 +20,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient
+from lib.client import LazyJiraClient, _sanitize_error
 from lib.output import error, format_output, format_table, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -211,7 +211,7 @@ def list_cmd(ctx, issue_key: str):
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to list issue links for {issue_key}: {e}")
+        error(f"Failed to list issue links for {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 
@@ -221,21 +221,29 @@ def _link_matches(link: dict, to_key: str, link_type: str) -> bool:
     if type_name.lower() != link_type.lower():
         return False
     other = link.get("outwardIssue") or link.get("inwardIssue") or {}
-    return other.get("key") == to_key
+    other_key = other.get("key", "")
+    return other_key.casefold() == to_key.casefold()
 
 
-def _format_link_display(link: dict) -> str:
-    """Format an issue link for human-readable output (e.g. 'blocks TEST-2')."""
+def _format_link_display(link: dict, context_key: str | None = None) -> str:
+    """Format an issue link for human-readable output (e.g. 'blocks TEST-2').
+
+    When context_key is provided, describe the link from that issue's
+    perspective — matters when both inward and outward are populated
+    (e.g. results from client.get_issue_link(id)).
+    """
     type_obj = link.get("type") or {}
     type_name = type_obj.get("name", "")
-    if "outwardIssue" in link:
-        other = link["outwardIssue"].get("key", "?")
-        relation = type_obj.get("outward", type_name)
-        return f"{relation} {other}"
-    if "inwardIssue" in link:
-        other = link["inwardIssue"].get("key", "?")
-        relation = type_obj.get("inward", type_name)
-        return f"{relation} {other}"
+    outward = link.get("outwardIssue") or {}
+    inward = link.get("inwardIssue") or {}
+    if context_key and outward.get("key") == context_key and inward:
+        return f"{type_obj.get('outward', type_name)} {inward.get('key', '?')}"
+    if context_key and inward.get("key") == context_key and outward:
+        return f"{type_obj.get('inward', type_name)} {outward.get('key', '?')}"
+    if outward:
+        return f"{type_obj.get('outward', type_name)} {outward.get('key', '?')}"
+    if inward:
+        return f"{type_obj.get('inward', type_name)} {inward.get('key', '?')}"
     return type_name
 
 
@@ -280,7 +288,12 @@ def delete(
         # Resolve to a single link_id + display string
         if link_id is not None:
             link = client.get_issue_link(link_id)
-            display = _format_link_display(link)
+            inward_key = (link.get("inwardIssue") or {}).get("key") or ""
+            outward_key = (link.get("outwardIssue") or {}).get("key") or ""
+            if issue_key.casefold() not in {inward_key.casefold(), outward_key.casefold()}:
+                error(f"Link id {link_id} is not associated with issue {issue_key}")
+                sys.exit(1)
+            display = _format_link_display(link, context_key=issue_key)
         else:
             issue = client.issue(issue_key, fields="issuelinks")
             raw_links = (issue.get("fields") or {}).get("issuelinks") or []
@@ -294,7 +307,10 @@ def delete(
                 sys.exit(1)
             link = matches[0]
             link_id = link.get("id")
-            display = _format_link_display(link)
+            if not link_id:
+                error("Matched link has no id; cannot delete")
+                sys.exit(1)
+            display = _format_link_display(link, context_key=issue_key)
 
         if dry_run:
             warning("DRY RUN - No link will be deleted")
@@ -315,7 +331,7 @@ def delete(
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to delete issue link: {e}")
+        error(f"Failed to delete issue link: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 
