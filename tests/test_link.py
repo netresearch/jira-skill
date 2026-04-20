@@ -176,11 +176,21 @@ class TestLinkList:
 
 class TestLinkDelete:
     def test_delete_by_id(self):
+        # get_issue_link returns a global link view with BOTH endpoints.
+        # issue_key matches outwardIssue.key so verbiage comes from the
+        # outward label.
         mc = _make_mock_client()
-        mc.get_issue_link.return_value = _issue_link("42", "Blocks", "outward", "TEST-2", "Blocked")
-        result, _ = _run_link(["delete", "TEST-1", "--id", "42"], mc)
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "TEST-1", "fields": {"summary": "Src", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Blocked", "status": {"name": "Open"}}},
+        }
+        result, _ = _run_link(["delete", "TEST-2", "--id", "42"], mc)
         assert result.exit_code == 0, result.output
         assert "Deleted link" in result.output
+        # issue_key=TEST-2 matches outwardIssue, so display uses outward verbiage
+        assert "blocks" in result.output
         mc.remove_issue_link.assert_called_once_with("42")
 
     def test_delete_by_to_and_type(self):
@@ -201,7 +211,12 @@ class TestLinkDelete:
 
     def test_delete_dry_run(self):
         mc = _make_mock_client()
-        mc.get_issue_link.return_value = _issue_link("42", "Blocks", "outward", "TEST-2", "X")
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "TEST-1", "fields": {"summary": "X", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Y", "status": {"name": "Open"}}},
+        }
         result, _ = _run_link(["delete", "TEST-1", "--id", "42", "--dry-run"], mc)
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
@@ -262,7 +277,12 @@ class TestLinkDelete:
 
     def test_delete_json_output(self):
         mc = _make_mock_client()
-        mc.get_issue_link.return_value = _issue_link("42", "Blocks", "outward", "TEST-2", "X")
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "TEST-1", "fields": {"summary": "X", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Y", "status": {"name": "Open"}}},
+        }
         result, _ = _run_link(["--json", "delete", "TEST-1", "--id", "42"], mc)
         assert result.exit_code == 0, result.output
         data = json.loads(result.output)
@@ -272,15 +292,68 @@ class TestLinkDelete:
 
     def test_delete_quiet_output(self):
         mc = _make_mock_client()
-        mc.get_issue_link.return_value = _issue_link("42", "Blocks", "outward", "TEST-2", "X")
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "TEST-1", "fields": {"summary": "X", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Y", "status": {"name": "Open"}}},
+        }
         result, _ = _run_link(["--quiet", "delete", "TEST-1", "--id", "42"], mc)
         assert result.exit_code == 0
         assert result.output.strip() == "ok"
 
     def test_delete_api_exception_shows_error(self):
         mc = _make_mock_client()
-        mc.get_issue_link.return_value = _issue_link("42", "Blocks", "outward", "TEST-2", "X")
+        # Link has TEST-1 as inward so delete against TEST-1 resolves correctly.
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "TEST-1", "fields": {"summary": "X", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "TEST-2", "fields": {"summary": "Y", "status": {"name": "Open"}}},
+        }
         mc.remove_issue_link.side_effect = Exception("403 Forbidden")
         result, _ = _run_link(["delete", "TEST-1", "--id", "42"], mc)
         assert result.exit_code == 1
         assert "Failed to delete issue link" in result.output
+
+    def test_delete_by_id_wrong_issue_key(self):
+        """Reject delete when the link id is not associated with issue_key."""
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "OTHER-A", "fields": {"summary": "A", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "OTHER-B", "fields": {"summary": "B", "status": {"name": "Open"}}},
+        }
+        result, _ = _run_link(["delete", "UNRELATED-1", "--id", "42"], mc)
+        assert result.exit_code == 1
+        assert "not associated" in result.output
+        mc.remove_issue_link.assert_not_called()
+
+    def test_delete_by_id_context_chooses_inward_direction(self):
+        """When issue_key is the inward side, verbiage uses the inward label."""
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "PROJ-B", "fields": {"summary": "B", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "PROJ-A", "fields": {"summary": "A", "status": {"name": "Open"}}},
+        }
+        result, _ = _run_link(["delete", "PROJ-B", "--id", "42"], mc)
+        assert result.exit_code == 0, result.output
+        assert "is blocked by PROJ-A" in result.output
+        assert "blocks PROJ-A" not in result.output
+
+    def test_delete_by_to_lowercase(self):
+        """--to PROJ-2 should match even when Jira returns TEST-2 (case-insensitive)."""
+        mc = _make_mock_client()
+        mc.issue.return_value = _issue_with_links(
+            "TEST-1",
+            [_issue_link("7", "Blocks", "outward", "TEST-2", "X")],
+        )
+        result, _ = _run_link(
+            ["delete", "TEST-1", "--to", "test-2", "--type", "blocks"],
+            mc,
+        )
+        assert result.exit_code == 0, result.output
+        mc.remove_issue_link.assert_called_once_with("7")
