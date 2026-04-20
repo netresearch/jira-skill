@@ -234,9 +234,10 @@ def _format_link_display(link: dict, context_key: str | None = None) -> str:
     type_name = type_obj.get("name", "")
     outward = link.get("outwardIssue") or {}
     inward = link.get("inwardIssue") or {}
-    if context_key and outward.get("key") == context_key and inward:
+    ctx_cf = context_key.casefold() if context_key else None
+    if ctx_cf and outward.get("key", "").casefold() == ctx_cf and inward:
         return f"{type_obj.get('outward', type_name)} {inward.get('key', '?')}"
-    if context_key and inward.get("key") == context_key and outward:
+    if ctx_cf and inward.get("key", "").casefold() == ctx_cf and outward:
         return f"{type_obj.get('inward', type_name)} {outward.get('key', '?')}"
     if outward:
         return f"{type_obj.get('outward', type_name)} {outward.get('key', '?')}"

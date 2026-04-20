@@ -357,3 +357,23 @@ class TestLinkDelete:
         )
         assert result.exit_code == 0, result.output
         mc.remove_issue_link.assert_called_once_with("7")
+
+    def test_delete_by_id_context_key_case_insensitive(self):
+        """Display direction must remain correct when ISSUE_KEY case differs from Jira's canonical case.
+
+        Regression: without casefold the context match fell through to the
+        generic outward branch and displayed "blocks PROJ-A" even when the
+        user's issue was on the outward side (correct: "blocks PROJ-B").
+        """
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "PROJ-B", "fields": {"summary": "B", "status": {"name": "Open"}}},
+            "outwardIssue": {"key": "PROJ-A", "fields": {"summary": "A", "status": {"name": "Open"}}},
+        }
+        result, _ = _run_link(["delete", "proj-a", "--id", "42"], mc)
+        assert result.exit_code == 0, result.output
+        # proj-a matches outward (PROJ-A), so display should use outward verb + inward key
+        assert "blocks PROJ-B" in result.output
+        assert "is blocked by" not in result.output
