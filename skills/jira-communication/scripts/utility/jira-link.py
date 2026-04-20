@@ -298,7 +298,7 @@ def delete(
             raw_links = (issue.get("fields") or {}).get("issuelinks") or []
             matches = [lnk for lnk in raw_links if _link_matches(lnk, to_key, link_type)]
             if not matches:
-                error(f"No {link_type!r} link from {issue_key} to {to_key}")
+                error(f"No {link_type!r} link between {issue_key} and {to_key}")
                 sys.exit(1)
             if len(matches) > 1:
                 ids = ", ".join(m.get("id", "?") for m in matches)
