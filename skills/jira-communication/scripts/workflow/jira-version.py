@@ -289,8 +289,11 @@ def create(ctx, project_key, name, description, start_date, release_date, releas
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        # Delegate 409 handling to Task 10
-        error(f"Failed to create version: {e}")
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        if status == 409:
+            error(f'Version "{name}" already exists in {project_key}')
+        else:
+            error(f"Failed to create version: {e}")
         sys.exit(1)
 
 

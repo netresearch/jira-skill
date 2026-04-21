@@ -335,6 +335,26 @@ class TestCreate:
         assert "1.4.0" in result.output
 
 
+class TestCreateConflict:
+    def test_duplicate_name_409(self):
+        mc = _make_mock_client()
+        # atlassian-python-api raises HTTPError on 4xx; simulate that shape
+        from requests.exceptions import HTTPError
+        from requests import Response
+        resp = Response()
+        resp.status_code = 409
+        resp._content = b'{"errors":{"name":"A version with this name already exists."}}'
+        err = HTTPError("409 Conflict", response=resp)
+        mc.post.side_effect = err
+
+        result, _ = _run(["create", "PROJ", "1.4.0"], mc)
+        assert result.exit_code != 0
+        # Clean message, not a stack trace
+        assert "already exists" in result.output.lower()
+        assert "1.4.0" in result.output
+        assert "PROJ" in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
