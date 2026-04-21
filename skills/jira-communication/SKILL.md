@@ -39,56 +39,50 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123
 ## Common Tasks
 
 ```bash
-# Read / search
+# Read / search (--json is compact by default; --raw for full payload)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123 --expand changelog,transitions   # include status history
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123                            # compact JSON (null/empty stripped); add --raw for full payload
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py time-in-status PROJ-123 [--status Review]      # duration per status from changelog
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123 --expand changelog,transitions
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py time-in-status PROJ-123 [--status Review]
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed" -n 5 -f key,summary,status
 
 # Update / assign (--fields-json for description and custom fields)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me --priority Critical
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --fields-json '{"description": "New desc"}'
 
-# Delete (--dry-run to preview, --delete-subtasks for parents)
+# Delete (--delete-subtasks for parents)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py delete PROJ-123 --dry-run
 
-# Comment (add/edit/list -- use --json list to get IDs for edit/delete)
+# Comment (--json list for IDs)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py --json list PROJ-123
 
-# Transition (use "list" to see available transitions)
+# Transition
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 
-# Log work / query worklogs (default: my current week)
+# Log / query worklogs
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py --project HMKG --detail
 
 # Create (--type auto-resolves to subtask when --parent given)
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task --reporter jane.doe
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Bug --parent PROJ-100
 
 # User lookup
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py get john.doe
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py search doreen
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py me
 
-# Move / link / web links
+# Move / link / web links (link scripts: create/list/delete)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue NRS-100 SRVUC
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py create PROJ-123 PROJ-456 --type Blocks
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py list PROJ-123
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py delete PROJ-123 --id 10042
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py delete PROJ-123 --id 42
 
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py types PROJ
 
-# Board discovery (server-side name filter — avoids pulling thousands of boards)
+# Board discovery (server-side name match)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py list --name Lithium
 
 # Attachments
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 /tmp/report.pdf --dry-run
 ```
 
 `--assignee me` resolves to the authenticated user.
@@ -100,7 +94,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 /tmp/rep
 ## References
 
 - `references/jql-quick-reference.md` - JQL syntax
-- `references/jql-cookbook.md` - Translating natural-language queries to safe JQL
+- `references/jql-cookbook.md` - Natural-language → JQL
 - `references/multi-profile.md` - Multi-profile and auto-resolution
 - `references/troubleshooting.md` - Setup and auth
 
