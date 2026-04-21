@@ -66,7 +66,7 @@ def _resolve_watcher_identifier(client, identifier: str) -> tuple[str, bool]:
     return resolved["name"], False
 
 
-def _watcher_api_arg(client, identifier: str, is_account_id_value: bool) -> dict:
+def _watcher_api_arg(identifier: str, is_account_id_value: bool) -> dict:
     """Return the keyword arg dict for issue_delete_watcher.
 
     DC takes ?username=...; Cloud takes ?accountId=.... atlassian-python-api
@@ -213,7 +213,7 @@ def remove(ctx, issue_key: str, user: str, dry_run: bool):
             print(f"Would remove {identifier}{suffix} from {issue_key}")
             return
 
-        kwargs = _watcher_api_arg(client, identifier, is_acct)
+        kwargs = _watcher_api_arg(identifier, is_acct)
         client.issue_delete_watcher(issue_key, **kwargs)
 
         if ctx.obj["json"]:
