@@ -100,6 +100,56 @@ class TestList:
             assert header in result.output
 
 
+class TestListPaginated:
+    def test_list_with_query_uses_paginated_endpoint(self):
+        mc = _make_mock_client()
+        mc.get.return_value = {
+            "isLast": True,
+            "values": [_make_version("10042", "1.4.0-rc1", released=False)],
+        }
+        result, _ = _run(["list", "PROJ", "--query", "rc"], mc)
+        assert result.exit_code == 0, result.output
+        # First positional arg to .get should be the paginated path
+        called_path = mc.get.call_args.args[0]
+        assert called_path == "rest/api/2/project/PROJ/version"
+        called_params = mc.get.call_args.kwargs.get("params", {})
+        assert called_params.get("query") == "rc"
+
+    def test_list_with_order_by_uses_paginated_endpoint(self):
+        mc = _make_mock_client()
+        mc.get.return_value = {"isLast": True, "values": []}
+        result, _ = _run(["list", "PROJ", "--order-by", "releaseDate"], mc)
+        assert result.exit_code == 0, result.output
+        called_params = mc.get.call_args.kwargs.get("params", {})
+        assert called_params.get("orderBy") == "releaseDate"
+
+    def test_list_paginated_follows_next_page(self):
+        mc = _make_mock_client()
+        mc.get.side_effect = [
+            {"isLast": False, "values": [_make_version("10042", "1.4.0")], "startAt": 0, "maxResults": 1},
+            {"isLast": True, "values": [_make_version("10045", "1.5.0")], "startAt": 1, "maxResults": 1},
+        ]
+        result, _ = _run(["list", "PROJ", "--query", "1."], mc)
+        assert result.exit_code == 0, result.output
+        assert mc.get.call_count == 2
+        assert "10042" in result.output and "10045" in result.output
+
+    def test_status_all_filters_nothing_on_paginated(self):
+        mc = _make_mock_client()
+        mc.get.return_value = {
+            "isLast": True,
+            "values": [
+                _make_version("10042", "1.4.0", released=False),
+                _make_version("10041", "1.3.0", released=True),
+                _make_version("10030", "1.2.0", archived=True),
+            ],
+        }
+        result, _ = _run(["list", "PROJ", "--query", ".", "--status", "all"], mc)
+        assert result.exit_code == 0
+        for vid in ("10042", "10041", "10030"):
+            assert vid in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 

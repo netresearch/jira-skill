@@ -117,8 +117,30 @@ def list_versions(ctx, project_key: str, status: str, query: str | None, order_b
 
 
 def _fetch_versions_paginated(client, project_key, status=None, query=None, order_by=None):
-    """Paginated search — DC >=9.x and Cloud only. Filter by name and/or order server-side."""
-    raise NotImplementedError  # Implemented in Task 3
+    """Paginated search via `/project/{key}/version`.
+
+    Availability: Jira Server/DC >=9.x and Jira Cloud. Older DC versions return
+    404 — callers should rely on the flat `/project/{key}/versions` endpoint
+    and filter client-side when `--query` / `--order-by` are not supplied.
+    """
+    all_values: list[dict] = []
+    start_at = 0
+    page_size = 50
+    while True:
+        params = {"startAt": start_at, "maxResults": page_size}
+        if query:
+            params["query"] = query
+        if order_by:
+            params["orderBy"] = order_by
+        if status and status != "all":
+            params["status"] = status
+        page = client.get(f"rest/api/2/project/{project_key}/version", params=params) or {}
+        values = page.get("values", [])
+        all_values.extend(values)
+        if page.get("isLast", True) or not values:
+            break
+        start_at += len(values) or page_size
+    return all_values
 
 
 @cli.command()
