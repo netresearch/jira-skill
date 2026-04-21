@@ -275,3 +275,28 @@ class TestWatchersRemove:
         assert result.exit_code == 1
         assert "Failed to remove watcher" in result.output
         assert "404" in result.output
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: _watcher_api_arg helper (pure)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWatcherApiArg:
+    def test_dc_username(self):
+        mc = _make_mock_client(cloud=False)
+        assert _watchers_mod._watcher_api_arg(mc, "jdoe", False) == {"username": "jdoe"}
+
+    def test_cloud_account_id(self):
+        mc = _make_mock_client(cloud=True)
+        acct = "557058:d5765ebc-27de-4ce3-b520-a77a87e5e99a"
+        assert _watchers_mod._watcher_api_arg(mc, acct, True) == {"account_id": acct}
+
+
+class TestWatchersRemoveCloud:
+    def test_remove_cloud_passes_account_id(self):
+        mc = _make_mock_client(cloud=True)
+        acct = "557058:d5765ebc-27de-4ce3-b520-a77a87e5e99a"
+        result, _ = _run(["remove", "TEST-1", "--user", acct], mc)
+        assert result.exit_code == 0, result.output
+        mc.issue_delete_watcher.assert_called_once_with("TEST-1", account_id=acct)
