@@ -600,6 +600,46 @@ class TestMove:
         mc.post.assert_not_called()
 
 
+class TestMerge:
+    def test_merge_executes(self):
+        mc = _make_mock_client()
+        mc.post.return_value = {}
+        result, _ = _run(["merge", "10050", "INTO", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        path = mc.post.call_args.args[0]
+        assert path == "rest/api/2/version/10050/mergeto/10042"
+
+    def test_merge_requires_INTO(self):
+        mc = _make_mock_client()
+        result, _ = _run(["merge", "10050", "BESIDE", "10042"], mc)
+        assert result.exit_code != 0
+        mc.post.assert_not_called()
+
+    def test_merge_dry_run_fetches_counts(self):
+        mc = _make_mock_client()
+        mc.get.side_effect = [
+            {"issuesFixedCount": 7, "issuesAffectedCount": 1},  # src relatedIssueCounts
+            _make_version("10050", "1.4.0-dup"),                 # src version
+            _make_version("10042", "1.4.0"),                     # dst version
+        ]
+        result, _ = _run(["merge", "10050", "INTO", "10042", "--dry-run"], mc)
+        assert result.exit_code == 0, result.output
+        mc.post.assert_not_called()
+        assert "DRY RUN" in result.output
+        assert "7" in result.output   # fixed count
+        assert "1" in result.output   # affected count
+        assert "1.4.0-dup" in result.output
+        assert "1.4.0" in result.output
+
+    def test_merge_does_not_issue_separate_delete(self):
+        """mergeto deletes the source server-side; no extra DELETE needed."""
+        mc = _make_mock_client()
+        mc.post.return_value = {}
+        result, _ = _run(["merge", "10050", "INTO", "10042"], mc)
+        assert result.exit_code == 0
+        mc.delete.assert_not_called()
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 

@@ -533,10 +533,38 @@ def move(ctx, version_id, after, position, dry_run):
 @click.argument("src_id")
 @click.argument("into", type=click.Choice(["INTO"]))
 @click.argument("dst_id")
+@click.option("--dry-run", is_flag=True, help="Show what would change without calling mergeto")
 @click.pass_context
-def merge(ctx, src_id: str, into: str, dst_id: str):
-    """Merge SRC_ID INTO DST_ID (reassign refs + delete source)."""
-    raise NotImplementedError
+def merge(ctx, src_id, into, dst_id, dry_run):
+    """Merge SRC_ID INTO DST_ID.
+
+    Reassigns fixVersions / versions references from SRC to DST, then deletes
+    SRC server-side. There is no undo.
+    """
+    client = ctx.obj["client"]
+
+    if dry_run:
+        warning("DRY RUN - No changes will be made")
+        counts = client.get(f"rest/api/2/version/{src_id}/relatedIssueCounts") or {}
+        src = client.get(f"rest/api/2/version/{src_id}") or {}
+        dst = client.get(f"rest/api/2/version/{dst_id}") or {}
+        fixed = counts.get("issuesFixedCount", "?")
+        affected = counts.get("issuesAffectedCount", "?")
+        print(f'Would merge {src_id} "{src.get("name", "?")}" INTO '
+              f'{dst_id} "{dst.get("name", "?")}":')
+        print(f"  fixed issues to reassign:    {fixed}")
+        print(f"  affected issues to reassign: {affected}")
+        print("  source version would be deleted")
+        return
+
+    try:
+        client.post(f"rest/api/2/version/{src_id}/mergeto/{dst_id}")
+        success(f"Merged {src_id} into {dst_id}; source deleted")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to merge version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
