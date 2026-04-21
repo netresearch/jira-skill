@@ -752,7 +752,6 @@ class TestDeleteDryRun:
         assert "1" in result.output
         assert "1.4.0-dup" in result.output
 
-
     def test_delete_dry_run_handles_missing_version(self):
         """Dry-run must surface a clean error when version lookup fails."""
         mc = _make_mock_client()
