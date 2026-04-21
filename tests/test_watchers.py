@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 import click.testing
+import requests
 
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
@@ -237,10 +238,16 @@ class TestWatchersAdd:
         assert "Added watcher" in result.output
 
     def test_add_manage_watchers_permission_error(self):
+        """atlassian-python-api raises requests.HTTPError on 403; exercise
+        that concrete shape rather than a bare Exception."""
         mc = _make_mock_client()
         mc.user_find_by_user_string.return_value = [{"name": "asmith"}]
-        mc.issue_add_watcher.side_effect = Exception(
-            "403 Client Error: Forbidden — Manage Watchers permission required"
+        resp = requests.Response()
+        resp.status_code = 403
+        resp.reason = "Forbidden"
+        mc.issue_add_watcher.side_effect = requests.exceptions.HTTPError(
+            "403 Client Error: Forbidden for url: /rest/api/2/issue/TEST-1/watchers",
+            response=resp,
         )
         result, _ = _run(["add", "TEST-1", "--user", "asmith"], mc)
         assert result.exit_code == 1
@@ -291,9 +298,17 @@ class TestWatchersRemove:
         assert data == {"key": "TEST-1", "user": "bwilson", "removed": True}
 
     def test_remove_non_watcher_surfaces_error(self):
+        """Removing a user who is not watching returns 404; surface it as a
+        requests.HTTPError, not a silent success."""
         mc = _make_mock_client(cloud=False)
         mc.myself.return_value = {"name": "bwilson"}
-        mc.issue_delete_watcher.side_effect = Exception("404 Not Found")
+        resp = requests.Response()
+        resp.status_code = 404
+        resp.reason = "Not Found"
+        mc.issue_delete_watcher.side_effect = requests.exceptions.HTTPError(
+            "404 Client Error: Not Found for url: /rest/api/2/issue/TEST-1/watchers",
+            response=resp,
+        )
         result, _ = _run(["remove", "TEST-1"], mc)
         assert result.exit_code == 1
         assert "Failed to remove watcher" in result.output
