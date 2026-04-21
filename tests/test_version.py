@@ -656,6 +656,42 @@ class TestDeleteDryRun:
         assert "1.4.0-dup" in result.output
 
 
+class TestDelete:
+    def test_delete_with_move_fix_to(self):
+        mc = _make_mock_client()
+        mc.delete.return_value = {}
+        result, _ = _run(["delete", "10050", "--move-fix-to", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        path = mc.delete.call_args.args[0]
+        assert path == "rest/api/2/version/10050"
+        params = mc.delete.call_args.kwargs.get("params") or {}
+        assert params.get("moveFixIssuesTo") == "10042"
+        # Not provided → absent
+        assert "moveAffectedIssuesTo" not in params
+
+    def test_delete_with_both_move_targets(self):
+        mc = _make_mock_client()
+        mc.delete.return_value = {}
+        result, _ = _run(
+            ["delete", "10050", "--move-fix-to", "10042", "--move-affected-to", "10043"], mc
+        )
+        assert result.exit_code == 0
+        params = mc.delete.call_args.kwargs.get("params") or {}
+        assert params.get("moveFixIssuesTo") == "10042"
+        assert params.get("moveAffectedIssuesTo") == "10043"
+
+    def test_delete_without_move_targets_warns(self):
+        mc = _make_mock_client()
+        mc.delete.return_value = {}
+        result, _ = _run(["delete", "10050"], mc)
+        assert result.exit_code == 0, result.output
+        # Warning printed (to stderr captured by CliRunner into result.output)
+        assert "orphan" in result.output.lower() or "warning" in result.output.lower() or "⚠" in result.output
+        params = mc.delete.call_args.kwargs.get("params") or {}
+        assert "moveFixIssuesTo" not in params
+        assert "moveAffectedIssuesTo" not in params
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 

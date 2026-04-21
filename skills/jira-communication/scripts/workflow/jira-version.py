@@ -589,7 +589,33 @@ def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
               + (f" → {move_affected_to}" if move_affected_to else " (would be orphaned)"))
         return
 
-    raise NotImplementedError  # Task 19
+    # non-dry-run
+    params: dict = {}
+    if move_fix_to:
+        params["moveFixIssuesTo"] = move_fix_to
+    if move_affected_to:
+        params["moveAffectedIssuesTo"] = move_affected_to
+
+    if not move_fix_to and not move_affected_to:
+        warning(
+            f"No --move-fix-to / --move-affected-to provided. "
+            f"fixVersions/versions references on existing issues will be orphaned."
+        )
+
+    try:
+        client.delete(f"rest/api/2/version/{version_id}", params=params or None)
+        parts = []
+        if move_fix_to:
+            parts.append(f"fixVersion refs reassigned to {move_fix_to}")
+        if move_affected_to:
+            parts.append(f"affectsVersion refs reassigned to {move_affected_to}")
+        detail = "; " + "; ".join(parts) if parts else ""
+        success(f"Deleted version {version_id}{detail}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to delete version: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
