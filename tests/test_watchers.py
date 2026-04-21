@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest import mock
 
 import click.testing
-import pytest
 
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
