@@ -251,10 +251,47 @@ def _fetch_counts(client, vid: str) -> dict:
 @cli.command()
 @click.argument("project_key")
 @click.argument("name")
+@click.option("--description", help="Version description (plain text or wiki markup)")
+@click.option("--start-date", help="Start date YYYY-MM-DD")
+@click.option("--release-date", help="Release date YYYY-MM-DD")
+@click.option("--released", is_flag=True, help="Mark as released on creation")
+@click.option("--archived", is_flag=True, help="Mark as archived on creation")
+@click.option("--dry-run", is_flag=True, help="Show what would be created")
 @click.pass_context
-def create(ctx, project_key: str, name: str):
+def create(ctx, project_key, name, description, start_date, release_date, released, archived, dry_run):
     """Create a new version in a project."""
-    raise NotImplementedError
+    client = ctx.obj["client"]
+    payload = {"name": name, "project": project_key, "released": released, "archived": archived}
+    if description:
+        payload["description"] = description
+    if start_date:
+        payload["startDate"] = _validate_iso_date(start_date)
+    if release_date:
+        payload["releaseDate"] = _validate_iso_date(release_date)
+
+    if dry_run:
+        warning("DRY RUN - No version will be created")
+        print(f"Would POST rest/api/2/version with:\n  {payload}")
+        return
+
+    try:
+        created = client.post("rest/api/2/version", data=payload)
+        vid = (created or {}).get("id", "?")
+
+        if ctx.obj["json"]:
+            format_output(created, as_json=True)
+        elif ctx.obj["quiet"]:
+            print(vid)
+        else:
+            extra = f" (release {release_date})" if release_date else ""
+            success(f'Created version {vid} "{name}" in {project_key}{extra}')
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        # Delegate 409 handling to Task 10
+        error(f"Failed to create version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
