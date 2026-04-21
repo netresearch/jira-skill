@@ -410,9 +410,7 @@ def update(ctx, version_id, name, description, start_date, release_date, release
 @click.pass_context
 def release(ctx, version_id, release_date, dry_run):
     """Mark a version released (sets released=true + releaseDate)."""
-    from datetime import date as _d
-
-    rdate = _validate_iso_date(release_date) if release_date else _d.today().isoformat()
+    rdate = _validate_iso_date(release_date) if release_date else _date.today().isoformat()
     patch = {"released": True, "releaseDate": rdate}
 
     if dry_run:
