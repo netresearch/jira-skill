@@ -46,6 +46,28 @@ def _fmt_list_row(v: dict) -> dict:
     }
 
 
+def _is_numeric_id(s: str) -> bool:
+    return s.isdigit()
+
+
+def _render_version(v: dict, counts: dict | None = None) -> str:
+    lines = [
+        f"Version {v.get('id', '?')} — {v.get('name', '')}",
+        f"  Project:      {v.get('project', v.get('projectId', ''))}",
+        f"  Status:       {_status_of(v)}",
+        f"  Start:        {v.get('startDate', '-') or '-'}",
+        f"  Release:      {v.get('releaseDate', '-') or '-'}",
+    ]
+    if v.get("description"):
+        lines.append(f"  Description:  {v['description']}")
+    if counts:
+        fixed = counts.get("issuesFixedCount", counts.get("fixed", "?"))
+        affected = counts.get("issuesAffectedCount", counts.get("affected", "?"))
+        unresolved = counts.get("issuesUnresolvedCount", counts.get("unresolved", "?"))
+        lines.append(f"  Issues:       fixed={fixed} affected={affected} unresolved={unresolved}")
+    return "\n".join(lines)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -145,10 +167,48 @@ def _fetch_versions_paginated(client, project_key, status=None, query=None, orde
 
 @cli.command()
 @click.argument("version")
+@click.option("--project", help="Required when VERSION is a name (not an ID)")
+@click.option("--counts", is_flag=True, help="Include fixed/affected/unresolved issue counts")
 @click.pass_context
-def get(ctx, version: str):
+def get(ctx, version: str, project: str | None, counts: bool):
     """Get a single version by ID or name."""
-    raise NotImplementedError
+    client = ctx.obj["client"]
+    try:
+        if _is_numeric_id(version):
+            v = client.get(f"rest/api/2/version/{version}")
+        else:
+            v = _resolve_version_by_name(client, version, project)  # implemented in Task 6
+
+        extra = None
+        if counts:
+            extra = _fetch_counts(client, v["id"])  # implemented in Task 7
+
+        if ctx.obj["json"]:
+            payload = dict(v)
+            if extra:
+                payload["_counts"] = extra
+            format_output(payload, as_json=True)
+            return
+        if ctx.obj["quiet"]:
+            print(v.get("id", ""))
+            return
+        print(_render_version(v, counts=extra))
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to get version: {e}")
+        sys.exit(1)
+
+
+def _resolve_version_by_name(client, name, project_key):
+    raise NotImplementedError  # Task 6
+
+
+def _fetch_counts(client, vid):
+    raise NotImplementedError  # Task 7
 
 
 @cli.command()

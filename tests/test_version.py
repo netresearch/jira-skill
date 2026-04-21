@@ -170,6 +170,30 @@ class TestListOutputModes:
         assert lines == ["10042", "10048"]
 
 
+class TestGetById:
+    def test_get_by_id(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version(
+            "10042", "1.4.0", released=False, description="Q2 release",
+            start_date="2026-05-01", release_date="2026-05-31",
+        )
+        result, _ = _run(["get", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        mc.get.assert_called_once_with("rest/api/2/version/10042")
+        assert "1.4.0" in result.output
+        assert "Q2 release" in result.output
+        assert "2026-05-31" in result.output
+
+    def test_get_by_id_json(self):
+        mc = _make_mock_client()
+        v = _make_version("10042", "1.4.0")
+        mc.get.return_value = v
+        result, _ = _run(["--json", "get", "10042"], mc)
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["id"] == "10042"
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
