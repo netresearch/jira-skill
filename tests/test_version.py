@@ -401,6 +401,72 @@ class TestSafeUpdate:
         assert body["description"] == "orig"
 
 
+class TestUpdate:
+    def test_update_description(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", description="old")
+        mc.put.return_value = {}
+        result, _ = _run(["update", "10042", "--description", "new"], mc)
+        assert result.exit_code == 0, result.output
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["description"] == "new"
+        assert body["name"] == "1.4.0"  # retained
+
+    def test_update_name(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0")
+        mc.put.return_value = {}
+        result, _ = _run(["update", "10042", "--name", "1.4.0-final"], mc)
+        assert result.exit_code == 0
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["name"] == "1.4.0-final"
+
+    def test_update_dates(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0")
+        mc.put.return_value = {}
+        result, _ = _run(
+            ["update", "10042", "--start-date", "2026-05-01", "--release-date", "2026-06-07"], mc
+        )
+        assert result.exit_code == 0
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["startDate"] == "2026-05-01"
+        assert body["releaseDate"] == "2026-06-07"
+
+    def test_update_released_flag(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", released=False)
+        mc.put.return_value = {}
+        result, _ = _run(["update", "10042", "--released"], mc)
+        assert result.exit_code == 0
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["released"] is True
+
+    def test_update_unreleased_clears_release_date(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", released=True, release_date="2026-05-31")
+        mc.put.return_value = {}
+        result, _ = _run(["update", "10042", "--unreleased"], mc)
+        assert result.exit_code == 0
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["released"] is False
+        assert body["releaseDate"] is None
+
+    def test_update_dry_run(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0")
+        result, _ = _run(["update", "10042", "--description", "new", "--dry-run"], mc)
+        assert result.exit_code == 0
+        mc.put.assert_not_called()
+        assert "DRY RUN" in result.output
+
+    def test_update_rejects_bad_date(self):
+        mc = _make_mock_client()
+        result, _ = _run(["update", "10042", "--release-date", "tomorrow"], mc)
+        assert result.exit_code != 0
+        mc.put.assert_not_called()
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 

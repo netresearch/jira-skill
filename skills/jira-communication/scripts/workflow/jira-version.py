@@ -328,10 +328,61 @@ def create(ctx, project_key, name, description, start_date, release_date, releas
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--name", help="New name")
+@click.option("--description", help="New description")
+@click.option("--start-date", help="New start date YYYY-MM-DD")
+@click.option("--release-date", help="New release date YYYY-MM-DD")
+@click.option("--released/--unreleased", default=None, help="Mark released or unreleased")
+@click.option("--archived/--unarchived", default=None, help="Mark archived or unarchived")
+@click.option("--dry-run", is_flag=True, help="Show what would be updated")
 @click.pass_context
-def update(ctx, version_id: str):
-    """Update fields on an existing version (GET + merge + PUT)."""
-    raise NotImplementedError
+def update(ctx, version_id, name, description, start_date, release_date,
+           released, archived, dry_run):
+    """Update fields on an existing version (safe-merge: GET + merge + PUT)."""
+    client = ctx.obj["client"]
+
+    patch: dict = {}
+    if name is not None:
+        patch["name"] = name
+    if description is not None:
+        patch["description"] = description
+    if start_date is not None:
+        patch["startDate"] = _validate_iso_date(start_date)
+    if release_date is not None:
+        patch["releaseDate"] = _validate_iso_date(release_date)
+    if released is True:
+        patch["released"] = True
+    elif released is False:
+        # --unreleased: clear releaseDate unless caller also set --release-date
+        patch["released"] = False
+        patch.setdefault("releaseDate", None)
+    if archived is True:
+        patch["archived"] = True
+    elif archived is False:
+        patch["archived"] = False
+
+    if not patch:
+        error("No fields to update. Provide at least one of --name / --description / --start-date / --release-date / --released/--unreleased / --archived/--unarchived")
+        sys.exit(2)
+
+    if dry_run:
+        warning("DRY RUN - No version will be updated")
+        print(f"Would PUT rest/api/2/version/{version_id} with patch:\n  {patch}")
+        return
+
+    try:
+        _safe_update_version(client, version_id, **patch)
+        if ctx.obj["json"]:
+            format_output({"id": version_id, "updated": True, "patch": patch}, as_json=True)
+        elif ctx.obj["quiet"]:
+            print("ok")
+        else:
+            success(f"Updated version {version_id}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to update version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
