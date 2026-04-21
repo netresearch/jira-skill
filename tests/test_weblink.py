@@ -425,11 +425,22 @@ class TestIssueGetLinks:
         assert len(data["webLinks"]) == 1
         assert data["webLinks"][0]["id"] == 10
 
-    def test_json_output_empty_web_links(self):
+    def test_json_output_empty_web_links_stripped_by_default(self):
+        """Empty webLinks is stripped by the default compact JSON mode."""
         mc = _make_mock_client()
         mc.issue.return_value = _make_issue()
         mc.get_issue_remote_links.return_value = []
         result, _ = _run_issue(["--json", "get", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert "webLinks" not in data
+
+    def test_json_output_empty_web_links_kept_with_raw(self):
+        """--raw preserves empty webLinks in the payload."""
+        mc = _make_mock_client()
+        mc.issue.return_value = _make_issue()
+        mc.get_issue_remote_links.return_value = []
+        result, _ = _run_issue(["--json", "get", "TEST-1", "--raw"], mc)
         assert result.exit_code == 0, result.output
         data = json.loads(result.output)
         assert data["webLinks"] == []

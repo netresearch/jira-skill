@@ -368,3 +368,157 @@ class TestMockedCommands:
             result = runner.invoke(_user_mod.cli, ["--json", "me"])
         assert result.exit_code == 0, result.output
         assert "John Doe" in result.output
+
+    def test_board_list_name_filter_passed_to_api(self):
+        """jira-board list --name PATTERN must forward pattern as server-side filter.
+
+        The Jira agile API does partial-match filtering server-side when
+        `name` is passed; we must not fall back to client-side filtering,
+        otherwise instances with 3000+ boards waste a round trip.
+        """
+        mock_client = self._make_mock_client()
+        mock_client.get.return_value = {"values": []}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_board_mod.cli, ["list", "--name", "Lithium"])
+        assert result.exit_code == 0, result.output
+        mock_client.get.assert_called_once()
+        _, kwargs = mock_client.get.call_args
+        params = kwargs.get("params", {})
+        assert params.get("name") == "Lithium"
+
+    def test_issue_get_json_compact_by_default(self):
+        """jira-issue --json get must strip null/empty fields by default."""
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "key": "TEST-1",
+            "id": "10001",
+            "fields": {
+                "summary": "Test",
+                "status": {"name": "Open"},
+                "assignee": None,
+                "labels": [],
+                "customfield_99999": None,
+            },
+        }
+        mock_client.get_issue_remote_links.return_value = []
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["--json", "get", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert "customfield_99999" not in result.output
+        assert "assignee" not in result.output
+        assert "TEST-1" in result.output
+
+    def test_issue_get_json_raw_preserves_nulls(self):
+        """jira-issue --json get --raw must keep null/empty fields."""
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "key": "TEST-1",
+            "fields": {"summary": "Test", "customfield_99999": None},
+        }
+        mock_client.get_issue_remote_links.return_value = []
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["--json", "get", "TEST-1", "--raw"])
+        assert result.exit_code == 0, result.output
+        assert "customfield_99999" in result.output
+
+    def test_issue_time_in_status_help(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_issue_mod.cli, ["time-in-status", "--help"])
+        assert result.exit_code == 0, result.output
+        assert "time" in result.output.lower()
+
+    def test_issue_time_in_status_fetches_changelog_and_prints_summary(self):
+        """time-in-status must request changelog expansion and show per-status durations."""
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "key": "TEST-1",
+            "fields": {
+                "summary": "Test",
+                "status": {"name": "Done"},
+                "created": "2024-01-01T00:00:00.000+0000",
+            },
+            "changelog": {
+                "histories": [
+                    {
+                        "created": "2024-01-03T00:00:00.000+0000",
+                        "items": [{"field": "status", "fromString": "Open", "toString": "In Progress"}],
+                    },
+                    {
+                        "created": "2024-01-10T00:00:00.000+0000",
+                        "items": [{"field": "status", "fromString": "In Progress", "toString": "Done"}],
+                    },
+                ]
+            },
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["time-in-status", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        # Must pass expand=changelog to Jira
+        _, kwargs = mock_client.issue.call_args
+        assert "changelog" in kwargs.get("expand", "")
+        # Output mentions each status
+        assert "Open" in result.output
+        assert "In Progress" in result.output
+        assert "Done" in result.output
+
+    def test_issue_time_in_status_filter_resolves_status_name(self):
+        """--status 'progress' should resolve to 'In Progress' via resolve_status()."""
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "key": "TEST-1",
+            "fields": {
+                "summary": "Test",
+                "status": {"name": "Done"},
+                "created": "2024-01-01T00:00:00.000+0000",
+            },
+            "changelog": {
+                "histories": [
+                    {
+                        "created": "2024-01-03T00:00:00.000+0000",
+                        "items": [{"field": "status", "fromString": "Open", "toString": "In Progress"}],
+                    },
+                    {
+                        "created": "2024-01-10T00:00:00.000+0000",
+                        "items": [{"field": "status", "fromString": "In Progress", "toString": "Done"}],
+                    },
+                ]
+            },
+        }
+        # resolve_status will call client.get("rest/api/2/status")
+        mock_client.get.return_value = [
+            {"name": "Open"},
+            {"name": "In Progress"},
+            {"name": "Done"},
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["time-in-status", "TEST-1", "--status", "progress"])
+        assert result.exit_code == 0, result.output
+        assert "In Progress" in result.output
+
+    def test_issue_time_in_status_json(self):
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "key": "TEST-1",
+            "fields": {
+                "summary": "Test",
+                "status": {"name": "Open"},
+                "created": "2024-01-01T00:00:00.000+0000",
+            },
+            "changelog": {"histories": []},
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["--json", "time-in-status", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        # JSON payload must include the key and a status breakdown
+        import json as _json
+
+        payload = _json.loads(result.output)
+        assert payload["key"] == "TEST-1"
+        assert payload["current_status"] == "Open"
+        assert "Open" in payload["time_in_status"]

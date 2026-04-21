@@ -10,6 +10,7 @@
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -21,8 +22,13 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee
-from lib.output import error, extract_adf_text, format_output, success, warning
+from lib.changelog import (
+    compute_time_in_status,
+    extract_status_transitions,
+    format_timedelta,
+)
+from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee, resolve_status
+from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -54,6 +60,11 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--expand", "-e", help="Fields to expand (changelog,transitions,renderedFields)")
 @click.option("--truncate", type=int, metavar="N", help="Truncate description to N characters")
 @click.option("--full", is_flag=True, help="[DEPRECATED] Show full content (now default behavior)")
+@click.option(
+    "--raw",
+    is_flag=True,
+    help="With --json: return the full Jira payload. Without --raw, null/empty fields are stripped.",
+)
 @click.pass_context
 def get(
     ctx,
@@ -62,6 +73,7 @@ def get(
     expand: str | None,
     truncate: int | None,
     full: bool,
+    raw: bool,
 ):
     """Get issue details.
 
@@ -74,6 +86,10 @@ def get(
       jira-issue get PROJ-123 --fields summary,status,assignee
 
       jira-issue get PROJ-123 --expand changelog,transitions
+
+      jira-issue --json get PROJ-123         # compact JSON (null/empty stripped)
+
+      jira-issue --json get PROJ-123 --raw   # full Jira payload, incl. null customfields
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
@@ -112,7 +128,8 @@ def get(
 
         if ctx.obj["json"]:
             issue["webLinks"] = web_links
-            format_output(issue, as_json=True)
+            payload = issue if raw else compact_json(issue)
+            format_output(payload, as_json=True)
         elif ctx.obj["quiet"]:
             print(issue["key"])
         else:
@@ -287,6 +304,133 @@ def _print_issue(
             print(f"  [{link_id}] {title} \u2014 {link_url}")
 
     print()
+
+
+@cli.command("time-in-status")
+@click.argument("issue_key")
+@click.option(
+    "--status",
+    "-s",
+    "status_filter",
+    help="Show only time spent in this status (resolved via resolve_status)",
+)
+@click.pass_context
+def time_in_status_cmd(ctx, issue_key: str, status_filter: str | None):
+    """Show how long an issue has spent in each status.
+
+    Fetches the changelog and computes cumulative duration per status.
+    If the issue has re-entered a status, durations are summed.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    Examples:
+
+      jira-issue time-in-status PROJ-123
+
+      jira-issue time-in-status PROJ-123 --status Review
+
+      jira-issue --json time-in-status PROJ-123
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        issue = client.issue(issue_key, expand="changelog")
+        fields = issue.get("fields", {})
+        current_status = (fields.get("status") or {}).get("name", "")
+        created_raw = fields.get("created", "")
+        if not created_raw:
+            error(f"Issue {issue_key} has no 'created' timestamp")
+            sys.exit(1)
+
+        # Reuse lib.changelog._parse_iso indirectly by round-tripping through extract
+        transitions = extract_status_transitions(issue)
+        # The issue's own created field needs parsing too
+        from lib.changelog import _parse_iso as _parse
+
+        issue_created = _parse(created_raw)
+        now = datetime.now(timezone.utc)
+
+        per_status = compute_time_in_status(issue_created, transitions, current_status, now)
+
+        # Optionally filter to a single status (with resolution)
+        resolved_status = None
+        if status_filter:
+            try:
+                resolved_status = resolve_status(client, status_filter)
+            except ValueError as e:
+                error(str(e))
+                sys.exit(1)
+
+        if ctx.obj["json"]:
+            payload = {
+                "key": issue_key,
+                "current_status": current_status,
+                "time_in_status": {name: int(delta.total_seconds()) for name, delta in per_status.items()},
+            }
+            if resolved_status is not None:
+                payload["filter_status"] = resolved_status
+                payload["filter_seconds"] = int(per_status.get(resolved_status, _zero_delta()).total_seconds())
+            format_output(payload, as_json=True)
+            return
+
+        if ctx.obj["quiet"]:
+            if resolved_status is not None:
+                delta = per_status.get(resolved_status)
+                print(format_timedelta(delta) if delta else "0m")
+            else:
+                print(current_status)
+            return
+
+        summary = fields.get("summary", "")
+        print(f"\n{issue_key}: {summary}")
+        print("=" * 60)
+        if resolved_status is not None:
+            delta = per_status.get(resolved_status)
+            duration = format_timedelta(delta) if delta else "0m"
+            marker = " (current)" if resolved_status == current_status else ""
+            print(f'In "{resolved_status}"{marker}: {duration}')
+            print()
+            return
+
+        # Show all statuses, ordered by first appearance in the timeline
+        order = _status_order(current_status, transitions)
+        width = max((len(s) for s in per_status), default=0)
+        print("Time in status:")
+        for name in order:
+            if name not in per_status:
+                continue
+            marker = "  ← current" if name == current_status else ""
+            print(f"  {name.ljust(width)}  {format_timedelta(per_status[name])}{marker}")
+        print()
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to compute time-in-status for {issue_key}: {e}")
+        sys.exit(1)
+
+
+def _zero_delta():
+    from datetime import timedelta
+
+    return timedelta(0)
+
+
+def _status_order(current_status: str, transitions: list) -> list[str]:
+    """Return statuses in the order they first appear on the timeline."""
+    seen: list[str] = []
+    if transitions:
+        first_from = transitions[0].get("from") or current_status
+        if first_from and first_from not in seen:
+            seen.append(first_from)
+        for t in transitions:
+            to = t.get("to")
+            if to and to not in seen:
+                seen.append(to)
+    if current_status and current_status not in seen:
+        seen.append(current_status)
+    return seen
 
 
 @cli.command()
