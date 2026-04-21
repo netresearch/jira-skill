@@ -140,6 +140,10 @@ def list_versions(ctx, project_key: str, status: str, query: str | None, order_b
     try:
         if query or order_by:
             versions = _fetch_versions_paginated(client, project_key, status=status, query=query, order_by=order_by)
+            # Server-side `status` param is DC ≥9.x only; apply a client-side
+            # safety filter so older servers don't silently return all statuses.
+            if status != "all":
+                versions = [v for v in versions if _status_of(v) == status]
         else:
             versions = client.get(f"rest/api/2/project/{project_key}/versions") or []
             if status != "all":
