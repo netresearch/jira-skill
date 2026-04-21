@@ -251,6 +251,30 @@ class TestGetCounts:
         assert "unresolved=4" in result.output
 
 
+class TestValidateIsoDate:
+    def test_accepts_iso_date(self):
+        assert _mod._validate_iso_date("2026-05-31") == "2026-05-31"
+
+    def test_accepts_leap_day(self):
+        assert _mod._validate_iso_date("2024-02-29") == "2024-02-29"
+
+    def test_rejects_invalid_day(self):
+        with pytest.raises(click.BadParameter):
+            _mod._validate_iso_date("2026-02-30")
+
+    def test_rejects_timestamp(self):
+        with pytest.raises(click.BadParameter):
+            _mod._validate_iso_date("2026-05-31T00:00:00Z")
+
+    def test_rejects_garbage(self):
+        with pytest.raises(click.BadParameter):
+            _mod._validate_iso_date("tomorrow")
+
+    def test_rejects_slashes(self):
+        with pytest.raises(click.BadParameter):
+            _mod._validate_iso_date("2026/05/31")
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
