@@ -201,3 +201,25 @@ class TestWatchersAdd:
         result, _ = _run(["--quiet", "add", "TEST-1"], mc)
         assert result.exit_code == 0
         assert result.output.strip() == "ok"
+
+    def test_add_self_is_idempotent(self):
+        """Jira returns 204 for duplicate self-adds; script treats as success."""
+        mc = _make_mock_client()
+        mc.myself.return_value = {"name": "bwilson"}
+        # Simulate a second add — library returns None either way, no special
+        # handling needed. The test exists to pin the contract.
+        mc.issue_add_watcher.return_value = None
+        result, _ = _run(["add", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "Added watcher" in result.output
+
+    def test_add_manage_watchers_permission_error(self):
+        mc = _make_mock_client()
+        mc.user_find_by_user_string.return_value = [{"name": "asmith"}]
+        mc.issue_add_watcher.side_effect = Exception(
+            "403 Client Error: Forbidden — Manage Watchers permission required"
+        )
+        result, _ = _run(["add", "TEST-1", "--user", "asmith"], mc)
+        assert result.exit_code == 1
+        assert "Failed to add watcher" in result.output
+        assert "403" in result.output or "Forbidden" in result.output
