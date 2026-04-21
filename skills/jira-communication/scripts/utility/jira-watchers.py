@@ -115,7 +115,7 @@ def list_watchers(ctx, issue_key: str):
             return
 
         if not watchers:
-            print(f"(no watchers) for {issue_key}")
+            print(f"No watchers for {issue_key}")
             return
 
         # Jira returns isWatching at the top level describing the caller —
