@@ -166,3 +166,38 @@ class TestWatchersAdd:
         # a JSON-encoded string; atlassian-python-api passes this straight
         # through as the request body.
         mc.issue_add_watcher.assert_called_once_with("TEST-1", "bwilson")
+
+    def test_add_user_by_username_dc(self):
+        mc = _make_mock_client(cloud=False)
+        mc.user_find_by_user_string.return_value = [
+            {"name": "asmith", "displayName": "Alice Smith"}
+        ]
+        result, _ = _run(["add", "TEST-1", "--user", "asmith"], mc)
+        assert result.exit_code == 0, result.output
+        assert "asmith" in result.output
+        assert "(you)" not in result.output
+        mc.issue_add_watcher.assert_called_once_with("TEST-1", "asmith")
+
+    def test_add_user_by_account_id_cloud(self):
+        """An account-id-shaped identifier bypasses user search."""
+        mc = _make_mock_client(cloud=True)
+        acct = "557058:d5765ebc-27de-4ce3-b520-a77a87e5e99a"
+        result, _ = _run(["add", "TEST-1", "--user", acct], mc)
+        assert result.exit_code == 0, result.output
+        mc.user_find_by_user_string.assert_not_called()
+        mc.issue_add_watcher.assert_called_once_with("TEST-1", acct)
+
+    def test_add_json_output(self):
+        mc = _make_mock_client()
+        mc.myself.return_value = {"name": "bwilson"}
+        result, _ = _run(["--json", "add", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data == {"key": "TEST-1", "user": "bwilson", "added": True}
+
+    def test_add_quiet_output(self):
+        mc = _make_mock_client()
+        mc.myself.return_value = {"name": "bwilson"}
+        result, _ = _run(["--quiet", "add", "TEST-1"], mc)
+        assert result.exit_code == 0
+        assert result.output.strip() == "ok"
