@@ -66,6 +66,18 @@ def _resolve_watcher_identifier(client, identifier: str) -> tuple[str, bool]:
     return resolved["name"], False
 
 
+def _watcher_api_arg(client, identifier: str, is_account_id_value: bool) -> dict:
+    """Return the keyword arg dict for issue_delete_watcher.
+
+    DC takes ?username=...; Cloud takes ?accountId=.... atlassian-python-api
+    exposes both as keyword args; pick based on the resolved identifier
+    shape (an account-id-shaped string means Cloud/accountId).
+    """
+    if is_account_id_value:
+        return {"account_id": identifier}
+    return {"username": identifier}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Subcommands
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -170,8 +182,47 @@ def add(ctx, issue_key: str, user: str):
 @click.option("--dry-run", is_flag=True, help="Show what would be removed")
 @click.pass_context
 def remove(ctx, issue_key: str, user: str, dry_run: bool):
-    """Remove a watcher from an issue (default: yourself)."""
-    raise NotImplementedError
+    """Remove a watcher from an issue (default: yourself).
+
+    ISSUE_KEY: The Jira issue key (e.g. PROJ-123)
+
+    Removing yourself requires only Browse Projects; removing someone else
+    requires Manage Watchers. Removing a non-watcher returns 404 — surfaced
+    as a clean error, not a silent success.
+
+    Examples:
+
+      jira-watchers remove PROJ-123
+
+      jira-watchers remove PROJ-123 --user asmith --dry-run
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        identifier, is_acct = _resolve_watcher_identifier(client, user)
+        suffix = " (you)" if user.lower() == "me" else ""
+
+        if dry_run:
+            warning("DRY RUN - No watcher will be removed")
+            print(f"Would remove {identifier}{suffix} from {issue_key}")
+            return
+
+        kwargs = _watcher_api_arg(client, identifier, is_acct)
+        client.issue_delete_watcher(issue_key, **kwargs)
+
+        if ctx.obj["json"]:
+            print(format_json({"key": issue_key, "user": identifier, "removed": True}))
+        elif ctx.obj["quiet"]:
+            print("ok")
+        else:
+            success(f"Removed watcher from {issue_key}: {identifier}{suffix}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to remove watcher: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
