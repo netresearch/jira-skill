@@ -387,18 +387,53 @@ def update(ctx, version_id, name, description, start_date, release_date,
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--release-date", help="Release date YYYY-MM-DD (default: today)")
+@click.option("--dry-run", is_flag=True, help="Show what would change")
 @click.pass_context
-def release(ctx, version_id: str):
+def release(ctx, version_id, release_date, dry_run):
     """Mark a version released (sets released=true + releaseDate)."""
-    raise NotImplementedError
+    from datetime import date as _d
+    rdate = _validate_iso_date(release_date) if release_date else _d.today().isoformat()
+    patch = {"released": True, "releaseDate": rdate}
+
+    if dry_run:
+        warning("DRY RUN - No version will be updated")
+        print(f"Would release {version_id} on {rdate}")
+        return
+
+    client = ctx.obj["client"]
+    try:
+        _safe_update_version(client, version_id, **patch)
+        success(f"Released version {version_id} on {rdate}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to release version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--dry-run", is_flag=True, help="Show what would change")
 @click.pass_context
-def unrelease(ctx, version_id: str):
+def unrelease(ctx, version_id, dry_run):
     """Mark a version unreleased (clears releaseDate)."""
-    raise NotImplementedError
+    patch = {"released": False, "releaseDate": None}
+
+    if dry_run:
+        warning("DRY RUN - No version will be updated")
+        print(f"Would unrelease {version_id} (releaseDate cleared)")
+        return
+
+    client = ctx.obj["client"]
+    try:
+        _safe_update_version(client, version_id, **patch)
+        success(f"Unreleased version {version_id}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to unrelease version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
