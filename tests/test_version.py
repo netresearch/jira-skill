@@ -539,6 +539,29 @@ class TestArchiveUnarchive:
         mc.put.assert_not_called()
 
 
+class TestSelfUrl:
+    def test_builds_self_url(self):
+        mc = _make_mock_client(url="https://jira.example.com")
+        assert _mod._version_self_url(mc, "10042") == \
+            "https://jira.example.com/rest/api/2/version/10042"
+
+    def test_strips_trailing_slash(self):
+        mc = _make_mock_client(url="https://jira.example.com/")
+        assert _mod._version_self_url(mc, "10042") == \
+            "https://jira.example.com/rest/api/2/version/10042"
+
+    def test_preserves_context_path(self):
+        mc = _make_mock_client(url="https://corp.example.com/jira")
+        assert _mod._version_self_url(mc, "10042") == \
+            "https://corp.example.com/jira/rest/api/2/version/10042"
+
+    def test_raises_without_url(self):
+        mc = mock.Mock()
+        mc.url = ""
+        with pytest.raises(RuntimeError):
+            _mod._version_self_url(mc, "10042")
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 

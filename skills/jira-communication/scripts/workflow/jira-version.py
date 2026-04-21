@@ -277,6 +277,20 @@ def _safe_update_version(client, vid: str, **patch) -> dict:
     return client.put(f"rest/api/2/version/{vid}", data=merged)
 
 
+def _version_self_url(client, vid: str) -> str:
+    """Build a fully-qualified self URL for a version from the client's base URL.
+
+    Used by `move --after OTHER_ID` where the Jira API expects a `self` URL
+    rather than a bare ID. Constructed from the configured Jira base URL
+    (never from user input) to avoid SSRF or cross-instance spoofing.
+    """
+    base = getattr(client, "url", "") or ""
+    if not base:
+        raise RuntimeError("Jira client has no configured URL; cannot build self URL")
+    base = base.rstrip("/")
+    return f"{base}/rest/api/2/version/{vid}"
+
+
 @cli.command()
 @click.argument("project_key")
 @click.argument("name")
