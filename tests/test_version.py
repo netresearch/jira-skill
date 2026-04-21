@@ -74,8 +74,7 @@ class TestList:
     def test_list_flat_endpoint_default(self):
         mc = _make_mock_client()
         mc.get.return_value = [
-            _make_version("10042", "1.4.0", released=False,
-                          start_date="2026-05-01", release_date="2026-05-31"),
+            _make_version("10042", "1.4.0", released=False, start_date="2026-05-01", release_date="2026-05-31"),
             _make_version("10048", "1.6.0", released=False),
         ]
         result, _ = _run(["list", "PROJ"], mc)
@@ -90,8 +89,7 @@ class TestList:
     def test_list_table_columns(self):
         mc = _make_mock_client()
         mc.get.return_value = [
-            _make_version("10042", "1.4.0", released=False,
-                          start_date="2026-05-01", release_date="2026-05-31"),
+            _make_version("10042", "1.4.0", released=False, start_date="2026-05-01", release_date="2026-05-31"),
         ]
         result, _ = _run(["list", "PROJ"], mc)
         assert result.exit_code == 0
@@ -174,8 +172,12 @@ class TestGetById:
     def test_get_by_id(self):
         mc = _make_mock_client()
         mc.get.return_value = _make_version(
-            "10042", "1.4.0", released=False, description="Q2 release",
-            start_date="2026-05-01", release_date="2026-05-31",
+            "10042",
+            "1.4.0",
+            released=False,
+            description="Q2 release",
+            start_date="2026-05-01",
+            release_date="2026-05-31",
         )
         result, _ = _run(["get", "10042"], mc)
         assert result.exit_code == 0, result.output
@@ -294,10 +296,17 @@ class TestCreate:
         mc = _make_mock_client()
         mc.post.return_value = _make_version("10042", "1.4.0")
         result, _ = _run(
-            ["create", "PROJ", "1.4.0",
-             "--description", "Q2 2026",
-             "--start-date", "2026-05-01",
-             "--release-date", "2026-05-31"],
+            [
+                "create",
+                "PROJ",
+                "1.4.0",
+                "--description",
+                "Q2 2026",
+                "--start-date",
+                "2026-05-01",
+                "--release-date",
+                "2026-05-31",
+            ],
             mc,
         )
         assert result.exit_code == 0, result.output
@@ -310,8 +319,7 @@ class TestCreate:
         mc = _make_mock_client()
         mc.post.return_value = _make_version("10042", "1.4.0", released=True, archived=True)
         result, _ = _run(
-            ["create", "PROJ", "1.4.0", "--released", "--archived",
-             "--release-date", "2026-05-31"],
+            ["create", "PROJ", "1.4.0", "--released", "--archived", "--release-date", "2026-05-31"],
             mc,
         )
         assert result.exit_code == 0, result.output
@@ -339,8 +347,9 @@ class TestCreateConflict:
     def test_duplicate_name_409(self):
         mc = _make_mock_client()
         # atlassian-python-api raises HTTPError on 4xx; simulate that shape
-        from requests.exceptions import HTTPError
         from requests import Response
+        from requests.exceptions import HTTPError
+
         resp = Response()
         resp.status_code = 409
         resp._content = b'{"errors":{"name":"A version with this name already exists."}}'
@@ -359,8 +368,12 @@ class TestSafeUpdate:
     def test_merges_patch_onto_current(self):
         mc = _make_mock_client()
         mc.get.return_value = _make_version(
-            "10042", "1.4.0", released=False,
-            description="old", start_date="2026-05-01", release_date="2026-05-31",
+            "10042",
+            "1.4.0",
+            released=False,
+            description="old",
+            start_date="2026-05-01",
+            release_date="2026-05-31",
         )
         mc.put.return_value = {}
         _mod._safe_update_version(mc, "10042", description="new", releaseDate="2026-06-07")
@@ -380,7 +393,10 @@ class TestSafeUpdate:
         """Clearing a field (e.g. unrelease) means explicit None -> null in the PUT body."""
         mc = _make_mock_client()
         mc.get.return_value = _make_version(
-            "10042", "1.4.0", released=True, release_date="2026-05-31",
+            "10042",
+            "1.4.0",
+            released=True,
+            release_date="2026-05-31",
         )
         mc.put.return_value = {}
         _mod._safe_update_version(mc, "10042", released=False, releaseDate=None)
@@ -425,9 +441,7 @@ class TestUpdate:
         mc = _make_mock_client()
         mc.get.return_value = _make_version("10042", "1.4.0")
         mc.put.return_value = {}
-        result, _ = _run(
-            ["update", "10042", "--start-date", "2026-05-01", "--release-date", "2026-06-07"], mc
-        )
+        result, _ = _run(["update", "10042", "--start-date", "2026-05-01", "--release-date", "2026-06-07"], mc)
         assert result.exit_code == 0
         body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
         assert body["startDate"] == "2026-05-01"
@@ -485,15 +499,14 @@ class TestReleaseUnrelease:
         result, _ = _run(["release", "10042"], mc)
         assert result.exit_code == 0, result.output
         from datetime import date
+
         body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
         assert body["released"] is True
         assert body["releaseDate"] == date.today().isoformat()
 
     def test_unrelease_clears_release_date(self):
         mc = _make_mock_client()
-        mc.get.return_value = _make_version(
-            "10042", "1.4.0", released=True, release_date="2026-05-31"
-        )
+        mc.get.return_value = _make_version("10042", "1.4.0", released=True, release_date="2026-05-31")
         mc.put.return_value = {}
         result, _ = _run(["unrelease", "10042"], mc)
         assert result.exit_code == 0, result.output
@@ -542,18 +555,15 @@ class TestArchiveUnarchive:
 class TestSelfUrl:
     def test_builds_self_url(self):
         mc = _make_mock_client(url="https://jira.example.com")
-        assert _mod._version_self_url(mc, "10042") == \
-            "https://jira.example.com/rest/api/2/version/10042"
+        assert _mod._version_self_url(mc, "10042") == "https://jira.example.com/rest/api/2/version/10042"
 
     def test_strips_trailing_slash(self):
         mc = _make_mock_client(url="https://jira.example.com/")
-        assert _mod._version_self_url(mc, "10042") == \
-            "https://jira.example.com/rest/api/2/version/10042"
+        assert _mod._version_self_url(mc, "10042") == "https://jira.example.com/rest/api/2/version/10042"
 
     def test_preserves_context_path(self):
         mc = _make_mock_client(url="https://corp.example.com/jira")
-        assert _mod._version_self_url(mc, "10042") == \
-            "https://corp.example.com/jira/rest/api/2/version/10042"
+        assert _mod._version_self_url(mc, "10042") == "https://corp.example.com/jira/rest/api/2/version/10042"
 
     def test_raises_without_url(self):
         mc = mock.Mock()
@@ -619,15 +629,15 @@ class TestMerge:
         mc = _make_mock_client()
         mc.get.side_effect = [
             {"issuesFixedCount": 7, "issuesAffectedCount": 1},  # src relatedIssueCounts
-            _make_version("10050", "1.4.0-dup"),                 # src version
-            _make_version("10042", "1.4.0"),                     # dst version
+            _make_version("10050", "1.4.0-dup"),  # src version
+            _make_version("10042", "1.4.0"),  # dst version
         ]
         result, _ = _run(["merge", "10050", "INTO", "10042", "--dry-run"], mc)
         assert result.exit_code == 0, result.output
         mc.post.assert_not_called()
         assert "DRY RUN" in result.output
-        assert "7" in result.output   # fixed count
-        assert "1" in result.output   # affected count
+        assert "7" in result.output  # fixed count
+        assert "1" in result.output  # affected count
         assert "1.4.0-dup" in result.output
         assert "1.4.0" in result.output
 
@@ -672,9 +682,7 @@ class TestDelete:
     def test_delete_with_both_move_targets(self):
         mc = _make_mock_client()
         mc.delete.return_value = {}
-        result, _ = _run(
-            ["delete", "10050", "--move-fix-to", "10042", "--move-affected-to", "10043"], mc
-        )
+        result, _ = _run(["delete", "10050", "--move-fix-to", "10042", "--move-affected-to", "10043"], mc)
         assert result.exit_code == 0
         params = mc.delete.call_args.kwargs.get("params") or {}
         assert params.get("moveFixIssuesTo") == "10042"
@@ -697,8 +705,7 @@ class TestHelp:
 
     @pytest.mark.parametrize(
         "subcmd",
-        ["list", "get", "create", "update", "release", "unrelease",
-         "archive", "unarchive", "move", "merge", "delete"],
+        ["list", "get", "create", "update", "release", "unrelease", "archive", "unarchive", "move", "merge", "delete"],
     )
     def test_subcommand_help(self, subcmd):
         runner = click.testing.CliRunner()
@@ -709,6 +716,17 @@ class TestHelp:
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--help"])
         assert result.exit_code == 0
-        for sub in ("list", "get", "create", "update", "release", "unrelease",
-                    "archive", "unarchive", "move", "merge", "delete"):
+        for sub in (
+            "list",
+            "get",
+            "create",
+            "update",
+            "release",
+            "unrelease",
+            "archive",
+            "unarchive",
+            "move",
+            "merge",
+            "delete",
+        ):
             assert sub in result.output
