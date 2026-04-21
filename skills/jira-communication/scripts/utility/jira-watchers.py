@@ -107,6 +107,7 @@ def list_watchers(ctx, issue_key: str):
 
         watchers = data.get("watchers", []) or []
         count = data.get("watchCount", len(watchers))
+        is_watching = bool(data.get("isWatching"))
 
         if ctx.obj["quiet"]:
             for w in watchers:
@@ -117,7 +118,11 @@ def list_watchers(ctx, issue_key: str):
             print(f"(no watchers) for {issue_key}")
             return
 
-        print(f"Watchers for {issue_key} ({count}):\n")
+        # Jira returns isWatching at the top level describing the caller —
+        # surface it in the header so users know their own subscription state
+        # without a second client.myself() round-trip.
+        status = "you are watching" if is_watching else "you are not watching"
+        print(f"Watchers for {issue_key} ({count}) — {status}:\n")
         for w in watchers:
             name = w.get("name") or w.get("accountId", "")
             display = w.get("displayName", "")
