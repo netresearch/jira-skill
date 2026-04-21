@@ -25,7 +25,6 @@ import click
 from lib.client import LazyJiraClient
 from lib.output import error, format_output, format_table, success, warning
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -41,9 +40,7 @@ def _validate_iso_date(s: str) -> str:
     client-side with a clear error.
     """
     if not isinstance(s, str) or not _ISO_DATE_RE.match(s):
-        raise click.BadParameter(
-            f'Expected YYYY-MM-DD, got "{s}". Timestamps are not allowed.'
-        )
+        raise click.BadParameter(f'Expected YYYY-MM-DD, got "{s}". Timestamps are not allowed.')
     try:
         y, m, d = (int(p) for p in s.split("-"))
         _date(y, m, d)
@@ -120,11 +117,18 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 
 @cli.command("list")
 @click.argument("project_key")
-@click.option("--status", type=click.Choice(["released", "unreleased", "archived", "all"]),
-              default="unreleased", help="Filter by status")
+@click.option(
+    "--status",
+    type=click.Choice(["released", "unreleased", "archived", "all"]),
+    default="unreleased",
+    help="Filter by status",
+)
 @click.option("--query", help="Filter by name substring (paginated endpoint)")
-@click.option("--order-by", type=click.Choice(["sequence", "name", "startDate", "releaseDate"]),
-              help="Sort order (paginated endpoint)")
+@click.option(
+    "--order-by",
+    type=click.Choice(["sequence", "name", "startDate", "releaseDate"]),
+    help="Sort order (paginated endpoint)",
+)
 @click.pass_context
 def list_versions(ctx, project_key: str, status: str, query: str | None, order_by: str | None):
     """List versions in a project.
@@ -135,8 +139,7 @@ def list_versions(ctx, project_key: str, status: str, query: str | None, order_b
     client = ctx.obj["client"]
     try:
         if query or order_by:
-            versions = _fetch_versions_paginated(client, project_key, status=status,
-                                                 query=query, order_by=order_by)
+            versions = _fetch_versions_paginated(client, project_key, status=status, query=query, order_by=order_by)
         else:
             versions = client.get(f"rest/api/2/project/{project_key}/versions") or []
             if status != "all":
@@ -350,8 +353,7 @@ def create(ctx, project_key, name, description, start_date, release_date, releas
 @click.option("--archived/--unarchived", default=None, help="Mark archived or unarchived")
 @click.option("--dry-run", is_flag=True, help="Show what would be updated")
 @click.pass_context
-def update(ctx, version_id, name, description, start_date, release_date,
-           released, archived, dry_run):
+def update(ctx, version_id, name, description, start_date, release_date, released, archived, dry_run):
     """Update fields on an existing version (safe-merge: GET + merge + PUT)."""
     client = ctx.obj["client"]
 
@@ -376,7 +378,9 @@ def update(ctx, version_id, name, description, start_date, release_date,
         patch["archived"] = False
 
     if not patch:
-        error("No fields to update. Provide at least one of --name / --description / --start-date / --release-date / --released/--unreleased / --archived/--unarchived")
+        error(
+            "No fields to update. Provide at least one of --name / --description / --start-date / --release-date / --released/--unreleased / --archived/--unarchived"
+        )
         sys.exit(2)
 
     if dry_run:
@@ -407,6 +411,7 @@ def update(ctx, version_id, name, description, start_date, release_date,
 def release(ctx, version_id, release_date, dry_run):
     """Mark a version released (sets released=true + releaseDate)."""
     from datetime import date as _d
+
     rdate = _validate_iso_date(release_date) if release_date else _d.today().isoformat()
     patch = {"released": True, "releaseDate": rdate}
 
@@ -495,8 +500,9 @@ def unarchive(ctx, version_id, dry_run):
 @cli.command()
 @click.argument("version_id")
 @click.option("--after", help="Move this version to directly after the given version ID")
-@click.option("--position", type=click.Choice(["First", "Last", "Earlier", "Later"]),
-              help="Move relative to current position")
+@click.option(
+    "--position", type=click.Choice(["First", "Last", "Earlier", "Later"]), help="Move relative to current position"
+)
 @click.option("--dry-run", is_flag=True, help="Show what would change")
 @click.pass_context
 def move(ctx, version_id, after, position, dry_run):
@@ -550,8 +556,7 @@ def merge(ctx, src_id, into, dst_id, dry_run):
         dst = client.get(f"rest/api/2/version/{dst_id}") or {}
         fixed = counts.get("issuesFixedCount", "?")
         affected = counts.get("issuesAffectedCount", "?")
-        print(f'Would merge {src_id} "{src.get("name", "?")}" INTO '
-              f'{dst_id} "{dst.get("name", "?")}":')
+        print(f'Would merge {src_id} "{src.get("name", "?")}" INTO {dst_id} "{dst.get("name", "?")}":')
         print(f"  fixed issues to reassign:    {fixed}")
         print(f"  affected issues to reassign: {affected}")
         print("  source version would be deleted")
@@ -583,10 +588,11 @@ def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
         fixed = counts.get("issuesFixedCount", "?")
         affected = counts.get("issuesAffectedCount", "?")
         print(f'Would delete {version_id} "{v.get("name", "?")}":')
-        print(f"  fixVersion refs:        {fixed}"
-              + (f" → {move_fix_to}" if move_fix_to else " (would be orphaned)"))
-        print(f"  affectsVersion refs:    {affected}"
-              + (f" → {move_affected_to}" if move_affected_to else " (would be orphaned)"))
+        print(f"  fixVersion refs:        {fixed}" + (f" → {move_fix_to}" if move_fix_to else " (would be orphaned)"))
+        print(
+            f"  affectsVersion refs:    {affected}"
+            + (f" → {move_affected_to}" if move_affected_to else " (would be orphaned)")
+        )
         return
 
     # non-dry-run
@@ -598,8 +604,8 @@ def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
 
     if not move_fix_to and not move_affected_to:
         warning(
-            f"No --move-fix-to / --move-affected-to provided. "
-            f"fixVersions/versions references on existing issues will be orphaned."
+            "No --move-fix-to / --move-affected-to provided. "
+            "fixVersions/versions references on existing issues will be orphaned."
         )
 
     try:
