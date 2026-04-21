@@ -494,10 +494,39 @@ def unarchive(ctx, version_id, dry_run):
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--after", help="Move this version to directly after the given version ID")
+@click.option("--position", type=click.Choice(["First", "Last", "Earlier", "Later"]),
+              help="Move relative to current position")
+@click.option("--dry-run", is_flag=True, help="Show what would change")
 @click.pass_context
-def move(ctx, version_id: str):
+def move(ctx, version_id, after, position, dry_run):
     """Reorder a version within its project."""
-    raise NotImplementedError
+    if bool(after) == bool(position):
+        error("Provide exactly one of --after or --position")
+        sys.exit(2)
+
+    client = ctx.obj["client"]
+    if after:
+        body = {"after": _version_self_url(client, after)}
+    else:
+        body = {"position": position}
+
+    if dry_run:
+        warning("DRY RUN - No version will be moved")
+        print(f"Would POST rest/api/2/version/{version_id}/move with:\n  {body}")
+        return
+
+    try:
+        client.post(f"rest/api/2/version/{version_id}/move", data=body)
+        if after:
+            success(f"Moved version {version_id} after {after}")
+        else:
+            success(f"Moved version {version_id} to {position}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to move version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
