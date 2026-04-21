@@ -50,8 +50,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @cli.command("list")
 @click.option("--project", "-p", help="Filter by project key")
 @click.option("--type", "-t", "board_type", type=click.Choice(["scrum", "kanban"]), help="Filter by board type")
+@click.option("--name", "-n", "name_pattern", help="Filter by board name (server-side partial match)")
 @click.pass_context
-def list_boards(ctx, project: str | None, board_type: str | None):
+def list_boards(ctx, project: str | None, board_type: str | None, name_pattern: str | None):
     """List agile boards.
 
     Examples:
@@ -61,6 +62,8 @@ def list_boards(ctx, project: str | None, board_type: str | None):
       jira-board list --project PROJ
 
       jira-board list --type scrum
+
+      jira-board list --name Lithium        # server-side partial match on board name
     """
     client = ctx.obj["client"]
 
@@ -70,6 +73,8 @@ def list_boards(ctx, project: str | None, board_type: str | None):
             params["projectKeyOrId"] = project
         if board_type:
             params["type"] = board_type
+        if name_pattern:
+            params["name"] = name_pattern
 
         response = client.get("rest/agile/1.0/board", params=params)
         boards = response.get("values", [])
@@ -84,6 +89,8 @@ def list_boards(ctx, project: str | None, board_type: str | None):
                 print("No boards found")
                 if project:
                     print(f"  (filtered by project: {project})")
+                if name_pattern:
+                    print(f"  (filtered by name: {name_pattern})")
             else:
                 print(f"Agile boards ({len(boards)} found):\n")
                 rows = []
