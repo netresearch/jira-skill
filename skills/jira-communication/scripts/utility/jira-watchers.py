@@ -20,7 +20,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, is_account_id, resolve_assignee
+from lib.client import LazyJiraClient, resolve_assignee
 from lib.output import error, format_json, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
