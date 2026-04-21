@@ -100,8 +100,9 @@ class TestWatchersList:
         }
         result, _ = _run(["list", "TEST-1"], mc)
         assert result.exit_code == 0, result.output
-        assert "(no watchers)" in result.output
-        assert "TEST-1" in result.output
+        # Design doc (2026-04-20-watchers-design.md, "list" section): empty
+        # list renders as "No watchers for {key}".
+        assert "No watchers for TEST-1" in result.output
 
     def test_list_json_output(self):
         mc = _make_mock_client()
