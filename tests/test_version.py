@@ -496,6 +496,54 @@ class TestUpdate:
         mc.put.assert_not_called()
 
 
+class TestOutputModesOnMutations:
+    """Destructive/mutating subcommands must honour --quiet and --json."""
+
+    def test_release_quiet(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", released=False)
+        mc.put.return_value = {}
+        result, _ = _run(["--quiet", "release", "10042", "--release-date", "2026-05-31"], mc)
+        assert result.exit_code == 0, result.output
+        # Quiet must not print the ✓ emoji success line
+        assert "✓" not in result.output
+
+    def test_archive_json(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", archived=False)
+        # Jira echoes the updated version on PUT; surface that in --json output.
+        mc.put.return_value = _make_version("10042", "1.4.0", archived=True)
+        result, _ = _run(["--json", "archive", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        parsed = json.loads(result.output)
+        assert parsed.get("id") == "10042"
+        assert parsed.get("archived") is True
+
+    def test_move_quiet(self):
+        mc = _make_mock_client()
+        mc.post.return_value = {}
+        result, _ = _run(["--quiet", "move", "10042", "--position", "First"], mc)
+        assert result.exit_code == 0
+        assert "✓" not in result.output
+
+    def test_merge_json(self):
+        mc = _make_mock_client()
+        mc.post.return_value = {}
+        result, _ = _run(["--json", "merge", "10050", "INTO", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        parsed = json.loads(result.output)
+        assert parsed.get("src") == "10050"
+        assert parsed.get("dst") == "10042"
+        assert parsed.get("merged") is True
+
+    def test_delete_quiet(self):
+        mc = _make_mock_client()
+        mc.delete.return_value = {}
+        result, _ = _run(["--quiet", "delete", "10050", "--move-fix-to", "10042"], mc)
+        assert result.exit_code == 0
+        assert "✓" not in result.output
+
+
 class TestReleaseUnrelease:
     def test_release_with_date(self):
         mc = _make_mock_client()
