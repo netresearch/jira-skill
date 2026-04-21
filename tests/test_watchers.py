@@ -92,3 +92,13 @@ class TestWatchersList:
         assert "asmith" in result.output
         assert "Alice Smith" in result.output
         mc.issue_get_watchers.assert_called_once_with("TEST-1")
+
+    def test_list_empty(self):
+        mc = _make_mock_client()
+        mc.issue_get_watchers.return_value = {
+            "watchCount": 0, "isWatching": False, "watchers": [],
+        }
+        result, _ = _run(["list", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "(no watchers)" in result.output
+        assert "TEST-1" in result.output
