@@ -555,6 +555,9 @@ def move(ctx, version_id, after, position, dry_run):
 
     client = ctx.obj["client"]
     if after:
+        if not _is_numeric_id(after):
+            error(f'--after expects a numeric version ID, got "{after}"')
+            sys.exit(2)
         body = {"after": _version_self_url(client, after)}
     else:
         body = {"position": position}
@@ -653,6 +656,11 @@ def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
         return
 
     # non-dry-run
+    for flag, val in (("--move-fix-to", move_fix_to), ("--move-affected-to", move_affected_to)):
+        if val and not _is_numeric_id(val):
+            error(f'{flag} expects a numeric version ID, got "{val}"')
+            sys.exit(2)
+
     params: dict = {}
     if move_fix_to:
         params["moveFixIssuesTo"] = move_fix_to
