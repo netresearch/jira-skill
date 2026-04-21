@@ -467,6 +467,49 @@ class TestUpdate:
         mc.put.assert_not_called()
 
 
+class TestReleaseUnrelease:
+    def test_release_with_date(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", released=False)
+        mc.put.return_value = {}
+        result, _ = _run(["release", "10042", "--release-date", "2026-05-31"], mc)
+        assert result.exit_code == 0, result.output
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["released"] is True
+        assert body["releaseDate"] == "2026-05-31"
+
+    def test_release_defaults_to_today(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", released=False)
+        mc.put.return_value = {}
+        result, _ = _run(["release", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        from datetime import date
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["released"] is True
+        assert body["releaseDate"] == date.today().isoformat()
+
+    def test_unrelease_clears_release_date(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version(
+            "10042", "1.4.0", released=True, release_date="2026-05-31"
+        )
+        mc.put.return_value = {}
+        result, _ = _run(["unrelease", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["released"] is False
+        assert body["releaseDate"] is None
+
+    def test_release_dry_run(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0")
+        result, _ = _run(["release", "10042", "--release-date", "2026-05-31", "--dry-run"], mc)
+        assert result.exit_code == 0
+        mc.put.assert_not_called()
+        assert "DRY RUN" in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
