@@ -569,10 +569,27 @@ def merge(ctx, src_id, into, dst_id, dry_run):
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--move-fix-to", help="Reassign fixVersions refs to this version ID")
+@click.option("--move-affected-to", help="Reassign affectsVersions refs to this version ID")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
 @click.pass_context
-def delete(ctx, version_id: str):
+def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
     """Delete a version, optionally reassigning fixVersions/versions refs."""
-    raise NotImplementedError
+    client = ctx.obj["client"]
+    if dry_run:
+        v = client.get(f"rest/api/2/version/{version_id}") or {}
+        counts = client.get(f"rest/api/2/version/{version_id}/relatedIssueCounts") or {}
+        warning("DRY RUN - No version will be deleted")
+        fixed = counts.get("issuesFixedCount", "?")
+        affected = counts.get("issuesAffectedCount", "?")
+        print(f'Would delete {version_id} "{v.get("name", "?")}":')
+        print(f"  fixVersion refs:        {fixed}"
+              + (f" → {move_fix_to}" if move_fix_to else " (would be orphaned)"))
+        print(f"  affectsVersion refs:    {affected}"
+              + (f" → {move_affected_to}" if move_affected_to else " (would be orphaned)"))
+        return
+
+    raise NotImplementedError  # Task 19
 
 
 if __name__ == "__main__":
