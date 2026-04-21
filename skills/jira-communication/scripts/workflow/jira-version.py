@@ -438,18 +438,44 @@ def unrelease(ctx, version_id, dry_run):
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--dry-run", is_flag=True, help="Show what would change")
 @click.pass_context
-def archive(ctx, version_id: str):
+def archive(ctx, version_id, dry_run):
     """Archive a version (hides it from pickers)."""
-    raise NotImplementedError
+    if dry_run:
+        warning("DRY RUN - No version will be updated")
+        print(f"Would archive {version_id}")
+        return
+    client = ctx.obj["client"]
+    try:
+        _safe_update_version(client, version_id, archived=True)
+        success(f"Archived version {version_id}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to archive version: {e}")
+        sys.exit(1)
 
 
 @cli.command()
 @click.argument("version_id")
+@click.option("--dry-run", is_flag=True, help="Show what would change")
 @click.pass_context
-def unarchive(ctx, version_id: str):
+def unarchive(ctx, version_id, dry_run):
     """Unarchive a version."""
-    raise NotImplementedError
+    if dry_run:
+        warning("DRY RUN - No version will be updated")
+        print(f"Would unarchive {version_id}")
+        return
+    client = ctx.obj["client"]
+    try:
+        _safe_update_version(client, version_id, archived=False)
+        success(f"Unarchived version {version_id}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to unarchive version: {e}")
+        sys.exit(1)
 
 
 @cli.command()

@@ -510,6 +510,35 @@ class TestReleaseUnrelease:
         assert "DRY RUN" in result.output
 
 
+class TestArchiveUnarchive:
+    def test_archive(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", archived=False)
+        mc.put.return_value = {}
+        result, _ = _run(["archive", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["archived"] is True
+        # Other fields untouched
+        assert body["name"] == "1.4.0"
+
+    def test_unarchive(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", archived=True)
+        mc.put.return_value = {}
+        result, _ = _run(["unarchive", "10042"], mc)
+        assert result.exit_code == 0
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["archived"] is False
+
+    def test_archive_dry_run(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0")
+        result, _ = _run(["archive", "10042", "--dry-run"], mc)
+        assert result.exit_code == 0
+        mc.put.assert_not_called()
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
