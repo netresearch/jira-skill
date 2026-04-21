@@ -44,6 +44,7 @@ _link_mod = _load_script("jira-link", "utility")
 _worklog_query_mod = _load_script("jira-worklog-query", "utility")
 _weblink_mod = _load_script("jira-weblink", "utility")
 _watchers_mod = _load_script("jira-watchers", "utility")
+_version_mod = _load_script("jira-version", "workflow")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -115,6 +116,11 @@ class TestHelpOutput:
     def test_watchers_help(self):
         output = self._run_help(_watchers_mod.cli)
         assert "watcher" in output.lower()
+
+    def test_version_help(self):
+        output = self._run_help(_version_mod.cli)
+        assert "version" in output.lower()
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
