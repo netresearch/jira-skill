@@ -55,11 +55,15 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 def _resolve_watcher_identifier(client, identifier: str) -> tuple[str, bool]:
     """Return (value, is_account_id) suitable for issue_add_watcher / issue_delete_watcher.
 
-    Reuses resolve_assignee() for the hard part (me / accountId / user search) and
-    unwraps the dict into a flat string — the watchers REST API takes a bare
-    identifier, not {"name": ...} / {"accountId": ...}.
+    Reuses resolve_assignee() for 'me' / accountId / user-search handling and
+    unwraps the {"name": ...} / {"accountId": ...} dict into a flat string,
+    because the watchers REST API takes a bare identifier as its JSON body
+    (not an object). atlassian-python-api passes the string through verbatim.
     """
-    raise NotImplementedError
+    resolved = resolve_assignee(client, identifier)
+    if "accountId" in resolved:
+        return resolved["accountId"], True
+    return resolved["name"], False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -119,8 +123,45 @@ def list_watchers(ctx, issue_key: str):
 @click.option("--user", default="me", help="Username, accountId, email, or 'me' (default: me)")
 @click.pass_context
 def add(ctx, issue_key: str, user: str):
-    """Add a watcher to an issue (default: yourself)."""
-    raise NotImplementedError
+    """Add a watcher to an issue (default: yourself).
+
+    ISSUE_KEY: The Jira issue key (e.g. PROJ-123)
+
+    Adding yourself requires only Browse Projects; adding someone else
+    requires the Manage Watchers permission. Self-adds are idempotent —
+    Jira silently accepts repeated adds.
+
+    Examples:
+
+      jira-watchers add PROJ-123
+
+      jira-watchers add PROJ-123 --user asmith
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        identifier, _is_acct = _resolve_watcher_identifier(client, user)
+
+        # POST body is a raw JSON-encoded string (e.g. '"jdoe"'), NOT
+        # {"name": "jdoe"}. atlassian-python-api's issue_add_watcher handles
+        # that correctly — do not wrap in a dict.
+        client.issue_add_watcher(issue_key, identifier)
+
+        suffix = " (you)" if user.lower() == "me" else ""
+
+        if ctx.obj["json"]:
+            print(format_json({"key": issue_key, "user": identifier, "added": True}))
+        elif ctx.obj["quiet"]:
+            print("ok")
+        else:
+            success(f"Added watcher to {issue_key}: {identifier}{suffix}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to add watcher: {e}")
+        sys.exit(1)
 
 
 @cli.command()

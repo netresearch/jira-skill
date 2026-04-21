@@ -144,3 +144,25 @@ class TestWatchersList:
         assert result.exit_code == 0
         lines = [ln for ln in result.output.splitlines() if ln.strip()]
         assert lines == ["jdoe", "asmith"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: add subcommand
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWatchersAdd:
+    def test_add_self_default(self):
+        mc = _make_mock_client()
+        # Default --user is "me", resolve_assignee calls client.myself()
+        mc.myself.return_value = {"name": "bwilson", "displayName": "Bob Wilson"}
+        mc.issue_add_watcher.return_value = None  # 204 No Content
+        result, _ = _run(["add", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "Added watcher" in result.output
+        assert "TEST-1" in result.output
+        assert "bwilson" in result.output
+        # Raw string identifier, not a dict — Jira's watchers POST body is
+        # a JSON-encoded string; atlassian-python-api passes this straight
+        # through as the request body.
+        mc.issue_add_watcher.assert_called_once_with("TEST-1", "bwilson")
