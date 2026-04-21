@@ -203,8 +203,20 @@ def get(ctx, version: str, project: str | None, counts: bool):
         sys.exit(1)
 
 
-def _resolve_version_by_name(client, name, project_key):
-    raise NotImplementedError  # Task 6
+def _resolve_version_by_name(client, name: str, project_key: str | None) -> dict:
+    if not project_key:
+        error("--project is required when looking up a version by name")
+        sys.exit(2)
+    versions = client.get(f"rest/api/2/project/{project_key}/versions") or []
+    matches = [v for v in versions if v.get("name") == name]
+    if not matches:
+        error(f'No version named "{name}" found in {project_key}')
+        sys.exit(1)
+    if len(matches) > 1:
+        ids = ", ".join(v.get("id", "?") for v in matches)
+        error(f'Multiple versions named "{name}" in {project_key} (ids: {ids})')
+        sys.exit(1)
+    return matches[0]
 
 
 def _fetch_counts(client, vid):
