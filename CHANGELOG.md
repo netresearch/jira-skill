@@ -11,10 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`jira-link.py list`**: List all issue links on an issue with IDs, link type, direction, and related issue key/summary/status. Supports `--json` and `--quiet` output modes.
 - **`jira-link.py delete`**: Remove an issue link by `--id` or by the combination of `--to`/`--type`. Detects ambiguous matches and requires `--id` to disambiguate. Supports `--dry-run` preview.
+- **`jira-issue.py time-in-status`**: Compute the cumulative time an issue has spent in each status from its changelog. Supports `--status X` to filter to one status (resolved via new `resolve_status()` helper, so `--status review` matches "In Review"). Also supports `--json`/`--quiet` output. ([#72](https://github.com/netresearch/jira-skill/issues/72))
+- **`resolve_status()`** in `lib/client.py`: canonical-name resolution for Jira statuses, mirroring `resolve_assignee()` — case-insensitive exact match, unambiguous substring match, error with candidate list otherwise. ([#72](https://github.com/netresearch/jira-skill/issues/72))
+- **`jira-board.py list --name PATTERN`**: server-side partial match on board name (passes `name` to `GET /rest/agile/1.0/board`). Avoids pulling thousands of boards on instances with many projects. ([#72](https://github.com/netresearch/jira-skill/issues/72))
+- **`lib/output.py::compact_json()`**: recursively drop `None` / `[]` values from JSON structures.
+- **`lib/changelog.py`**: new module with `extract_status_transitions()`, `compute_time_in_status()`, and `format_timedelta()` helpers.
+- **`references/jql-cookbook.md`**: translation guide for turning natural-language queries into safe JQL — fuzzy-term → JQL mapping, `statusCategory` vs. `status` guidance, resolver pointers (including the new `resolve_status`), ambiguity protocol, worked examples. ([#72](https://github.com/netresearch/jira-skill/issues/72))
 
 ### Changed
 
 - SKILL.md: add examples for the new `jira-link list`/`delete` subcommands and the previously-undocumented `jira-weblink delete`. Full CRUD for both scripts is still discoverable via `--help`; SKILL.md shows the operations most relevant to the new delete workflow within the 500-word cap.
+- **`jira-issue.py --json get` now returns compact JSON by default** — keys with `null` or `[]` values are stripped. Use `--raw` to restore the full Jira payload (including null `customfield_*` entries). Trims typical issue JSON from ~50 KB to a few KB. ([#72](https://github.com/netresearch/jira-skill/issues/72))
+- SKILL.md: add examples for `jira-issue get --expand changelog,transitions`, compact-vs-`--raw` JSON, `time-in-status`, and `jira-board list --name`. Reference the new `jql-cookbook.md`.
 
 ## [3.10.1] - 2026-04-16
 

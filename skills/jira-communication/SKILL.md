@@ -41,6 +41,9 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123
 ```bash
 # Read / search
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123 --expand changelog,transitions   # include status history
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123                            # compact JSON (null/empty stripped); add --raw for full payload
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py time-in-status PROJ-123 [--status Review]      # duration per status from changelog
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed" -n 5 -f key,summary,status
 
 # Update / assign (--fields-json for description and custom fields)
@@ -80,6 +83,9 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py delete PROJ-123 --id 
 
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py types PROJ
 
+# Board discovery (server-side name filter — avoids pulling thousands of boards)
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py list --name Lithium
+
 # Attachments
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 /tmp/report.pdf --dry-run
@@ -94,6 +100,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 /tmp/rep
 ## References
 
 - `references/jql-quick-reference.md` - JQL syntax
+- `references/jql-cookbook.md` - Translating natural-language queries to safe JQL
 - `references/multi-profile.md` - Multi-profile and auto-resolution
 - `references/troubleshooting.md` - Setup and auth
 
