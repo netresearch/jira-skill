@@ -129,14 +129,10 @@ def resolve_status(client, identifier: str) -> str:
     if len(substring_matches) == 1:
         return substring_matches[0]
     if len(substring_matches) > 1:
-        raise ValueError(
-            f"Status '{identifier}' is ambiguous. Candidates: {', '.join(substring_matches)}"
-        )
+        raise ValueError(f"Status '{identifier}' is ambiguous. Candidates: {', '.join(substring_matches)}")
 
     # 3. No match
-    raise ValueError(
-        f"Status '{identifier}' not found. Available: {', '.join(sorted(names))}"
-    )
+    raise ValueError(f"Status '{identifier}' not found. Available: {', '.join(sorted(names))}")
 
 
 def resolve_subtask_type(client, project_key: str, requested_type: str) -> str | None:

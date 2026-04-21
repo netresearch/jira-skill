@@ -64,7 +64,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option(
     "--raw",
     is_flag=True,
-    help="With --json: return the full Jira payload. Without --raw, null/empty fields are stripped.",
+    help=(
+        "With --json: preserve every key on the Jira response (including null "
+        "customfields). Without --raw, null/empty fields are stripped. In either "
+        "case an extra `webLinks` key is added by this script from a separate "
+        "remote-links API call."
+    ),
 )
 @click.pass_context
 def get(
@@ -360,8 +365,10 @@ def time_in_status_cmd(ctx, issue_key: str, status_filter: str | None):
                 sys.exit(1)
 
         if ctx.obj["json"]:
+            # Prefer the canonical key from the fetched issue over the user-supplied
+            # identifier (callers may pass an issue ID; Jira returns the key).
             payload = {
-                "key": issue_key,
+                "key": issue.get("key", issue_key),
                 "current_status": current_status,
                 "time_in_status": {name: int(delta.total_seconds()) for name, delta in per_status.items()},
             }

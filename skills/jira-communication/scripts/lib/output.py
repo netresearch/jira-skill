@@ -108,9 +108,7 @@ def compact_json(data: Any) -> Any:
     """
     if isinstance(data, dict):
         return {
-            k: compact_json(v)
-            for k, v in data.items()
-            if v is not None and not (isinstance(v, list) and len(v) == 0)
+            k: compact_json(v) for k, v in data.items() if v is not None and not (isinstance(v, list) and len(v) == 0)
         }
     if isinstance(data, list):
         return [compact_json(item) for item in data]
