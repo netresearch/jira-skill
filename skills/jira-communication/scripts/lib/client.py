@@ -88,6 +88,57 @@ def get_project_issue_types(client, project_key: str, subtask_only: bool | None 
     return types
 
 
+def resolve_status(client, identifier: str) -> str:
+    """Resolve a status identifier to a canonical Jira status name.
+
+    Uses `GET /rest/api/2/status` and matches:
+    1. Exact (case-insensitive) on status name → return canonical name
+    2. Substring match (unambiguous — exactly one hit) → return canonical name
+    3. Otherwise → raise ValueError with candidates
+
+    The same status name may appear multiple times in the API response
+    (same workflow status used across several workflows). Names are
+    deduplicated before matching.
+
+    Args:
+        client: Jira client instance (must support `.get(path)`).
+        identifier: User-supplied status string to resolve.
+
+    Returns:
+        Canonical status name with original casing from Jira.
+
+    Raises:
+        ValueError: No match, or substring match is ambiguous.
+    """
+    response = client.get("rest/api/2/status") or []
+    if not isinstance(response, list):
+        response = []
+    names: set[str] = {s["name"] for s in response if isinstance(s, dict) and s.get("name")}
+    if not names:
+        raise ValueError("No statuses available from Jira")
+
+    ident_lower = identifier.lower()
+
+    # 1. Exact match (case-insensitive)
+    for name in names:
+        if name.lower() == ident_lower:
+            return name
+
+    # 2. Substring match (unambiguous)
+    substring_matches = sorted(n for n in names if ident_lower in n.lower())
+    if len(substring_matches) == 1:
+        return substring_matches[0]
+    if len(substring_matches) > 1:
+        raise ValueError(
+            f"Status '{identifier}' is ambiguous. Candidates: {', '.join(substring_matches)}"
+        )
+
+    # 3. No match
+    raise ValueError(
+        f"Status '{identifier}' not found. Available: {', '.join(sorted(names))}"
+    )
+
+
 def resolve_subtask_type(client, project_key: str, requested_type: str) -> str | None:
     """Resolve a requested issue type to a valid subtask type for the project.
 

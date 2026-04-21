@@ -18,6 +18,7 @@ from lib.client import (
     get_project_issue_types,
     is_account_id,
     resolve_assignee,
+    resolve_status,
     resolve_subtask_type,
 )
 
@@ -490,3 +491,91 @@ class TestResolveSubtaskType:
         client = _mock_client_with_types(SAMPLE_ISSUE_TYPES)
         result = resolve_subtask_type(client, "PROJ", "Epic")
         assert result is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: resolve_status()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+SAMPLE_STATUSES = [
+    {"id": "1", "name": "Open", "statusCategory": {"key": "new"}},
+    {"id": "2", "name": "In Progress", "statusCategory": {"key": "indeterminate"}},
+    {"id": "3", "name": "In Review", "statusCategory": {"key": "indeterminate"}},
+    {"id": "4", "name": "Code Review", "statusCategory": {"key": "indeterminate"}},
+    {"id": "5", "name": "Done", "statusCategory": {"key": "done"}},
+    # Duplicate name (same status used in multiple workflows) — must be deduped
+    {"id": "6", "name": "Open", "statusCategory": {"key": "new"}},
+]
+
+
+def _mock_client_with_statuses(statuses):
+    """Helper: mock client whose .get('rest/api/2/status') returns statuses."""
+    mock_client = mock.Mock()
+    mock_client.get.return_value = statuses
+    return mock_client
+
+
+class TestResolveStatus:
+    """resolve_status() must return canonical status name or raise ValueError."""
+
+    def test_exact_match_case_insensitive(self):
+        client = _mock_client_with_statuses(SAMPLE_STATUSES)
+        assert resolve_status(client, "in progress") == "In Progress"
+
+    def test_exact_match_preserves_canonical_casing(self):
+        client = _mock_client_with_statuses(SAMPLE_STATUSES)
+        assert resolve_status(client, "DONE") == "Done"
+
+    def test_substring_match_unambiguous(self):
+        """'Progress' matches only 'In Progress'."""
+        client = _mock_client_with_statuses(SAMPLE_STATUSES)
+        assert resolve_status(client, "Progress") == "In Progress"
+
+    def test_substring_match_ambiguous_raises(self):
+        """'review' substring matches both 'In Review' and 'Code Review'."""
+        client = _mock_client_with_statuses(SAMPLE_STATUSES)
+        try:
+            resolve_status(client, "review")
+        except ValueError as e:
+            msg = str(e)
+            assert "ambiguous" in msg.lower()
+            assert "In Review" in msg
+            assert "Code Review" in msg
+        else:
+            raise AssertionError("expected ValueError for ambiguous match")
+
+    def test_no_match_raises_with_candidates(self):
+        client = _mock_client_with_statuses(SAMPLE_STATUSES)
+        try:
+            resolve_status(client, "Closed")
+        except ValueError as e:
+            msg = str(e)
+            assert "Closed" in msg
+            # Candidates listed
+            assert "Open" in msg and "Done" in msg
+        else:
+            raise AssertionError("expected ValueError for no match")
+
+    def test_duplicate_names_deduplicated(self):
+        """Same status name from multiple workflows must resolve cleanly."""
+        client = _mock_client_with_statuses(SAMPLE_STATUSES)
+        assert resolve_status(client, "Open") == "Open"
+
+    def test_empty_status_list_raises(self):
+        client = _mock_client_with_statuses([])
+        try:
+            resolve_status(client, "Open")
+        except ValueError as e:
+            assert "No statuses" in str(e) or "no statuses" in str(e).lower()
+        else:
+            raise AssertionError("expected ValueError for empty list")
+
+    def test_api_returns_none_treated_as_empty(self):
+        client = _mock_client_with_statuses(None)
+        try:
+            resolve_status(client, "Open")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError when API returns None")

@@ -8,7 +8,7 @@ _test_dir = Path(__file__).parent
 _scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
 sys.path.insert(0, str(_scripts_path))
 
-from lib.output import extract_adf_text
+from lib.output import compact_json, extract_adf_text
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: extract_adf_text()
@@ -130,3 +130,69 @@ class TestExtractAdfText:
         assert "Intro" in result
         assert "Step 1" in result
         assert "Summary" in result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: compact_json()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCompactJson:
+    """compact_json() must strip null / empty-list values recursively."""
+
+    def test_strips_none_values(self):
+        assert compact_json({"a": 1, "b": None, "c": "x"}) == {"a": 1, "c": "x"}
+
+    def test_strips_empty_lists(self):
+        assert compact_json({"a": [], "b": [1, 2]}) == {"b": [1, 2]}
+
+    def test_preserves_false_and_zero(self):
+        """Falsy values that aren't None/[] must be preserved."""
+        data = {"truthy": 1, "zero": 0, "false": False, "empty_str": ""}
+        assert compact_json(data) == {"truthy": 1, "zero": 0, "false": False, "empty_str": ""}
+
+    def test_recursive_into_nested_dict(self):
+        data = {"outer": {"inner": None, "kept": "x"}}
+        assert compact_json(data) == {"outer": {"kept": "x"}}
+
+    def test_recursive_into_list_of_dicts(self):
+        data = {"items": [{"a": None, "b": 1}, {"a": 2, "b": None}]}
+        assert compact_json(data) == {"items": [{"b": 1}, {"a": 2}]}
+
+    def test_jira_issue_shape_drops_null_customfields(self):
+        """The real-world case from issue #72."""
+        issue = {
+            "key": "PROJ-1",
+            "id": "10001",
+            "self": "https://jira.example.com/rest/api/2/issue/10001",
+            "fields": {
+                "summary": "Bug",
+                "status": {"name": "Open"},
+                "assignee": None,
+                "labels": [],
+                "customfield_18111": None,
+                "customfield_18112": None,
+                "customfield_18113": [],
+                "priority": {"name": "High"},
+            },
+        }
+        result = compact_json(issue)
+        assert result["key"] == "PROJ-1"
+        assert result["id"] == "10001"
+        assert "customfield_18111" not in result["fields"]
+        assert "customfield_18112" not in result["fields"]
+        assert "customfield_18113" not in result["fields"]
+        assert "assignee" not in result["fields"]
+        assert "labels" not in result["fields"]
+        assert result["fields"]["summary"] == "Bug"
+        assert result["fields"]["status"] == {"name": "Open"}
+
+    def test_does_not_mutate_input(self):
+        original = {"a": None, "b": 1}
+        compact_json(original)
+        assert "a" in original  # input untouched
+
+    def test_non_dict_non_list_passthrough(self):
+        assert compact_json("hello") == "hello"
+        assert compact_json(42) == 42
+        assert compact_json(None) is None

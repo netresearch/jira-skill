@@ -86,6 +86,37 @@ def format_table(data: list, columns: list | None = None) -> str:
     return "\n".join(lines)
 
 
+def compact_json(data: Any) -> Any:
+    """Recursively drop keys whose value is None or an empty list.
+
+    Motivation: Jira issue payloads include 100+ `customfield_*` entries
+    that are typically null on any given issue, bloating `--json` output
+    to 50+ KB for a single issue. This helper removes the noise without
+    touching meaningful falsy values (0, False, "").
+
+    Rules:
+        * dict values that are `None` or `[]` are dropped
+        * lists are mapped element-wise
+        * everything else (including 0, False, "") passes through
+        * the input is not mutated
+
+    Args:
+        data: Any JSON-like value (dict, list, scalar).
+
+    Returns:
+        A new structure with null/empty-list entries removed.
+    """
+    if isinstance(data, dict):
+        return {
+            k: compact_json(v)
+            for k, v in data.items()
+            if v is not None and not (isinstance(v, list) and len(v) == 0)
+        }
+    if isinstance(data, list):
+        return [compact_json(item) for item in data]
+    return data
+
+
 def format_output(data: Any, as_json: bool = False, quiet: bool = False) -> None:
     """Format and print output based on flags.
 
