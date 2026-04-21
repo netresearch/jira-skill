@@ -194,6 +194,42 @@ class TestGetById:
         assert parsed["id"] == "10042"
 
 
+class TestGetByName:
+    def test_get_by_name_requires_project(self):
+        mc = _make_mock_client()
+        result, _ = _run(["get", "1.4.0"], mc)
+        assert result.exit_code != 0
+        assert "--project" in result.output.lower() or "project" in result.output.lower()
+
+    def test_get_by_name_resolves(self):
+        mc = _make_mock_client()
+        mc.get.return_value = [
+            _make_version("10041", "1.3.0"),
+            _make_version("10042", "1.4.0"),
+        ]
+        result, _ = _run(["get", "1.4.0", "--project", "PROJ"], mc)
+        assert result.exit_code == 0, result.output
+        mc.get.assert_called_once_with("rest/api/2/project/PROJ/versions")
+        assert "10042" in result.output
+
+    def test_get_by_name_no_match(self):
+        mc = _make_mock_client()
+        mc.get.return_value = [_make_version("10041", "1.3.0")]
+        result, _ = _run(["get", "1.4.0", "--project", "PROJ"], mc)
+        assert result.exit_code != 0
+        assert "not found" in result.output.lower() or "no version" in result.output.lower()
+
+    def test_get_by_name_ambiguous(self):
+        mc = _make_mock_client()
+        mc.get.return_value = [
+            _make_version("10042", "1.4.0"),
+            _make_version("10043", "1.4.0"),  # duplicate name
+        ]
+        result, _ = _run(["get", "1.4.0", "--project", "PROJ"], mc)
+        assert result.exit_code != 0
+        assert "multiple" in result.output.lower() or "ambiguous" in result.output.lower()
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
