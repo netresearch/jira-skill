@@ -322,13 +322,11 @@ class TestWatchersRemove:
 
 class TestWatcherApiArg:
     def test_dc_username(self):
-        mc = _make_mock_client(cloud=False)
-        assert _watchers_mod._watcher_api_arg(mc, "jdoe", False) == {"username": "jdoe"}
+        assert _watchers_mod._watcher_api_arg("jdoe", False) == {"username": "jdoe"}
 
     def test_cloud_account_id(self):
-        mc = _make_mock_client(cloud=True)
         acct = "557058:d5765ebc-27de-4ce3-b520-a77a87e5e99a"
-        assert _watchers_mod._watcher_api_arg(mc, acct, True) == {"account_id": acct}
+        assert _watchers_mod._watcher_api_arg(acct, True) == {"account_id": acct}
 
 
 class TestWatchersRemoveCloud:
