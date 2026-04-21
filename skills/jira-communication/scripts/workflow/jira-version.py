@@ -8,7 +8,9 @@
 # ///
 """Jira project version operations - list, get, create, update, release lifecycle, move, merge, delete."""
 
+import re
 import sys
+from datetime import date as _date
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -27,6 +29,27 @@ from lib.output import error, format_output, format_table, success, warning
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
+
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_iso_date(s: str) -> str:
+    """Validate an ISO date string (YYYY-MM-DD) and return it unchanged.
+
+    Jira rejects full timestamps like `2026-05-31T00:00:00Z` with a 400 on
+    version start/release dates. This helper enforces the date-only shape
+    client-side with a clear error.
+    """
+    if not isinstance(s, str) or not _ISO_DATE_RE.match(s):
+        raise click.BadParameter(
+            f'Expected YYYY-MM-DD, got "{s}". Timestamps are not allowed.'
+        )
+    try:
+        y, m, d = (int(p) for p in s.split("-"))
+        _date(y, m, d)
+    except ValueError as e:
+        raise click.BadParameter(f'Invalid date "{s}": {e}') from e
+    return s
 
 
 def _status_of(v: dict) -> str:
