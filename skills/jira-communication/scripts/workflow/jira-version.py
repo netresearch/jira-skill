@@ -284,6 +284,26 @@ def _safe_update_version(client, vid: str, **patch) -> dict:
     return client.put(f"rest/api/2/version/{vid}", data=merged)
 
 
+def _emit_mutation_result(ctx, payload: dict, *, fallback_id: str, success_msg: str) -> None:
+    """Render the result of a mutating subcommand honouring --json / --quiet.
+
+    Why: without this, `release` / `archive` / `move` / `merge` / `delete` always
+    print the ``✓ …`` success line, breaking `--quiet` pipelines and emitting
+    non-JSON on `--json`. ``payload`` is the API response (may be empty); when
+    empty we fall back to an id-only JSON object so consumers always get a
+    structured result.
+    """
+    if ctx.obj.get("json"):
+        data = dict(payload) if payload else {"id": fallback_id}
+        format_output(data, as_json=True)
+        return
+    if ctx.obj.get("quiet"):
+        vid = (payload or {}).get("id") or fallback_id
+        print(vid)
+        return
+    success(success_msg)
+
+
 def _version_self_url(client, vid: str) -> str:
     """Build a fully-qualified self URL for a version from the client's base URL.
 
@@ -424,8 +444,13 @@ def release(ctx, version_id, release_date, dry_run):
 
     client = ctx.obj["client"]
     try:
-        _safe_update_version(client, version_id, **patch)
-        success(f"Released version {version_id} on {rdate}")
+        updated = _safe_update_version(client, version_id, **patch) or {}
+        _emit_mutation_result(
+            ctx,
+            updated,
+            fallback_id=version_id,
+            success_msg=f"Released version {version_id} on {rdate}",
+        )
     except Exception as e:
         if ctx.obj["debug"]:
             raise
@@ -448,8 +473,13 @@ def unrelease(ctx, version_id, dry_run):
 
     client = ctx.obj["client"]
     try:
-        _safe_update_version(client, version_id, **patch)
-        success(f"Unreleased version {version_id}")
+        updated = _safe_update_version(client, version_id, **patch) or {}
+        _emit_mutation_result(
+            ctx,
+            updated,
+            fallback_id=version_id,
+            success_msg=f"Unreleased version {version_id}",
+        )
     except Exception as e:
         if ctx.obj["debug"]:
             raise
@@ -469,8 +499,13 @@ def archive(ctx, version_id, dry_run):
         return
     client = ctx.obj["client"]
     try:
-        _safe_update_version(client, version_id, archived=True)
-        success(f"Archived version {version_id}")
+        updated = _safe_update_version(client, version_id, archived=True) or {}
+        _emit_mutation_result(
+            ctx,
+            updated,
+            fallback_id=version_id,
+            success_msg=f"Archived version {version_id}",
+        )
     except Exception as e:
         if ctx.obj["debug"]:
             raise
@@ -490,8 +525,13 @@ def unarchive(ctx, version_id, dry_run):
         return
     client = ctx.obj["client"]
     try:
-        _safe_update_version(client, version_id, archived=False)
-        success(f"Unarchived version {version_id}")
+        updated = _safe_update_version(client, version_id, archived=False) or {}
+        _emit_mutation_result(
+            ctx,
+            updated,
+            fallback_id=version_id,
+            success_msg=f"Unarchived version {version_id}",
+        )
     except Exception as e:
         if ctx.obj["debug"]:
             raise
@@ -525,11 +565,9 @@ def move(ctx, version_id, after, position, dry_run):
         return
 
     try:
-        client.post(f"rest/api/2/version/{version_id}/move", data=body)
-        if after:
-            success(f"Moved version {version_id} after {after}")
-        else:
-            success(f"Moved version {version_id} to {position}")
+        resp = client.post(f"rest/api/2/version/{version_id}/move", data=body) or {}
+        msg = f"Moved version {version_id} after {after}" if after else f"Moved version {version_id} to {position}"
+        _emit_mutation_result(ctx, resp, fallback_id=version_id, success_msg=msg)
     except Exception as e:
         if ctx.obj["debug"]:
             raise
@@ -572,7 +610,12 @@ def merge(ctx, src_id, into, dst_id, dry_run):
 
     try:
         client.post(f"rest/api/2/version/{src_id}/mergeto/{dst_id}")
-        success(f"Merged {src_id} into {dst_id}; source deleted")
+        if ctx.obj.get("json"):
+            format_output({"src": src_id, "dst": dst_id, "merged": True}, as_json=True)
+        elif ctx.obj.get("quiet"):
+            print(dst_id)
+        else:
+            success(f"Merged {src_id} into {dst_id}; source deleted")
     except Exception as e:
         if ctx.obj["debug"]:
             raise
@@ -624,13 +667,23 @@ def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
 
     try:
         client.delete(f"rest/api/2/version/{version_id}", params=params or None)
-        parts = []
-        if move_fix_to:
-            parts.append(f"fixVersion refs reassigned to {move_fix_to}")
-        if move_affected_to:
-            parts.append(f"affectsVersion refs reassigned to {move_affected_to}")
-        detail = "; " + "; ".join(parts) if parts else ""
-        success(f"Deleted version {version_id}{detail}")
+        if ctx.obj.get("json"):
+            payload = {"id": version_id, "deleted": True}
+            if move_fix_to:
+                payload["moveFixIssuesTo"] = move_fix_to
+            if move_affected_to:
+                payload["moveAffectedIssuesTo"] = move_affected_to
+            format_output(payload, as_json=True)
+        elif ctx.obj.get("quiet"):
+            print(version_id)
+        else:
+            parts = []
+            if move_fix_to:
+                parts.append(f"fixVersion refs reassigned to {move_fix_to}")
+            if move_affected_to:
+                parts.append(f"affectsVersion refs reassigned to {move_affected_to}")
+            detail = "; " + "; ".join(parts) if parts else ""
+            success(f"Deleted version {version_id}{detail}")
     except Exception as e:
         if ctx.obj["debug"]:
             raise
