@@ -102,3 +102,45 @@ class TestWatchersList:
         assert result.exit_code == 0, result.output
         assert "(no watchers)" in result.output
         assert "TEST-1" in result.output
+
+    def test_list_json_output(self):
+        mc = _make_mock_client()
+        payload = {
+            "watchCount": 1,
+            "isWatching": True,
+            "watchers": [_watcher("jdoe", "John Doe")],
+        }
+        mc.issue_get_watchers.return_value = payload
+        result, _ = _run(["--json", "list", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["watchCount"] == 1
+        assert data["isWatching"] is True
+        assert data["watchers"][0]["name"] == "jdoe"
+
+    def test_list_quiet_cloud_prints_account_ids(self):
+        mc = _make_mock_client(cloud=True)
+        mc.issue_get_watchers.return_value = {
+            "watchCount": 2,
+            "isWatching": False,
+            "watchers": [
+                _watcher("a", "A", account_id="557058:aaa"),
+                _watcher("b", "B", account_id="557058:bbb"),
+            ],
+        }
+        result, _ = _run(["--quiet", "list", "TEST-1"], mc)
+        assert result.exit_code == 0
+        lines = [ln for ln in result.output.splitlines() if ln.strip()]
+        assert lines == ["557058:aaa", "557058:bbb"]
+
+    def test_list_quiet_dc_prints_usernames(self):
+        mc = _make_mock_client(cloud=False)
+        mc.issue_get_watchers.return_value = {
+            "watchCount": 2,
+            "isWatching": False,
+            "watchers": [_watcher("jdoe", "J"), _watcher("asmith", "A")],
+        }
+        result, _ = _run(["--quiet", "list", "TEST-1"], mc)
+        assert result.exit_code == 0
+        lines = [ln for ln in result.output.splitlines() if ln.strip()]
+        assert lines == ["jdoe", "asmith"]
