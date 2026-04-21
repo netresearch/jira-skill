@@ -562,6 +562,44 @@ class TestSelfUrl:
             _mod._version_self_url(mc, "10042")
 
 
+class TestMove:
+    def test_move_after(self):
+        mc = _make_mock_client(url="https://jira.example.com")
+        mc.post.return_value = {}
+        result, _ = _run(["move", "10045", "--after", "10042"], mc)
+        assert result.exit_code == 0, result.output
+        path = mc.post.call_args.args[0]
+        assert path == "rest/api/2/version/10045/move"
+        body = mc.post.call_args.kwargs.get("data") or mc.post.call_args.kwargs.get("json")
+        assert body["after"] == "https://jira.example.com/rest/api/2/version/10042"
+
+    def test_move_position(self):
+        mc = _make_mock_client()
+        mc.post.return_value = {}
+        result, _ = _run(["move", "10042", "--position", "First"], mc)
+        assert result.exit_code == 0, result.output
+        body = mc.post.call_args.kwargs.get("data") or mc.post.call_args.kwargs.get("json")
+        assert body == {"position": "First"}
+
+    def test_move_requires_after_or_position(self):
+        mc = _make_mock_client()
+        result, _ = _run(["move", "10042"], mc)
+        assert result.exit_code != 0
+        mc.post.assert_not_called()
+
+    def test_move_after_and_position_mutually_exclusive(self):
+        mc = _make_mock_client()
+        result, _ = _run(["move", "10042", "--after", "10041", "--position", "Last"], mc)
+        assert result.exit_code != 0
+        mc.post.assert_not_called()
+
+    def test_move_dry_run(self):
+        mc = _make_mock_client()
+        result, _ = _run(["move", "10042", "--position", "First", "--dry-run"], mc)
+        assert result.exit_code == 0
+        mc.post.assert_not_called()
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
