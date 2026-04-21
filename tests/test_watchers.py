@@ -96,7 +96,9 @@ class TestWatchersList:
     def test_list_empty(self):
         mc = _make_mock_client()
         mc.issue_get_watchers.return_value = {
-            "watchCount": 0, "isWatching": False, "watchers": [],
+            "watchCount": 0,
+            "isWatching": False,
+            "watchers": [],
         }
         result, _ = _run(["list", "TEST-1"], mc)
         assert result.exit_code == 0, result.output
@@ -194,9 +196,7 @@ class TestWatchersAdd:
 
     def test_add_user_by_username_dc(self):
         mc = _make_mock_client(cloud=False)
-        mc.user_find_by_user_string.return_value = [
-            {"name": "asmith", "displayName": "Alice Smith"}
-        ]
+        mc.user_find_by_user_string.return_value = [{"name": "asmith", "displayName": "Alice Smith"}]
         result, _ = _run(["add", "TEST-1", "--user", "asmith"], mc)
         assert result.exit_code == 0, result.output
         assert "asmith" in result.output
