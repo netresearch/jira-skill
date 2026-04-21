@@ -219,8 +219,10 @@ def _resolve_version_by_name(client, name: str, project_key: str | None) -> dict
     return matches[0]
 
 
-def _fetch_counts(client, vid):
-    raise NotImplementedError  # Task 7
+def _fetch_counts(client, vid: str) -> dict:
+    related = client.get(f"rest/api/2/version/{vid}/relatedIssueCounts") or {}
+    unresolved = client.get(f"rest/api/2/version/{vid}/unresolvedIssueCount") or {}
+    return {**related, **unresolved}
 
 
 @cli.command()

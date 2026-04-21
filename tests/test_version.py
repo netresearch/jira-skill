@@ -230,6 +230,27 @@ class TestGetByName:
         assert "multiple" in result.output.lower() or "ambiguous" in result.output.lower()
 
 
+class TestGetCounts:
+    def test_counts_fetches_both_endpoints(self):
+        mc = _make_mock_client()
+        # Three GETs: version, relatedIssueCounts, unresolvedIssueCount
+        mc.get.side_effect = [
+            _make_version("10042", "1.4.0"),
+            {"issuesFixedCount": 12, "issuesAffectedCount": 3},
+            {"issuesUnresolvedCount": 4},
+        ]
+        result, _ = _run(["get", "10042", "--counts"], mc)
+        assert result.exit_code == 0, result.output
+        assert mc.get.call_count == 3
+        paths = [c.args[0] for c in mc.get.call_args_list]
+        assert paths[0] == "rest/api/2/version/10042"
+        assert paths[1] == "rest/api/2/version/10042/relatedIssueCounts"
+        assert paths[2] == "rest/api/2/version/10042/unresolvedIssueCount"
+        assert "fixed=12" in result.output
+        assert "affected=3" in result.output
+        assert "unresolved=4" in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
