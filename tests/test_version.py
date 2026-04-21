@@ -150,6 +150,26 @@ class TestListPaginated:
             assert vid in result.output
 
 
+class TestListOutputModes:
+    def test_list_json_output(self):
+        mc = _make_mock_client()
+        versions = [_make_version("10042", "1.4.0"), _make_version("10048", "1.6.0")]
+        mc.get.return_value = versions
+        result, _ = _run(["--json", "list", "PROJ"], mc)
+        assert result.exit_code == 0, result.output
+        parsed = json.loads(result.output)
+        assert isinstance(parsed, list)
+        assert {v["id"] for v in parsed} == {"10042", "10048"}
+
+    def test_list_quiet_output(self):
+        mc = _make_mock_client()
+        mc.get.return_value = [_make_version("10042", "1.4.0"), _make_version("10048", "1.6.0")]
+        result, _ = _run(["--quiet", "list", "PROJ"], mc)
+        assert result.exit_code == 0
+        lines = [ln for ln in result.output.strip().splitlines() if ln]
+        assert lines == ["10042", "10048"]
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
