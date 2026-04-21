@@ -223,3 +223,55 @@ class TestWatchersAdd:
         assert result.exit_code == 1
         assert "Failed to add watcher" in result.output
         assert "403" in result.output or "Forbidden" in result.output
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: remove subcommand
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWatchersRemove:
+    def test_remove_self_default_dc(self):
+        mc = _make_mock_client(cloud=False)
+        mc.myself.return_value = {"name": "bwilson"}
+        result, _ = _run(["remove", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "Removed watcher" in result.output
+        assert "bwilson" in result.output
+        assert "(you)" in result.output
+        mc.issue_delete_watcher.assert_called_once_with("TEST-1", username="bwilson")
+
+    def test_remove_user_by_username_dc(self):
+        mc = _make_mock_client(cloud=False)
+        mc.user_find_by_user_string.return_value = [{"name": "asmith"}]
+        result, _ = _run(["remove", "TEST-1", "--user", "asmith"], mc)
+        assert result.exit_code == 0, result.output
+        assert "(you)" not in result.output
+        mc.issue_delete_watcher.assert_called_once_with("TEST-1", username="asmith")
+
+    def test_remove_dry_run_does_not_call_api(self):
+        mc = _make_mock_client()
+        mc.myself.return_value = {"name": "bwilson"}
+        result, _ = _run(["remove", "TEST-1", "--dry-run"], mc)
+        assert result.exit_code == 0, result.output
+        assert "DRY RUN" in result.output
+        assert "Would remove" in result.output
+        assert "bwilson" in result.output
+        mc.issue_delete_watcher.assert_not_called()
+
+    def test_remove_json_output(self):
+        mc = _make_mock_client(cloud=False)
+        mc.myself.return_value = {"name": "bwilson"}
+        result, _ = _run(["--json", "remove", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data == {"key": "TEST-1", "user": "bwilson", "removed": True}
+
+    def test_remove_non_watcher_surfaces_error(self):
+        mc = _make_mock_client(cloud=False)
+        mc.myself.return_value = {"name": "bwilson"}
+        mc.issue_delete_watcher.side_effect = Exception("404 Not Found")
+        result, _ = _run(["remove", "TEST-1"], mc)
+        assert result.exit_code == 1
+        assert "Failed to remove watcher" in result.output
+        assert "404" in result.output
