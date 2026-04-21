@@ -144,6 +144,30 @@ class TestWatchersList:
         lines = [ln for ln in result.output.splitlines() if ln.strip()]
         assert lines == ["jdoe", "asmith"]
 
+    def test_list_text_shows_is_watching_when_true(self):
+        """Top-level isWatching=True surfaces in the header so callers see
+        their own subscription state without a second API call."""
+        mc = _make_mock_client()
+        mc.issue_get_watchers.return_value = {
+            "watchCount": 1,
+            "isWatching": True,
+            "watchers": [_watcher("bwilson", "Bob Wilson")],
+        }
+        result, _ = _run(["list", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "you are watching" in result.output.lower()
+
+    def test_list_text_shows_not_watching_when_false(self):
+        mc = _make_mock_client()
+        mc.issue_get_watchers.return_value = {
+            "watchCount": 1,
+            "isWatching": False,
+            "watchers": [_watcher("jdoe", "John Doe")],
+        }
+        result, _ = _run(["list", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "not watching" in result.output.lower()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: add subcommand
