@@ -549,9 +549,15 @@ def merge(ctx, src_id, into, dst_id, dry_run):
 
     if dry_run:
         warning("DRY RUN - No changes will be made")
-        counts = client.get(f"rest/api/2/version/{src_id}/relatedIssueCounts") or {}
-        src = client.get(f"rest/api/2/version/{src_id}") or {}
-        dst = client.get(f"rest/api/2/version/{dst_id}") or {}
+        try:
+            counts = client.get(f"rest/api/2/version/{src_id}/relatedIssueCounts") or {}
+            src = client.get(f"rest/api/2/version/{src_id}") or {}
+            dst = client.get(f"rest/api/2/version/{dst_id}") or {}
+        except Exception as e:
+            if ctx.obj["debug"]:
+                raise
+            error(f"Failed to preview merge: {e}")
+            sys.exit(1)
         fixed = counts.get("issuesFixedCount", "?")
         affected = counts.get("issuesAffectedCount", "?")
         print(f'Would merge {src_id} "{src.get("name", "?")}" INTO {dst_id} "{dst.get("name", "?")}":')
@@ -580,8 +586,14 @@ def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
     """Delete a version, optionally reassigning fixVersions/versions refs."""
     client = ctx.obj["client"]
     if dry_run:
-        v = client.get(f"rest/api/2/version/{version_id}") or {}
-        counts = client.get(f"rest/api/2/version/{version_id}/relatedIssueCounts") or {}
+        try:
+            v = client.get(f"rest/api/2/version/{version_id}") or {}
+            counts = client.get(f"rest/api/2/version/{version_id}/relatedIssueCounts") or {}
+        except Exception as e:
+            if ctx.obj["debug"]:
+                raise
+            error(f"Failed to preview delete: {e}")
+            sys.exit(1)
         warning("DRY RUN - No version will be deleted")
         fixed = counts.get("issuesFixedCount", "?")
         affected = counts.get("issuesAffectedCount", "?")
