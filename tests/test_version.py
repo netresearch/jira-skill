@@ -640,6 +640,22 @@ class TestMerge:
         mc.delete.assert_not_called()
 
 
+class TestDeleteDryRun:
+    def test_delete_dry_run_fetches_counts(self):
+        mc = _make_mock_client()
+        mc.get.side_effect = [
+            _make_version("10050", "1.4.0-dup"),
+            {"issuesFixedCount": 7, "issuesAffectedCount": 1},
+        ]
+        result, _ = _run(["delete", "10050", "--dry-run"], mc)
+        assert result.exit_code == 0, result.output
+        mc.delete.assert_not_called()
+        assert "DRY RUN" in result.output
+        assert "7" in result.output
+        assert "1" in result.output
+        assert "1.4.0-dup" in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
