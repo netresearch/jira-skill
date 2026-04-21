@@ -25,6 +25,28 @@ from lib.output import error, format_output, format_table, success, warning
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _status_of(v: dict) -> str:
+    if v.get("archived"):
+        return "archived"
+    return "released" if v.get("released") else "unreleased"
+
+
+def _fmt_list_row(v: dict) -> dict:
+    return {
+        "ID": v.get("id", ""),
+        "NAME": v.get("name", ""),
+        "STATUS": _status_of(v),
+        "START": v.get("startDate", "-") or "-",
+        "RELEASE": v.get("releaseDate", "-") or "-",
+        "ISSUES": v.get("issueCount", "-") if v.get("issueCount") is not None else "-",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -53,10 +75,50 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 
 @cli.command("list")
 @click.argument("project_key")
+@click.option("--status", type=click.Choice(["released", "unreleased", "archived", "all"]),
+              default="unreleased", help="Filter by status")
+@click.option("--query", help="Filter by name substring (paginated endpoint)")
+@click.option("--order-by", type=click.Choice(["sequence", "name", "startDate", "releaseDate"]),
+              help="Sort order (paginated endpoint)")
 @click.pass_context
-def list_versions(ctx, project_key: str):
-    """List versions in a project."""
-    raise NotImplementedError
+def list_versions(ctx, project_key: str, status: str, query: str | None, order_by: str | None):
+    """List versions in a project.
+
+    Uses the flat `/project/{key}/versions` endpoint unless --query or --order-by
+    is provided, in which case it switches to the paginated endpoint.
+    """
+    client = ctx.obj["client"]
+    try:
+        if query or order_by:
+            versions = _fetch_versions_paginated(client, project_key, status=status,
+                                                 query=query, order_by=order_by)
+        else:
+            versions = client.get(f"rest/api/2/project/{project_key}/versions") or []
+            if status != "all":
+                versions = [v for v in versions if _status_of(v) == status]
+
+        if ctx.obj["json"]:
+            format_output(versions, as_json=True)
+            return
+        if ctx.obj["quiet"]:
+            for v in versions:
+                print(v.get("id", ""))
+            return
+
+        print(f"{status.capitalize()} versions in {project_key} ({len(versions)}):\n")
+        rows = [_fmt_list_row(v) for v in versions]
+        print(format_table(rows, columns=["ID", "NAME", "STATUS", "START", "RELEASE", "ISSUES"]))
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to list versions: {e}")
+        sys.exit(1)
+
+
+def _fetch_versions_paginated(client, project_key, status=None, query=None, order_by=None):
+    """Paginated search — DC >=9.x and Cloud only. Filter by name and/or order server-side."""
+    raise NotImplementedError  # Implemented in Task 3
 
 
 @cli.command()

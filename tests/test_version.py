@@ -70,6 +70,36 @@ def _make_version(
     return v
 
 
+class TestList:
+    def test_list_flat_endpoint_default(self):
+        mc = _make_mock_client()
+        mc.get.return_value = [
+            _make_version("10042", "1.4.0", released=False,
+                          start_date="2026-05-01", release_date="2026-05-31"),
+            _make_version("10048", "1.6.0", released=False),
+        ]
+        result, _ = _run(["list", "PROJ"], mc)
+        assert result.exit_code == 0, result.output
+        # The flat endpoint returns ALL versions; filter happens client-side
+        mc.get.assert_called_once_with("rest/api/2/project/PROJ/versions")
+        assert "10042" in result.output
+        assert "1.4.0" in result.output
+        # Default --status unreleased: both are unreleased so both show
+        assert "10048" in result.output
+
+    def test_list_table_columns(self):
+        mc = _make_mock_client()
+        mc.get.return_value = [
+            _make_version("10042", "1.4.0", released=False,
+                          start_date="2026-05-01", release_date="2026-05-31"),
+        ]
+        result, _ = _run(["list", "PROJ"], mc)
+        assert result.exit_code == 0
+        # Header keywords
+        for header in ("ID", "NAME", "STATUS", "START", "RELEASE", "ISSUES"):
+            assert header in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
