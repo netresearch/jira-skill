@@ -10,7 +10,7 @@
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -26,6 +26,7 @@ from lib.changelog import (
     compute_time_in_status,
     extract_status_transitions,
     format_timedelta,
+    parse_jira_datetime,
 )
 from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee, resolve_status
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
@@ -343,12 +344,8 @@ def time_in_status_cmd(ctx, issue_key: str, status_filter: str | None):
             error(f"Issue {issue_key} has no 'created' timestamp")
             sys.exit(1)
 
-        # Reuse lib.changelog._parse_iso indirectly by round-tripping through extract
         transitions = extract_status_transitions(issue)
-        # The issue's own created field needs parsing too
-        from lib.changelog import _parse_iso as _parse
-
-        issue_created = _parse(created_raw)
+        issue_created = parse_jira_datetime(created_raw)
         now = datetime.now(timezone.utc)
 
         per_status = compute_time_in_status(issue_created, transitions, current_status, now)
@@ -370,7 +367,7 @@ def time_in_status_cmd(ctx, issue_key: str, status_filter: str | None):
             }
             if resolved_status is not None:
                 payload["filter_status"] = resolved_status
-                payload["filter_seconds"] = int(per_status.get(resolved_status, _zero_delta()).total_seconds())
+                payload["filter_seconds"] = int(per_status.get(resolved_status, timedelta(0)).total_seconds())
             format_output(payload, as_json=True)
             return
 
@@ -409,12 +406,6 @@ def time_in_status_cmd(ctx, issue_key: str, status_filter: str | None):
             raise
         error(f"Failed to compute time-in-status for {issue_key}: {e}")
         sys.exit(1)
-
-
-def _zero_delta():
-    from datetime import timedelta
-
-    return timedelta(0)
 
 
 def _status_order(current_status: str, transitions: list) -> list[str]:

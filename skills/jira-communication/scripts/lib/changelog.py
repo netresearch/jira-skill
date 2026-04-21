@@ -3,11 +3,11 @@
 from datetime import datetime, timedelta
 
 
-def _parse_iso(s: str) -> datetime:
-    """Parse an ISO-8601 timestamp, including Jira's '+0000' variant.
+def parse_jira_datetime(s: str) -> datetime:
+    """Parse a Jira ISO-8601 timestamp, including the ``+0000`` variant.
 
-    Python 3.10's ``datetime.fromisoformat`` rejects the compact ``+0000``
-    form Jira emits — normalise to ``+00:00`` first.
+    Python 3.10's :func:`datetime.fromisoformat` rejects the compact
+    ``+0000`` form Jira emits — normalise to ``+00:00`` first.
     """
     if len(s) >= 5 and s[-5] in "+-" and s[-4:].isdigit():
         s = s[:-2] + ":" + s[-2:]
@@ -32,7 +32,7 @@ def extract_status_transitions(issue: dict) -> list[dict]:
         if not created_raw:
             continue
         try:
-            created = _parse_iso(created_raw)
+            created = parse_jira_datetime(created_raw)
         except ValueError:
             continue
         for item in h.get("items", []):
