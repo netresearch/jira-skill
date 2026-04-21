@@ -355,6 +355,52 @@ class TestCreateConflict:
         assert "PROJ" in result.output
 
 
+class TestSafeUpdate:
+    def test_merges_patch_onto_current(self):
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version(
+            "10042", "1.4.0", released=False,
+            description="old", start_date="2026-05-01", release_date="2026-05-31",
+        )
+        mc.put.return_value = {}
+        _mod._safe_update_version(mc, "10042", description="new", releaseDate="2026-06-07")
+
+        mc.get.assert_called_once_with("rest/api/2/version/10042")
+        path = mc.put.call_args.args[0]
+        assert path == "rest/api/2/version/10042"
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["description"] == "new"
+        assert body["releaseDate"] == "2026-06-07"
+        # Untouched fields retained from GET
+        assert body["name"] == "1.4.0"
+        assert body["startDate"] == "2026-05-01"
+        assert body["released"] is False
+
+    def test_explicit_none_sets_null(self):
+        """Clearing a field (e.g. unrelease) means explicit None -> null in the PUT body."""
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version(
+            "10042", "1.4.0", released=True, release_date="2026-05-31",
+        )
+        mc.put.return_value = {}
+        _mod._safe_update_version(mc, "10042", released=False, releaseDate=None)
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["released"] is False
+        assert "releaseDate" in body
+        assert body["releaseDate"] is None
+
+    def test_does_not_send_unset_kwargs(self):
+        """Kwargs not passed by the caller must not appear in the patch."""
+        mc = _make_mock_client()
+        mc.get.return_value = _make_version("10042", "1.4.0", description="orig")
+        mc.put.return_value = {}
+        _mod._safe_update_version(mc, "10042", name="1.4.0-rc")
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert body["name"] == "1.4.0-rc"
+        # description retained from GET, not cleared
+        assert body["description"] == "orig"
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 

@@ -248,6 +248,35 @@ def _fetch_counts(client, vid: str) -> dict:
     return {**related, **unresolved}
 
 
+# Sentinel distinguishes "caller did not provide this key" from "caller passed None to clear".
+_UNSET = object()
+
+
+def _safe_update_version(client, vid: str, **patch) -> dict:
+    """Safely update a version by GET + dict-merge + PUT.
+
+    Why: Jira's `PUT /version/{id}` is treated as *replace* on some Server/DC
+    deployments (and a few Cloud tenants), meaning any field omitted from the
+    body is cleared. To avoid accidentally wiping `description`, `startDate`,
+    etc. when the user only wants to update one field, we always fetch the
+    current version first and merge the caller's patch onto it before PUTting.
+
+    Any kwarg whose value is not the _UNSET sentinel is applied verbatim. Pass
+    an explicit ``None`` to clear a field (e.g. `releaseDate=None` on unrelease);
+    the null is preserved in the PUT body.
+    """
+    current = client.get(f"rest/api/2/version/{vid}") or {}
+    merged = dict(current)
+    for key, value in patch.items():
+        if value is _UNSET:
+            continue
+        merged[key] = value
+    # Strip server-managed fields we shouldn't echo back
+    for ro in ("self", "operations", "projectId"):
+        merged.pop(ro, None)
+    return client.put(f"rest/api/2/version/{vid}", data=merged)
+
+
 @cli.command()
 @click.argument("project_key")
 @click.argument("name")
