@@ -660,6 +660,14 @@ class TestMove:
         assert result.exit_code != 0
         mc.post.assert_not_called()
 
+    def test_move_after_rejects_non_numeric_id(self):
+        """--after OTHER_ID must be numeric; reject path-like or non-digit values early."""
+        mc = _make_mock_client(url="https://jira.example.com")
+        result, _ = _run(["move", "10045", "--after", "../../oops"], mc)
+        assert result.exit_code != 0
+        mc.post.assert_not_called()
+        assert "numeric" in result.output.lower() or "invalid" in result.output.lower()
+
     def test_move_after_and_position_mutually_exclusive(self):
         mc = _make_mock_client()
         result, _ = _run(["move", "10042", "--after", "10041", "--position", "Last"], mc)
@@ -782,6 +790,14 @@ class TestDelete:
         params = mc.delete.call_args.kwargs.get("params") or {}
         assert params.get("moveFixIssuesTo") == "10042"
         assert params.get("moveAffectedIssuesTo") == "10043"
+
+    def test_delete_rejects_non_numeric_move_targets(self):
+        """--move-fix-to / --move-affected-to must be numeric IDs."""
+        mc = _make_mock_client()
+        result, _ = _run(["delete", "10050", "--move-fix-to", "not-a-number"], mc)
+        assert result.exit_code != 0
+        mc.delete.assert_not_called()
+        assert "numeric" in result.output.lower() or "invalid" in result.output.lower()
 
     def test_delete_without_move_targets_warns(self):
         mc = _make_mock_client()
