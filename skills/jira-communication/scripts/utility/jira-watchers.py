@@ -74,8 +74,44 @@ def list_watchers(ctx, issue_key: str):
     """List watchers on an issue.
 
     ISSUE_KEY: The Jira issue key (e.g. PROJ-123)
+
+    Example:
+
+      jira-watchers list PROJ-123
     """
-    raise NotImplementedError
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        data = client.issue_get_watchers(issue_key)
+
+        if ctx.obj["json"]:
+            print(format_json(data))
+            return
+
+        watchers = data.get("watchers", []) or []
+        count = data.get("watchCount", len(watchers))
+
+        if ctx.obj["quiet"]:
+            for w in watchers:
+                print(w.get("accountId") or w.get("name", ""))
+            return
+
+        if not watchers:
+            print(f"(no watchers) for {issue_key}")
+            return
+
+        print(f"Watchers for {issue_key} ({count}):\n")
+        for w in watchers:
+            name = w.get("name") or w.get("accountId", "")
+            display = w.get("displayName", "")
+            print(f"  {name:<20} {display}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to list watchers: {e}")
+        sys.exit(1)
 
 
 @cli.command()
