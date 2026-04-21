@@ -58,3 +58,37 @@ class TestWatchersHelp:
         assert "list" in result.output
         assert "add" in result.output
         assert "remove" in result.output
+
+
+def _watcher(name="jdoe", display="John Doe", account_id=None):
+    """Build a watcher dict matching the Jira API shape."""
+    w = {"name": name, "displayName": display, "active": True}
+    if account_id is not None:
+        w["accountId"] = account_id
+    return w
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: list subcommand
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWatchersList:
+    def test_list_text_output(self):
+        mc = _make_mock_client()
+        mc.issue_get_watchers.return_value = {
+            "watchCount": 2,
+            "isWatching": False,
+            "watchers": [
+                _watcher("jdoe", "John Doe"),
+                _watcher("asmith", "Alice Smith"),
+            ],
+        }
+        result, _ = _run(["list", "TEST-1"], mc)
+        assert result.exit_code == 0, result.output
+        assert "TEST-1" in result.output
+        assert "jdoe" in result.output
+        assert "John Doe" in result.output
+        assert "asmith" in result.output
+        assert "Alice Smith" in result.output
+        mc.issue_get_watchers.assert_called_once_with("TEST-1")
