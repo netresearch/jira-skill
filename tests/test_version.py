@@ -275,6 +275,66 @@ class TestValidateIsoDate:
             _mod._validate_iso_date("2026/05/31")
 
 
+class TestCreate:
+    def test_create_minimal(self):
+        mc = _make_mock_client()
+        mc.post.return_value = _make_version("10042", "1.4.0")
+        result, _ = _run(["create", "PROJ", "1.4.0"], mc)
+        assert result.exit_code == 0, result.output
+        mc.post.assert_called_once()
+        path = mc.post.call_args.args[0]
+        assert path == "rest/api/2/version"
+        body = mc.post.call_args.kwargs.get("data") or mc.post.call_args.kwargs.get("json")
+        assert body["name"] == "1.4.0"
+        assert body["project"] == "PROJ"
+        assert body.get("released", False) is False
+        assert body.get("archived", False) is False
+
+    def test_create_with_dates_and_description(self):
+        mc = _make_mock_client()
+        mc.post.return_value = _make_version("10042", "1.4.0")
+        result, _ = _run(
+            ["create", "PROJ", "1.4.0",
+             "--description", "Q2 2026",
+             "--start-date", "2026-05-01",
+             "--release-date", "2026-05-31"],
+            mc,
+        )
+        assert result.exit_code == 0, result.output
+        body = mc.post.call_args.kwargs.get("data") or mc.post.call_args.kwargs.get("json")
+        assert body["description"] == "Q2 2026"
+        assert body["startDate"] == "2026-05-01"
+        assert body["releaseDate"] == "2026-05-31"
+
+    def test_create_released_and_archived_flags(self):
+        mc = _make_mock_client()
+        mc.post.return_value = _make_version("10042", "1.4.0", released=True, archived=True)
+        result, _ = _run(
+            ["create", "PROJ", "1.4.0", "--released", "--archived",
+             "--release-date", "2026-05-31"],
+            mc,
+        )
+        assert result.exit_code == 0, result.output
+        body = mc.post.call_args.kwargs.get("data") or mc.post.call_args.kwargs.get("json")
+        assert body["released"] is True
+        assert body["archived"] is True
+
+    def test_create_rejects_bad_date(self):
+        mc = _make_mock_client()
+        result, _ = _run(["create", "PROJ", "1.4.0", "--release-date", "2026/05/31"], mc)
+        assert result.exit_code != 0
+        assert "YYYY-MM-DD" in result.output or "Invalid date" in result.output
+        mc.post.assert_not_called()
+
+    def test_create_dry_run(self):
+        mc = _make_mock_client()
+        result, _ = _run(["create", "PROJ", "1.4.0", "--release-date", "2026-05-31", "--dry-run"], mc)
+        assert result.exit_code == 0
+        mc.post.assert_not_called()
+        assert "DRY RUN" in result.output
+        assert "1.4.0" in result.output
+
+
 class TestHelp:
     """All subcommands must respond to --help with exit code 0."""
 
