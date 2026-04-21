@@ -132,6 +132,21 @@ class TestListPaginated:
         assert mc.get.call_count == 2
         assert "10042" in result.output and "10045" in result.output
 
+    def test_paginated_applies_client_side_status_filter(self):
+        """Older DC may ignore the server-side status param; the CLI must still filter."""
+        mc = _make_mock_client()
+        mc.get.return_value = {
+            "isLast": True,
+            "values": [
+                _make_version("10042", "1.4.0", released=False),
+                _make_version("10041", "1.3.0", released=True),
+            ],
+        }
+        result, _ = _run(["list", "PROJ", "--query", ".", "--status", "released"], mc)
+        assert result.exit_code == 0, result.output
+        assert "10041" in result.output
+        assert "10042" not in result.output
+
     def test_status_all_filters_nothing_on_paginated(self):
         mc = _make_mock_client()
         mc.get.return_value = {
@@ -649,6 +664,22 @@ class TestMerge:
         assert result.exit_code == 0
         mc.delete.assert_not_called()
 
+    def test_merge_dry_run_handles_missing_src(self):
+        """Dry-run must surface a clean error when src version lookup fails."""
+        mc = _make_mock_client()
+        from requests import Response
+        from requests.exceptions import HTTPError
+
+        resp = Response()
+        resp.status_code = 404
+        mc.get.side_effect = HTTPError("404 Not Found", response=resp)
+        result, _ = _run(["merge", "99999", "INTO", "10042", "--dry-run"], mc)
+        assert result.exit_code != 0
+        # Must be a clean error, not a raw traceback
+        assert "Traceback" not in result.output
+        assert "Failed" in result.output or "not found" in result.output.lower() or "✗" in result.output
+        mc.post.assert_not_called()
+
 
 class TestDeleteDryRun:
     def test_delete_dry_run_fetches_counts(self):
@@ -664,6 +695,22 @@ class TestDeleteDryRun:
         assert "7" in result.output
         assert "1" in result.output
         assert "1.4.0-dup" in result.output
+
+
+    def test_delete_dry_run_handles_missing_version(self):
+        """Dry-run must surface a clean error when version lookup fails."""
+        mc = _make_mock_client()
+        from requests import Response
+        from requests.exceptions import HTTPError
+
+        resp = Response()
+        resp.status_code = 404
+        mc.get.side_effect = HTTPError("404 Not Found", response=resp)
+        result, _ = _run(["delete", "99999", "--dry-run"], mc)
+        assert result.exit_code != 0
+        assert "Traceback" not in result.output
+        assert "Failed" in result.output or "not found" in result.output.lower() or "✗" in result.output
+        mc.delete.assert_not_called()
 
 
 class TestDelete:
