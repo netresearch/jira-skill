@@ -39,14 +39,17 @@ Deleting someone else's comment requires the Delete All Comments permission.
 
 ## Multi-line comments
 
-Shell-wrap long bodies in a HEREDOC via `--body-file -`:
+`jira-comment.py add` takes the body as a positional argument. Pass `-` to read the body from stdin, which pairs naturally with a HEREDOC or a file:
 
 ```bash
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 --body-file - <<'EOF'
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 - <<'EOF'
 h3. Progress
 
 Deployed to staging, see https://staging.example.com/.
 EOF
+
+# Or from a file
+cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 -
 ```
 
 Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.

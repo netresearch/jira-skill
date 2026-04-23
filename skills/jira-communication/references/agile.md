@@ -20,14 +20,17 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py list --type scrum
 ## Sprints
 
 ```bash
-# Sprints for a specific board
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py list --board 119
+# Sprints for a specific board (positional BOARD_ID)
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py list 119
 
-# Active sprint only
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py list --board 119 --state active
+# Filter by state
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py list 119 --state active
 
-# Details on a single sprint (goal, dates, issues)
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py get 916
+# The single currently-active sprint for a board
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py current 119
+
+# Issues in a sprint (positional SPRINT_ID)
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-sprint.py issues 916
 ```
 
 ## Assigning an issue to a sprint
