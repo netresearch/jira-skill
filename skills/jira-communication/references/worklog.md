@@ -13,10 +13,6 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --commen
 # Explicit start time
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 1h30m \
     --started "2026-04-20T14:00:00" --comment "Research session"
-
-# Adjust remaining estimate as well
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h \
-    --comment "Fixed the bug" --remaining 0
 ```
 
 Time strings accept `Nw Nd Nh Nm Ns` combinations (Jira semantics, 8h workday).
@@ -50,11 +46,3 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py \
     --from "$(date -d 'monday last week' -I)" --to "$(date -I)"
 ```
 
-## Delete a worklog
-
-```bash
-# Find the worklog ID via JSON query
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py list PROJ-123 --json
-
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py delete PROJ-123 --id 399124 --dry-run
-```

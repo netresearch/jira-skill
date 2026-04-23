@@ -21,20 +21,15 @@ The script resolves relative paths against the current working directory and ref
 
 ## Download
 
+`jira-attachment.py download` takes two positional arguments: the attachment URL and the output file path. Find the URL via `jira-issue.py get --json` (the `fields.attachment[].content` field carries the download URL).
+
 ```bash
-# By issue key — lists attachments and prompts for selection
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download PROJ-123
-
-# By attachment ID (found in `jira-issue.py get --json`)
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download --id 12345
-
-# By direct URL — constrained to the configured Jira host
+# Positional: full URL (or /rest/api/2/attachment/content/<id>) + output file
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download \
-    --url "https://jira.example.com/secure/attachment/12345/file.pdf"
+    "https://jira.example.com/rest/api/2/attachment/content/12345" \
+    ./attachments/report.pdf
 ```
 
 ## Safety guarantees
 
-- **Host pinning**: `--url` downloads reject any host that does not match the active profile's `JIRA_URL` — an SSRF protection. The script prints the rejection reason in `--debug` mode.
-- **Path traversal**: Output paths are normalized; downloads refuse targets outside the chosen `--output` directory.
-- **Size cap**: Default 100 MB per download. Override with `--max-bytes N`. The script streams to disk, so memory use is constant.
+- **Path traversal**: output paths are constrained to the current working directory — the script rejects targets that resolve outside cwd.

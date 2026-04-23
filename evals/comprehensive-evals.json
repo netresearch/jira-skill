@@ -118,7 +118,7 @@
       "id": 17,
       "name": "attachment-download-url",
       "prompt": "Download the attachment at https://jira.example.com/secure/attachment/12345/report.pdf",
-      "expected_output": "Agent reads references/attachments.md and runs jira-attachment.py download --url '<the URL>'",
+      "expected_output": "Agent reads references/attachments.md and runs jira-attachment.py download '<the URL>' <output_file>",
       "ideal_tools": 2
     },
     {

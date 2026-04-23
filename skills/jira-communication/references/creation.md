@@ -12,7 +12,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Fix flaky
     --type Bug --parent PROJ-100
 ```
 
-`jira-create.py` inspects the parent and picks the matching `Sub: <Type>` issue type where the project defines one, falling back to the project's declared sub-task type.
+When `--parent` is provided, `jira-create.py` resolves the sub-task issue type from the project's issue-type catalog (matching on name, case-insensitive). The parent issue itself is not fetched — resolution is project-scoped: an exact match on the requested type wins, otherwise a substring match against sub-task names (e.g., `Task` → `Sub: Task`), otherwise the sole sub-task type if only one exists.
 
 ## Custom reporter
 
@@ -44,4 +44,4 @@ Sprint ID is an integer, not an array. Epic Link is the epic's issue key as a st
 
 ## Combining flags
 
-Typed flags (`--assignee`, `--priority`, `--labels`, `--reporter`, `--components`) win over `--fields-json` when the same field is set in both. Use `--fields-json` only for fields the CLI doesn't expose directly.
+`--fields-json` wins over typed flags (`--assignee`, `--priority`, `--labels`, `--reporter`, `--components`) when the same field is set in both — the script merges the JSON payload onto the typed-flag payload (`fields.update(extra_fields)`). Use typed flags for the fields the CLI exposes directly, and reach for `--fields-json` only for the long tail.
