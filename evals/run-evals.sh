@@ -77,18 +77,34 @@ for i in $(seq 0 $((eval_count - 1))); do
     duration=$((end - start))
 
     # tool_calls: count of tool_use events in the assistant's messages.
-    tool_calls=$(jq -s '[.[]? | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use")] | length' "$out_dir/stream.ndjson" 2>/dev/null)
+    # `|| true` keeps the whole suite running when a transcript has a
+    # non-JSON line (some CLI warnings can leak into stdout before the first
+    # stream-json event).
+    tool_calls=$(jq -s '[.[]? | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use")] | length' "$out_dir/stream.ndjson" 2>/dev/null || true)
     if [[ -z "$tool_calls" ]]; then tool_calls=0; fi
 
     # Final assistant text (from the terminal result event).
     jq -rs '[.[]? | select(.type == "result") | .result] | last // ""' "$out_dir/stream.ndjson" > "$out_dir/output.txt" 2>/dev/null || : > "$out_dir/output.txt"
 
     # Pass heuristic: the expected_output typically names a `jira-*.py` script.
-    # The eval passes when that script name appears anywhere in the stream's
-    # tool-use commands. Evals without a script reference are marked "unknown".
+    # The eval passes when that script name appears in an assistant tool_use
+    # command/input (not merely mentioned in a text block). Evals without a
+    # script reference in expected_output are marked "unknown".
     expected_script=$(printf '%s' "$expected" | grep -oE 'jira-[a-z-]+\.py' | head -1 || true)
     if [[ -n "$expected_script" ]]; then
-        if grep -qF "$expected_script" "$out_dir/stream.ndjson"; then
+        if jq -s -e --arg s "$expected_script" '
+            any(
+                .[]?
+                | select(.type == "assistant")
+                | .message.content[]?
+                | select(.type == "tool_use");
+                (
+                    [.command?, .input.command?, (.input? | .. | strings)]
+                    | map(select(. != null))
+                    | any(contains($s))
+                )
+            )
+        ' "$out_dir/stream.ndjson" >/dev/null 2>&1; then
             pass="true"
         else
             pass="false"

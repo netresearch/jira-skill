@@ -7,17 +7,19 @@ Load this reference whenever the user wants to attach a file to an issue, downlo
 ## Upload
 
 ```bash
-# Simple upload
+# Simple upload (single file per invocation)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 
 # Preview (no upload, just show what would be sent)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 /tmp/report.pdf --dry-run
 
-# Multiple files
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 a.png b.png c.pdf
+# Multiple files — call `add` once per file
+for file in a.png b.png c.pdf; do
+    uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 "$file"
+done
 ```
 
-The script resolves relative paths against the current working directory and refuses paths escaping the cwd (`..` segments) unless `--allow-absolute` is passed.
+`jira-attachment.py add` takes a single `FILE_PATH` argument (absolute or relative) and only requires that the file exists and is readable. There is no `--allow-absolute` flag and no cwd-confinement on the upload side — validate paths in the caller if needed.
 
 ## Download
 
