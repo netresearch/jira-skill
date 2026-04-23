@@ -35,7 +35,7 @@ Pass the **Name** column to `--type`. Confirm the exact names on your instance v
 
 ```bash
 # Create a web link
-uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py create PROJ-123 \
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-weblink.py add PROJ-123 \
     --url "https://example.com/design-doc" --title "Design doc"
 
 # List
