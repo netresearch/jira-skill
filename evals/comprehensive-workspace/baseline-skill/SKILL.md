@@ -1,103 +1,67 @@
 ---
 name: jira-communication
-description: "Use when interacting with Jira issues - searching, creating, updating, moving, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
+description: "Use when interacting with Jira issues - searching, creating, updating, moving, transitioning, commenting, logging work, downloading attachments, managing sprints, boards, issue links, web links, fields, or users. Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python 3.10+, uv, curl. Jira Server/DC or Cloud instance with API access."
 metadata:
   author: Netresearch DTT GmbH
-  version: "3.6.2"
+  version: "3.11.0"
   repository: https://github.com/netresearch/jira-skill
 allowed-tools: Bash(python:*) Bash(uv:*) Bash(curl:*) Read Write
 ---
 
 # Jira Communication
 
-CLI scripts for Jira operations via `uv run`. All scripts support `--help`, `--json`, `--quiet`, `--debug`.
-
-**Paths** are relative to `skills/jira-communication/`.
+CLI scripts via `uv run`. All support `--help`, `--json`, `--quiet`, `--debug`.
 
 ## Auto-Trigger
 
-Activate when user mentions:
-- **Jira URLs**: `https://jira.*/browse/*`, `https://*.atlassian.net/browse/*`
-- **Issue keys**: `PROJ-123`, `NRS-4167`
-
-On URL trigger → extract key → `jira-issue.py get PROJ-123`
-
-## Auth Failure Handling
-
-When auth fails, offer: `uv run scripts/core/jira-setup.py` (interactive credential setup)
+On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues → `jira-setup.py`.
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/core/jira-setup.py` | Interactive credential config |
-| `scripts/core/jira-validate.py` | Verify connection |
-| `scripts/core/jira-issue.py` | Get/update issue details |
-| `scripts/core/jira-search.py` | Search with JQL |
-| `scripts/core/jira-worklog.py` | Time tracking |
-| `scripts/core/jira-attachment.py` | Download attachments |
-| `scripts/workflow/jira-create.py` | Create issues |
-| `scripts/workflow/jira-move.py` | Move issues between projects |
-| `scripts/workflow/jira-transition.py` | Change status |
-| `scripts/workflow/jira-comment.py` | Add/edit/list comments |
-| `scripts/workflow/jira-sprint.py` | List sprints |
-| `scripts/workflow/jira-board.py` | List boards |
-| `scripts/utility/jira-user.py` | User info |
-| `scripts/utility/jira-fields.py` | Search fields |
-| `scripts/utility/jira-link.py` | Issue links |
+Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
-## Critical: Flag Ordering
+**Core**: `jira-issue.py`, `jira-search.py`, `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
+**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`
+**Utility**: `jira-user.py`, `jira-fields.py`, `jira-link.py`, `jira-weblink.py`, `jira-worklog-query.py`
 
-Global flags go **before** the subcommand (argparse requirement):
-```bash
-# Correct:  uv run scripts/core/jira-issue.py --json get PROJ-123
-# Wrong:    uv run scripts/core/jira-issue.py get PROJ-123 --json
-```
+## Execution Style
 
-## Quick Examples
+Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global flags before subcommand: `jira-issue.py --json get PROJ-123`.
+
+## Basic Usage
 
 ```bash
-uv run scripts/core/jira-search.py query "assignee = currentUser()"
-uv run scripts/core/jira-issue.py get PROJ-123
-uv run scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
-uv run scripts/workflow/jira-move.py issue NRS-100 SRVUC
-uv run scripts/workflow/jira-transition.py do PROJ-123 "In Progress" --dry-run
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed" -n 5 -f key,summary,status
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me --priority Critical
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 ```
 
 ## Related Skills
 
-**jira-syntax**: For descriptions/comments. Jira uses wiki markup, NOT Markdown.
+**jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.
 
 ## References
 
-- `references/jql-quick-reference.md` - JQL syntax
-- `references/troubleshooting.md` - Setup and auth issues
+- `jql-quick-reference.md` — when JQL goes beyond simple filters
+- `jql-cookbook.md` — when translating natural-language requests into JQL
+- `multi-profile.md` — when using multiple Jira instances or `--profile`
+- `troubleshooting.md` — when hitting auth, SSL, 401, or 403 errors
+- `issue-editing.md` — when using `--fields-json`, reporter changes, `--expand`, `time-in-status`, deletes, or moves
+- `creation.md` — when creating with `--parent`, reporter, components, or custom fields
+- `comments.md` — when editing, deleting, or listing comments
+- `worklog.md` — when using `--started`, date ranges, or `jira-worklog-query.py`
+- `attachments.md` — when uploading, downloading, or inspecting attachments
+- `links.md` — when working with issue or web links
+- `agile.md` — when working with sprints, boards, or `board --name`
+- `fields-and-users.md` — when looking up custom field IDs, users, or issue types
 
 ## Authentication
 
-**Cloud**: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`
-**Server/DC**: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`
-
-Config via `~/.env.jira` or env vars. Run `jira-validate.py --verbose` to verify.
-
-## Multi-Profile Support
-
-When `~/.jira/profiles.json` exists, multiple Jira instances are supported.
-
-**Profile resolution** (automatic, priority order):
-1. `--env-file PATH` - legacy single-file behavior
-2. `--profile NAME` flag - use named profile
-3. Full Jira URL in input - match host to profile
-4. Issue key (e.g., WEB-1381) - match project prefix
-5. `.jira-profile` file in working directory
-6. Default profile from profiles.json
-7. Fallback to `~/.env.jira`
-
-**Profile management**:
-```bash
-uv run scripts/core/jira-setup.py --profile mkk        # Create profile
-uv run scripts/core/jira-validate.py --all-profiles     # Validate all
-uv run scripts/core/jira-setup.py --migrate             # Migrate .env.jira
-```
+Cloud: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`. Server/DC: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`. Config via `~/.env.jira` or `~/.jira/profiles.json`.
