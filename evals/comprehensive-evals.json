@@ -92,6 +92,41 @@
       "prompt": "Attach the file /tmp/eval-attachment-test.txt to TEST-135",
       "expected_output": "Agent runs jira-attachment.py add TEST-135 /tmp/eval-attachment-test.txt",
       "ideal_tools": 1
+    },
+    {
+      "id": 14,
+      "name": "multi-profile-resolution",
+      "prompt": "I have three Jira instances at work, one for my-org and one for another customer — how do I tell the skill which to use?",
+      "expected_output": "Agent reads references/multi-profile.md and explains --profile, .jira-profile, or URL/prefix resolution",
+      "ideal_tools": 1
+    },
+    {
+      "id": 15,
+      "name": "links-create-and-list",
+      "prompt": "Link PROJ-100 as blocking PROJ-200 and show me all links on PROJ-100",
+      "expected_output": "Agent reads references/links.md, then runs jira-link.py create PROJ-100 PROJ-200 --type Blockade and jira-link.py list PROJ-100",
+      "ideal_tools": 3
+    },
+    {
+      "id": 16,
+      "name": "worklog-with-started",
+      "prompt": "Log 1h 30m on PROJ-123 with comment 'research', started yesterday at 14:00",
+      "expected_output": "Agent reads references/worklog.md (for --started syntax) and runs jira-worklog.py add PROJ-123 1h30m --started <iso> --comment 'research'",
+      "ideal_tools": 2
+    },
+    {
+      "id": 17,
+      "name": "attachment-download-url",
+      "prompt": "Download the attachment at https://jira.example.com/secure/attachment/12345/report.pdf",
+      "expected_output": "Agent reads references/attachments.md and runs jira-attachment.py download --url '<the URL>'",
+      "ideal_tools": 2
+    },
+    {
+      "id": 18,
+      "name": "issue-editing-fields-json",
+      "prompt": "Update the description of PROJ-123 using fields-json",
+      "expected_output": "Agent reads references/issue-editing.md and runs jira-issue.py update PROJ-123 --fields-json '{\"description\": \"...\"}'",
+      "ideal_tools": 2
     }
   ]
 }
