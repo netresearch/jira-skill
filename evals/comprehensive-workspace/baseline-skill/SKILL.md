@@ -23,7 +23,7 @@ On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues →
 Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
 **Core**: `jira-issue.py`, `jira-search.py`, `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
-**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`
+**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`, `jira-version.py`
 **Utility**: `jira-user.py`, `jira-fields.py`, `jira-link.py`, `jira-weblink.py`, `jira-worklog-query.py`, `jira-watchers.py`
 
 ## Execution Style
@@ -62,6 +62,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 - `references/agile.md` — when working with sprints, boards, or `board --name`
 - `references/fields-and-users.md` — when looking up custom field IDs, users, or issue types
 - `references/watchers.md` — when the user asks to watch, subscribe, notify on, or list watchers of an issue
+- `references/versions.md` — when the user asks about fix/affects versions, releases, or version CRUD
 
 ## Authentication
 
