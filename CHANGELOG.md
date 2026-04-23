@@ -14,12 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`jira-issue.py time-in-status PROJ-123 [--status X]`**: report cumulative time an issue has spent in each status (or in a single status when `--status` is given). Re-entered statuses are summed. `--status` accepts a fuzzy term — "review" resolves to "In Review" on most instances; ambiguous matches list candidates. ([#72](https://github.com/netresearch/jira-skill/issues/72))
 - **`jira-board.py list --name PATTERN`**: server-side partial match on board name, so the Jira API does the filtering. Eliminates pulling thousands of boards to grep client-side on large instances. ([#72](https://github.com/netresearch/jira-skill/issues/72))
 - **`references/jql-cookbook.md`**: translation guide for turning natural-language queries like *"open bugs stale for 2 weeks"* into safe JQL. Covers `statusCategory` vs. `status`, "blocked" disambiguation, resolver pointers, and worked examples. Complements the existing `jql-quick-reference.md`. ([#72](https://github.com/netresearch/jira-skill/issues/72))
+- `evals/run-evals.sh` — headless runner for the comprehensive eval suite using `claude --print --output-format stream-json --plugin-dir`. Emits per-eval pass/fail and tool-call counts, plus an optional consolidated `--results-json`. Documented in root `AGENTS.md`.
+- 5 new eval cases (IDs 14–18) probing reference-load behavior for the refactored skill.
 
 ### Changed
 
 - SKILL.md: add examples for the new `jira-link list`/`delete` subcommands and the previously-undocumented `jira-weblink delete`. Full CRUD for both scripts is still discoverable via `--help`; SKILL.md shows the operations most relevant to the new delete workflow within the 500-word cap.
 - **`jira-issue.py --json get` now returns compact JSON by default** — null and empty-list fields are stripped, trimming the typical issue payload from ~50 KB (dominated by null `customfield_*` entries) to a few KB. Pass `--raw` to restore the full Jira response. ([#72](https://github.com/netresearch/jira-skill/issues/72))
 - SKILL.md: add examples for `jira-issue get --expand changelog,transitions`, compact-vs-`--raw` JSON, `time-in-status`, and `jira-board list --name`. Reference the new `jql-cookbook.md`.
+- **Progressive-disclosure refactor of `jira-communication/SKILL.md`**: extract advanced examples into 8 new feature-class references (`issue-editing`, `creation`, `comments`, `worklog`, `attachments`, `links`, `agile`, `fields-and-users`). SKILL.md drops from 491 to 392 words. All 12 references carry standardized "When to load" headers so Claude loads the right one on demand. A 3× baseline + 3× post-refactor eval comparison shows zero regressions and tool-call-neutral behavior in the best case.
+- Scrub Netresearch-specific identifiers (`doreen.wienhold`, `doreen`) from eval prompts; `create-issue-with-reporter` uses `paul.siedler` as the reporter and the former `user-search` eval is reframed as `user-me` to exercise `jira-user.py me`.
 
 ## [3.10.1] - 2026-04-16
 
