@@ -1,5 +1,9 @@
 # JQL Cookbook — Translating Natural-Language Queries
 
+## When to load
+
+Load this reference whenever the user phrases a search request in natural language ("show me all stale bugs", "what have I been working on this sprint") and you need to decide which JQL expression is safe for which phrasing.
+
 How to turn questions like *"all my open bugs with no activity in 2 weeks"*
 into safe, portable JQL — and which built-in scripts help with the fuzzy
 parts (status names, usernames, board names).
