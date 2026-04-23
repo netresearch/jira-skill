@@ -127,6 +127,27 @@
       "prompt": "Update the description of PROJ-123 using fields-json",
       "expected_output": "Agent reads references/issue-editing.md and runs jira-issue.py update PROJ-123 --fields-json '{\"description\": \"...\"}'",
       "ideal_tools": 2
+    },
+    {
+      "id": 19,
+      "name": "list-watchers",
+      "prompt": "List watchers on TEST-135",
+      "expected_output": "Agent reads references/watchers.md then runs jira-watchers.py list TEST-135",
+      "ideal_tools": 2
+    },
+    {
+      "id": 20,
+      "name": "add-watcher",
+      "prompt": "Add asmith as a watcher on TEST-135",
+      "expected_output": "Agent reads references/watchers.md then runs jira-watchers.py add TEST-135 --user asmith",
+      "ideal_tools": 2
+    },
+    {
+      "id": 21,
+      "name": "remove-self-watch",
+      "prompt": "Stop watching TEST-135",
+      "expected_output": "Agent reads references/watchers.md then runs jira-watchers.py remove TEST-135",
+      "ideal_tools": 2
     }
   ]
 }
