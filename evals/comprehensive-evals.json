@@ -97,7 +97,7 @@
       "id": 14,
       "name": "multi-profile-resolution",
       "prompt": "I have three Jira instances at work, one for my-org and one for another customer — how do I tell the skill which to use?",
-      "expected_output": "Agent reads references/multi-profile.md and explains --profile, .jira-profile, or URL/prefix resolution",
+      "expected_output": "Agent reads references/multi-profile.md (jira-setup.py context) and explains --profile, .jira-profile, or URL/prefix resolution",
       "ideal_tools": 1
     },
     {
