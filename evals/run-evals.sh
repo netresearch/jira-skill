@@ -16,6 +16,13 @@
 set -euo pipefail
 
 ITERATION="${1:-$(date +%Y%m%d-%H%M%S)}"
+
+# Reject iteration names containing path separators or traversal
+if [[ "$ITERATION" == *"/"* || "$ITERATION" == *".."* ]]; then
+    echo "ERROR: iteration name must not contain '/' or '..'" >&2
+    exit 2
+fi
+
 RESULTS_JSON=""
 if [[ "${2:-}" == "--results-json" && -n "${3:-}" ]]; then
     RESULTS_JSON="$3"

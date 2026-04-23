@@ -49,18 +49,18 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 
 ## References
 
-- `jql-quick-reference.md` — when JQL goes beyond simple filters
-- `jql-cookbook.md` — when translating natural-language requests into JQL
-- `multi-profile.md` — when using multiple Jira instances or `--profile`
-- `troubleshooting.md` — when hitting auth, SSL, 401, 403, or connection failures
-- `issue-editing.md` — when using `--fields-json`, reporter changes, `--expand`, `time-in-status`, deletes, or moves
-- `creation.md` — when creating with `--parent`, reporter, components, or custom fields
-- `comments.md` — when editing, deleting, or listing comments
-- `worklog.md` — when using `--started`, date ranges, or `jira-worklog-query.py`
-- `attachments.md` — when uploading, downloading, or inspecting attachments
-- `links.md` — when working with issue or web links
-- `agile.md` — when working with sprints, boards, or `board --name`
-- `fields-and-users.md` — when looking up custom field IDs, users, or issue types
+- `references/jql-quick-reference.md` — when JQL goes beyond simple filters
+- `references/jql-cookbook.md` — when translating natural-language requests into JQL
+- `references/multi-profile.md` — when using multiple Jira instances or `--profile`
+- `references/troubleshooting.md` — when hitting auth, SSL, 401, 403, or connection failures
+- `references/issue-editing.md` — when using `--fields-json`, reporter changes, `--expand`, `time-in-status`, deletes, or moves
+- `references/creation.md` — when creating with `--parent`, reporter, components, or custom fields
+- `references/comments.md` — when editing, deleting, or listing comments
+- `references/worklog.md` — when using `--started`, date ranges, or `jira-worklog-query.py`
+- `references/attachments.md` — when uploading, downloading, or inspecting attachments
+- `references/links.md` — when working with issue or web links
+- `references/agile.md` — when working with sprints, boards, or `board --name`
+- `references/fields-and-users.md` — when looking up custom field IDs, users, or issue types
 
 ## Authentication
 
