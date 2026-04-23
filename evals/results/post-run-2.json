@@ -1,0 +1,131 @@
+{
+  "iteration": "iteration-post-run-2",
+  "results": [
+    {
+      "id": 1,
+      "name": "read-issue",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 14
+    },
+    {
+      "id": 2,
+      "name": "search-issues",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 15
+    },
+    {
+      "id": 3,
+      "name": "add-comment",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 12
+    },
+    {
+      "id": 4,
+      "name": "transition-issue",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 18
+    },
+    {
+      "id": 5,
+      "name": "log-work",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 13
+    },
+    {
+      "id": 6,
+      "name": "create-issue",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 13
+    },
+    {
+      "id": 7,
+      "name": "update-fields",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 12
+    },
+    {
+      "id": 8,
+      "name": "read-issue-json",
+      "pass": "true",
+      "tool_calls": 3,
+      "duration_seconds": 25
+    },
+    {
+      "id": 9,
+      "name": "list-transitions",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 13
+    },
+    {
+      "id": 10,
+      "name": "search-with-fields",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 16
+    },
+    {
+      "id": 11,
+      "name": "create-issue-with-reporter",
+      "pass": "true",
+      "tool_calls": 3,
+      "duration_seconds": 22
+    },
+    {
+      "id": 12,
+      "name": "user-search",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 13
+    },
+    {
+      "id": 13,
+      "name": "upload-attachment",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 14
+    },
+    {
+      "id": 14,
+      "name": "multi-profile-resolution",
+      "pass": "unknown",
+      "tool_calls": 2,
+      "duration_seconds": 23
+    },
+    {
+      "id": 15,
+      "name": "links-create-and-list",
+      "pass": "true",
+      "tool_calls": 4,
+      "duration_seconds": 32
+    },
+    {
+      "id": 16,
+      "name": "worklog-with-started",
+      "pass": "true",
+      "tool_calls": 3,
+      "duration_seconds": 20
+    },
+    {
+      "id": 17,
+      "name": "attachment-download-url",
+      "pass": "true",
+      "tool_calls": 4,
+      "duration_seconds": 32
+    },
+    {
+      "id": 18,
+      "name": "issue-editing-fields-json",
+      "pass": "true",
+      "tool_calls": 2,
+      "duration_seconds": 32
+    }
+  ]
+}
