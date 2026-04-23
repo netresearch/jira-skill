@@ -63,6 +63,12 @@ uv run skills/jira-communication/scripts/core/jira-issue.py get <ISSUE-KEY>
 
 # Verify agent harness compliance
 bash scripts/verify-harness.sh --format=text --status
+
+# Run the eval suite (writes to evals/comprehensive-workspace/<timestamp>/)
+bash evals/run-evals.sh
+
+# Optional: emit a consolidated results JSON (pass/fail + tool-call count per eval)
+bash evals/run-evals.sh my-iteration --results-json evals/results/my-iteration.json
 ```
 
 ## When instructions conflict
