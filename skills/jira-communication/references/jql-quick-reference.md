@@ -1,5 +1,9 @@
 # JQL Quick Reference
 
+## When to load
+
+Load this reference whenever a JQL query goes beyond the inline SKILL.md examples — any use of `AND`/`OR` combinators, historical operators (`WAS`, `CHANGED`), functions (`currentUser()`, `startOfWeek()`), or unfamiliar field names.
+
 Common JQL patterns for `jira-search.py query "<JQL>"`.
 
 ## Operators
