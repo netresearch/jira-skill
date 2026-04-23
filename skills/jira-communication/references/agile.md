@@ -48,4 +48,4 @@ See `issue-editing.md` for more on `--fields-json`, and `fields-and-users.md` fo
 ## Scrum vs Kanban
 
 - **Scrum boards** own named sprints; issues have a Sprint field with an integer ID.
-- **Kanban boards** have no sprints — the Sprint field is always empty; `jira-sprint.py list --board <kanban>` returns an empty array, not an error.
+- **Kanban boards** have no sprints — the Sprint field is always empty; `jira-sprint.py list <KANBAN_BOARD_ID>` returns an empty array, not an error.
