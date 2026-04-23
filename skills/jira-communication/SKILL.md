@@ -52,7 +52,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 - `jql-quick-reference.md` — when JQL goes beyond simple filters
 - `jql-cookbook.md` — when translating natural-language requests into JQL
 - `multi-profile.md` — when using multiple Jira instances or `--profile`
-- `troubleshooting.md` — when hitting auth, SSL, 401, or 403 errors
+- `troubleshooting.md` — when hitting auth, SSL, 401, 403, or connection failures
 - `issue-editing.md` — when using `--fields-json`, reporter changes, `--expand`, `time-in-status`, deletes, or moves
 - `creation.md` — when creating with `--parent`, reporter, components, or custom fields
 - `comments.md` — when editing, deleting, or listing comments
