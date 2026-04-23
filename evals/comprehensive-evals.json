@@ -148,6 +148,27 @@
       "prompt": "Stop watching TEST-135",
       "expected_output": "Agent reads references/watchers.md then runs jira-watchers.py remove TEST-135",
       "ideal_tools": 2
+    },
+    {
+      "id": 22,
+      "name": "list-versions-unreleased",
+      "prompt": "List unreleased versions in TEST",
+      "expected_output": "Agent reads references/versions.md then runs jira-version.py list TEST --status unreleased",
+      "ideal_tools": 2
+    },
+    {
+      "id": 23,
+      "name": "release-version",
+      "prompt": "Mark version 1.4.0 as released today in project TEST",
+      "expected_output": "Agent reads references/versions.md then runs jira-version.py release 1.4.0 --project TEST --release-date today",
+      "ideal_tools": 2
+    },
+    {
+      "id": 24,
+      "name": "delete-version-reassign",
+      "prompt": "Delete version 1.3.0 from TEST and move its fix-version tickets to 1.4.0",
+      "expected_output": "Agent reads references/versions.md then runs jira-version.py delete 1.3.0 --project TEST --move-fix-to 1.4.0",
+      "ideal_tools": 2
     }
   ]
 }
