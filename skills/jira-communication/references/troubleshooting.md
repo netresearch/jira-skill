@@ -1,5 +1,9 @@
 # Troubleshooting Guide
 
+## When to load
+
+Load this reference whenever any script returns a non-zero exit code related to authentication, SSL, connectivity, or environment configuration — typically surfaced as HTTP 401/403, certificate errors, or `JIRA_URL` not set.
+
 ## Setup Validation
 
 Always start with:

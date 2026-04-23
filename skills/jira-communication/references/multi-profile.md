@@ -1,5 +1,9 @@
 # Multi-Profile Configuration
 
+## When to load
+
+Load this reference whenever the user mentions more than one Jira instance, asks about `--profile`, `.jira-profile`, or `~/.jira/profiles.json`, or when auto-resolution by URL/issue-key prefix is unclear.
+
 Manage connections to multiple Jira instances via `~/.jira/profiles.json`.
 
 ## Profile Resolution Priority
