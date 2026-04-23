@@ -30,3 +30,6 @@ uv.lock
 .env
 .env.*
 !.env.example
+
+# Eval runner per-iteration transcripts (evals/results/*.json stays committed)
+evals/comprehensive-workspace/iteration-*/
