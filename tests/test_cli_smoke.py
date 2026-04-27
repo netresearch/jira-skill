@@ -262,6 +262,48 @@ class TestMockedCommands:
         # Verify the pagination range is rendered in the output
         assert "showing 51-52 of 234" in result.output
 
+    def test_search_query_start_at_rejects_negative(self):
+        """jira-search --start-at must reject negative values via click.IntRange."""
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _search_mod.cli,
+                ["query", "project=A", "--start-at", "-1"],
+            )
+        assert result.exit_code != 0
+        # click.IntRange rejection happens before the API is hit
+        mock_client.jql.assert_not_called()
+
+    def test_search_query_singular_pluralization(self):
+        """jira-search must say '1 issue' (singular) when total == 1."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {
+            "issues": [{"key": "A-1", "fields": {"summary": "only"}}],
+            "total": 1,
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_search_mod.cli, ["query", "project=A"])
+        assert result.exit_code == 0, result.output
+        assert "of 1 issue)" in result.output
+        assert "of 1 issues)" not in result.output
+
+    def test_search_query_empty_page_shows_total(self):
+        """Empty issues + total > 0 must hint about --start-at, not 'No issues found'."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {"issues": [], "total": 234}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _search_mod.cli,
+                ["query", "project=A", "--start-at", "500"],
+            )
+        assert result.exit_code == 0, result.output
+        assert "No issues on this page" in result.output
+        assert "total: 234" in result.output
+        assert "--start-at" in result.output
+
     def test_create_issue_dry_run(self):
         """jira-create issue with --dry-run must not call API."""
         mock_client = self._make_mock_client()
