@@ -98,7 +98,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py move 10042 --positio
 ## Merge
 
 ```bash
-# Preview: fetches relatedIssueCounts on both sides and prints what would move
+# Preview: fetches relatedIssueCounts on the source and prints what would move
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py merge 10050 INTO 10042 --dry-run
 
 # Execute: reassigns fixVersions/versions references, then deletes the source
