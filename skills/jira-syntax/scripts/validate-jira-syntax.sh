@@ -75,7 +75,7 @@ validate_file() {
     fi
 
     # Check for Markdown-style inline code (` instead of {{)
-    if echo "$content" | grep -qE "\`[^\`]+\`"; then
+    if grep -qE "\`[^\`]+\`" <<< "$content"; then
         warning "Found Markdown inline code (\`code\`). Consider Jira format: {{code}}"
     fi
 
@@ -109,14 +109,14 @@ validate_file() {
     # Use `grep -o ... | wc -l` to count each occurrence (not just matching
     # lines), matching the {color} check below for consistency and to catch
     # multiple tags on the same line.
-    local code_count=$(echo "$content" | grep -o "{code" | wc -l)
+    local code_count=$(grep -oE "\{code[}:]" <<< "$content" | wc -l)
     if [ $((code_count % 2)) -ne 0 ]; then
         error "Mismatched {code} tags: odd number ($code_count) of occurrences (expected pairs)"
     fi
 
     # Check for unclosed {panel} blocks
     # Same rule applies: {panel} opens and closes the block.
-    local panel_count=$(echo "$content" | grep -o "{panel" | wc -l)
+    local panel_count=$(grep -oE "\{panel[}:]" <<< "$content" | wc -l)
     if [ $((panel_count % 2)) -ne 0 ]; then
         error "Mismatched {panel} tags: odd number ($panel_count) of occurrences (expected pairs)"
     fi
