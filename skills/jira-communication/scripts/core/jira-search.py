@@ -51,7 +51,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("jql")
 @click.option("--max-results", "-n", default=50, help="Maximum results to return")
 @click.option("--fields", "-f", default="key,summary,status,assignee,priority", help="Comma-separated fields to return")
-@click.option("--start-at", default=0, type=int, help="Starting index for pagination (0-based)")
+@click.option(
+    "--start-at",
+    default=0,
+    type=click.IntRange(min=0),
+    help="Starting index for pagination (0-based)",
+)
 @click.option("--truncate", type=int, metavar="N", help="Truncate field values to N characters")
 @click.pass_context
 def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate: int | None):
@@ -96,12 +101,18 @@ def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate:
                 print(issue["key"])
         else:
             # Table output
+            total = results.get("total")
+            if total is None:
+                total = len(issues)
             if not issues:
-                print("No issues found")
+                if total > 0:
+                    print(f"No issues on this page (total: {total}). Try a smaller --start-at.")
+                else:
+                    print("No issues found")
             else:
                 _print_results_table(issues, field_list, truncate=truncate)
-                total = results.get("total", len(issues))
-                print(f"\n(showing {start_at + 1}-{start_at + len(issues)} of {total} issues)")
+                issue_label = "issue" if total == 1 else "issues"
+                print(f"\n(showing {start_at + 1}-{start_at + len(issues)} of {total} {issue_label})")
 
     except Exception as e:
         if ctx.obj["debug"]:
