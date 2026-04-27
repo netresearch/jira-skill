@@ -122,9 +122,6 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
-# All subcommands are stubs. TDD will flesh them out task by task.
-
-
 @cli.command("list")
 @click.argument("project_key")
 @click.option(
