@@ -45,6 +45,7 @@ _worklog_query_mod = _load_script("jira-worklog-query", "utility")
 _weblink_mod = _load_script("jira-weblink", "utility")
 _watchers_mod = _load_script("jira-watchers", "utility")
 _version_mod = _load_script("jira-version", "workflow")
+_qa_gather_mod = _load_script("jira-qa-gather", "utility")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -120,6 +121,20 @@ class TestHelpOutput:
     def test_version_help(self):
         output = self._run_help(_version_mod.cli)
         assert "version" in output.lower()
+
+    def test_qa_gather_help(self):
+        output = self._run_help(_qa_gather_mod.cli)
+        assert "qa" in output.lower() or "review" in output.lower() or "gather" in output.lower()
+
+    def test_qa_gather_rejects_zero_window(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_qa_gather_mod.cli, ["TEST-1", "--sibling-window", "0"])
+        assert result.exit_code != 0, "expected non-zero exit for --sibling-window=0"
+
+    def test_qa_gather_rejects_negative_max(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_qa_gather_mod.cli, ["TEST-1", "--max-siblings", "-1"])
+        assert result.exit_code != 0, "expected non-zero exit for --max-siblings=-1"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
