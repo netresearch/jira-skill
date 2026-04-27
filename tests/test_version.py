@@ -162,6 +162,84 @@ class TestListPaginated:
         for vid in ("10042", "10041", "10030"):
             assert vid in result.output
 
+    def test_paginated_404_falls_back_to_flat_endpoint(self):
+        """Older Jira DC returns 404 on /project/{key}/version; fall back to flat."""
+        mc = _make_mock_client()
+        from requests import Response
+        from requests.exceptions import HTTPError
+
+        resp = Response()
+        resp.status_code = 404
+        # First call (paginated) raises 404; second call (flat) returns the list.
+        mc.get.side_effect = [
+            HTTPError("404 Not Found", response=resp),
+            [
+                _make_version("10042", "1.4.0", released=False, release_date="2026-05-31"),
+                _make_version("10041", "1.3.0", released=True, release_date="2026-04-01"),
+                _make_version("10040", "0.9.0", released=False, release_date=None),
+            ],
+        ]
+        result, _ = _run(["list", "PROJ", "--query", "1.", "--order-by", "releaseDate"], mc)
+        assert result.exit_code == 0, result.output
+        # Flat endpoint reached
+        assert mc.get.call_args_list[-1].args[0] == "rest/api/2/project/PROJ/versions"
+        # Default status is unreleased; only 10042 (matches "1.") should remain after filter
+        assert "10042" in result.output
+        assert "10041" not in result.output  # released, filtered out
+
+    def test_paginated_non_404_error_propagates(self):
+        """A 500 from the paginated endpoint must NOT trigger the flat fallback."""
+        mc = _make_mock_client()
+        from requests import Response
+        from requests.exceptions import HTTPError
+
+        resp = Response()
+        resp.status_code = 500
+        mc.get.side_effect = HTTPError("500 Server Error", response=resp)
+        result, _ = _run(["list", "PROJ", "--query", "rc"], mc)
+        assert result.exit_code != 0
+        # Should not have called the flat endpoint
+        for call in mc.get.call_args_list:
+            assert call.args[0] != "rest/api/2/project/PROJ/versions"
+
+
+class TestNumericIdGuard:
+    """Positional version IDs are interpolated into REST paths; reject non-numeric values."""
+
+    @pytest.mark.parametrize(
+        "subcmd,extra",
+        [
+            ("update", ["--name", "x"]),
+            ("release", []),
+            ("unrelease", []),
+            ("archive", []),
+            ("unarchive", []),
+            ("move", ["--position", "First"]),
+            ("delete", []),
+        ],
+    )
+    def test_subcommand_rejects_non_numeric_version_id(self, subcmd, extra):
+        mc = _make_mock_client()
+        result, _ = _run([subcmd, "../../oops"] + extra, mc)
+        assert result.exit_code != 0
+        # No HTTP call made
+        mc.get.assert_not_called()
+        mc.put.assert_not_called()
+        mc.post.assert_not_called()
+        mc.delete.assert_not_called()
+
+    def test_merge_rejects_non_numeric_src(self):
+        mc = _make_mock_client()
+        result, _ = _run(["merge", "../../oops", "INTO", "10042"], mc)
+        assert result.exit_code != 0
+        mc.post.assert_not_called()
+
+    def test_merge_rejects_non_numeric_dst(self):
+        mc = _make_mock_client()
+        result, _ = _run(["merge", "10050", "INTO", "../../oops"], mc)
+        assert result.exit_code != 0
+        mc.post.assert_not_called()
+
 
 class TestListOutputModes:
     def test_list_json_output(self):
@@ -555,17 +633,27 @@ class TestReleaseUnrelease:
         assert body["released"] is True
         assert body["releaseDate"] == "2026-05-31"
 
-    def test_release_defaults_to_today(self):
+    def test_release_defaults_to_today(self, monkeypatch):
         mc = _make_mock_client()
         mc.get.return_value = _make_version("10042", "1.4.0", released=False)
         mc.put.return_value = {}
+
+        # Pin "today" so the assertion can't race the date rollover at midnight.
+        import datetime
+
+        class _FrozenDate(datetime.date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 5, 15)
+
+        monkeypatch.setattr(_mod, "_date", _FrozenDate)
+
         result, _ = _run(["release", "10042"], mc)
         assert result.exit_code == 0, result.output
-        from datetime import date
 
         body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
         assert body["released"] is True
-        assert body["releaseDate"] == date.today().isoformat()
+        assert body["releaseDate"] == "2026-05-15"
 
     def test_unrelease_clears_release_date(self):
         mc = _make_mock_client()
