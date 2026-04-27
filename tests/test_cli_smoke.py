@@ -240,6 +240,28 @@ class TestMockedCommands:
         assert "A-1" in result.output
         assert "A-2" in result.output
 
+    def test_search_query_start_at_forwarded(self):
+        """jira-search --start-at must be forwarded to client.jql(start=...)."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {
+            "issues": [{"key": "A-51"}, {"key": "A-52"}],
+            "total": 234,
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _search_mod.cli,
+                ["query", "project=A", "--start-at", "50", "--max-results", "50"],
+            )
+        assert result.exit_code == 0, result.output
+        # Verify the pagination kwarg was forwarded to jql()
+        mock_client.jql.assert_called_once()
+        _, kwargs = mock_client.jql.call_args
+        assert kwargs.get("start") == 50
+        assert kwargs.get("limit") == 50
+        # Verify the pagination range is rendered in the output
+        assert "showing 51-52 of 234" in result.output
+
     def test_create_issue_dry_run(self):
         """jira-create issue with --dry-run must not call API."""
         mock_client = self._make_mock_client()
