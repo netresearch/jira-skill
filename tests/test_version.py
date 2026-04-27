@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import click
 import click.testing
 import pytest
 
