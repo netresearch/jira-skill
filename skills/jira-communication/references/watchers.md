@@ -73,11 +73,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query '"Epic Link"
 - **DC vs Cloud identity.** DC uses usernames (`jdoe`); Cloud uses accountIds
   (`557058:...`). The script auto-detects via `client.cloud` and `resolve_assignee()` —
   pass whatever identifier you have; account-id-shaped strings bypass user search.
-- **`atlassian-python-api` kwarg is `user`, not `username`, on `issue_delete_watcher`.**
-  Actually, the library accepts `username=` (DC) and `account_id=` (Cloud) — the
-  script picks the correct kwarg based on identifier shape. If you ever drop to
-  raw REST, the query-param names are `?username=` / `?accountId=` (camelCase on
-  the wire).
+- **`issue_delete_watcher` library kwargs differ from raw REST params.**
+  In `atlassian-python-api`, call `issue_delete_watcher(..., username=...)` on DC
+  and `issue_delete_watcher(..., account_id=...)` on Cloud; the script chooses the
+  correct kwarg based on deployment/identifier shape. If you ever drop to raw
+  REST, the query parameter names are `?username=` (DC) and `?accountId=` (Cloud).
 - **Self-watch is idempotent.** Adding yourself when already watching returns
   HTTP 204, not an error — the script treats repeated self-adds as success.
 - **403 on someone-else add/remove.** Non-self watcher changes require the
