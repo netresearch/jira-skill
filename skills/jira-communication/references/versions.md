@@ -7,7 +7,7 @@ Load this reference whenever the user asks about fix/affects versions, releases,
 ## List
 
 ```bash
-# Default: unreleased versions in release-date order
+# Default: unreleased versions in the project's native sequence (server order)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py list PROJ
 
 # Filter by status (released | unreleased | archived | all)
@@ -67,9 +67,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py update 10042 --name 
 ## Release / unrelease
 
 ```bash
-# Mark released with a specific date (defaults to today)
+# Mark released with a specific date
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py release 10042 --release-date 2026-05-31
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py release 10042 --release-date today
+
+# Omit --release-date to default to today
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py release 10042
 
 # Roll back: sets released=false and explicitly clears releaseDate (null in payload)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py unrelease 10042
@@ -85,7 +87,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py unarchive 10039
 ## Move
 
 ```bash
-# After another version (IDs must be numeric; self URL is built server-side)
+# After another version (IDs must be numeric; the script builds the
+# `self` URL client-side from the configured Jira base URL before POSTing)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py move 10045 --after 10042
 
 # Relative position: First | Last | Earlier | Later
@@ -120,9 +123,10 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-version.py delete 10050 --dry-r
 
 - **Plural field names only.** On issues, use `fixVersions` (Fix Version/s) and `versions` (Affects Version/s). The singular forms `fixVersion` and `version` silently no-op on create and give a confusing "field does not exist on screen" error on update.
 - **Safe-merge update.** `update` always performs GET → merge → PUT because some Jira deployments treat PUT as replace. Clearing a field (e.g. `unrelease`) emits an explicit `null` in the payload rather than omitting the key.
-- **409 on duplicate names.** Creating a version whose name already exists in the project returns HTTP 409; the script surfaces it as `Version "X" already exists in PROJ (id=…)`.
+- **409 on duplicate names.** Creating a version whose name already exists in the project returns HTTP 409; the script surfaces it as `Version "X" already exists in PROJ`.
 - **Orphaned references on delete.** `delete` without `--move-fix-to` / `--move-affected-to` leaves dangling `fixVersions` / `versions` arrays on issues. Prefer `--dry-run` first to read the reassign counts.
-- **`--after` needs a numeric ID.** `move --after` and the `--move-fix-to` / `--move-affected-to` flags validate client-side that the target is a numeric version ID; names are rejected before any request is made.
+- **Numeric IDs only on mutating subcommands.** `update`, `release`, `unrelease`, `archive`, `unarchive`, `move`, `merge`, `delete` validate that every positional and target version ID is numeric before any HTTP call, so values like `../../issue/KEY` cannot reach the REST path. Look the version up by name (`get NAME --project PROJ`) first if you only have a name.
+- **Paginated endpoint fallback.** `--query` / `--order-by` use the paginated `/project/{key}/version` endpoint (Jira Cloud + DC ≥9.x). On older DC the endpoint returns 404 and the script automatically retries the flat endpoint, applying `--query` substring filter and `--order-by` sort client-side.
 - **Archived still filterable.** Archive only hides a version from pickers; JQL like `fixVersion = "1.3.0"` keeps matching archived versions.
 
 ## See also
