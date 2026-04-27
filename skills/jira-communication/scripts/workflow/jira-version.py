@@ -8,7 +8,6 @@
 # ///
 """Jira project version operations - list, get, create, update, release lifecycle, move, merge, delete."""
 
-import re
 import sys
 from datetime import date as _date
 from pathlib import Path
@@ -29,24 +28,35 @@ from lib.output import error, format_output, format_table, success, warning
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
 
 def _validate_iso_date(s: str) -> str:
     """Validate an ISO date string (YYYY-MM-DD) and return it unchanged.
 
     Jira rejects full timestamps like `2026-05-31T00:00:00Z` with a 400 on
     version start/release dates. This helper enforces the date-only shape
-    client-side with a clear error.
+    client-side with a clear error. ``date.fromisoformat`` (Python 3.10) accepts
+    only the strict ``YYYY-MM-DD`` shape, which is exactly what Jira requires.
     """
-    if not isinstance(s, str) or not _ISO_DATE_RE.match(s):
+    if not isinstance(s, str):
         raise click.BadParameter(f'Expected YYYY-MM-DD, got "{s}". Timestamps are not allowed.')
     try:
-        y, m, d = (int(p) for p in s.split("-"))
-        _date(y, m, d)
+        _date.fromisoformat(s)
     except ValueError as e:
-        raise click.BadParameter(f'Invalid date "{s}": {e}') from e
+        raise click.BadParameter(f'Expected YYYY-MM-DD, got "{s}" ({e}).') from e
     return s
+
+
+def _validate_numeric_id(value: str, label: str = "version ID") -> str:
+    """Reject non-numeric IDs so they cannot be interpolated into REST paths.
+
+    The Jira REST surface treats version IDs as positional path segments
+    (``/version/{id}``, ``/version/{src}/mergeto/{dst}``). A non-numeric value
+    such as ``../../issue/KEY`` would otherwise traverse to a different
+    resource. All callers feeding user input into a path must validate first.
+    """
+    if not isinstance(value, str) or not value.isdigit():
+        raise click.BadParameter(f'{label} must be numeric, got "{value}".')
+    return value
 
 
 def _status_of(v: dict) -> str:
@@ -139,7 +149,25 @@ def list_versions(ctx, project_key: str, status: str, query: str | None, order_b
     client = ctx.obj["client"]
     try:
         if query or order_by:
-            versions = _fetch_versions_paginated(client, project_key, status=status, query=query, order_by=order_by)
+            try:
+                versions = _fetch_versions_paginated(client, project_key, status=status, query=query, order_by=order_by)
+            except Exception as paginated_err:
+                # Older Jira DC (<9.x) returns 404 for /project/{key}/version.
+                # Fall back to the flat endpoint and apply --query / --order-by
+                # client-side so the user still gets a useful result.
+                resp_status = getattr(getattr(paginated_err, "response", None), "status_code", None)
+                if resp_status != 404:
+                    raise
+                warning(
+                    "Paginated /project/{key}/version endpoint returned 404; "
+                    "falling back to flat endpoint with client-side filter/sort."
+                )
+                versions = client.get(f"rest/api/2/project/{project_key}/versions") or []
+                if query:
+                    q = query.lower()
+                    versions = [v for v in versions if q in (v.get("name", "") or "").lower()]
+                if order_by:
+                    versions = sorted(versions, key=lambda v: (v.get(order_by) is None, v.get(order_by) or ""))
             # Server-side `status` param is DC ≥9.x only; apply a client-side
             # safety filter so older servers don't silently return all statuses.
             if status != "all":
@@ -172,8 +200,9 @@ def _fetch_versions_paginated(client, project_key, status=None, query=None, orde
     """Paginated search via `/project/{key}/version`.
 
     Availability: Jira Server/DC >=9.x and Jira Cloud. Older DC versions return
-    404 — callers should rely on the flat `/project/{key}/versions` endpoint
-    and filter client-side when `--query` / `--order-by` are not supplied.
+    404; ``list_versions`` catches that and falls back to the flat
+    `/project/{key}/versions` endpoint with client-side filter and sort so the
+    user still gets a useful result.
     """
     all_values: list[dict] = []
     start_at = 0
@@ -379,6 +408,7 @@ def create(ctx, project_key, name, description, start_date, release_date, releas
 @click.pass_context
 def update(ctx, version_id, name, description, start_date, release_date, released, archived, dry_run):
     """Update fields on an existing version (safe-merge: GET + merge + PUT)."""
+    _validate_numeric_id(version_id)
     client = ctx.obj["client"]
 
     patch: dict = {}
@@ -434,6 +464,7 @@ def update(ctx, version_id, name, description, start_date, release_date, release
 @click.pass_context
 def release(ctx, version_id, release_date, dry_run):
     """Mark a version released (sets released=true + releaseDate)."""
+    _validate_numeric_id(version_id)
     rdate = _validate_iso_date(release_date) if release_date else _date.today().isoformat()
     patch = {"released": True, "releaseDate": rdate}
 
@@ -464,6 +495,7 @@ def release(ctx, version_id, release_date, dry_run):
 @click.pass_context
 def unrelease(ctx, version_id, dry_run):
     """Mark a version unreleased (clears releaseDate)."""
+    _validate_numeric_id(version_id)
     patch = {"released": False, "releaseDate": None}
 
     if dry_run:
@@ -493,6 +525,7 @@ def unrelease(ctx, version_id, dry_run):
 @click.pass_context
 def archive(ctx, version_id, dry_run):
     """Archive a version (hides it from pickers)."""
+    _validate_numeric_id(version_id)
     if dry_run:
         warning("DRY RUN - No version will be updated")
         print(f"Would archive {version_id}")
@@ -519,6 +552,7 @@ def archive(ctx, version_id, dry_run):
 @click.pass_context
 def unarchive(ctx, version_id, dry_run):
     """Unarchive a version."""
+    _validate_numeric_id(version_id)
     if dry_run:
         warning("DRY RUN - No version will be updated")
         print(f"Would unarchive {version_id}")
@@ -549,6 +583,7 @@ def unarchive(ctx, version_id, dry_run):
 @click.pass_context
 def move(ctx, version_id, after, position, dry_run):
     """Reorder a version within its project."""
+    _validate_numeric_id(version_id)
     if bool(after) == bool(position):
         error("Provide exactly one of --after or --position")
         sys.exit(2)
@@ -590,6 +625,8 @@ def merge(ctx, src_id, into, dst_id, dry_run):
     Reassigns fixVersions / versions references from SRC to DST, then deletes
     SRC server-side. There is no undo.
     """
+    _validate_numeric_id(src_id, label="SRC_ID")
+    _validate_numeric_id(dst_id, label="DST_ID")
     client = ctx.obj["client"]
 
     if dry_run:
@@ -634,6 +671,7 @@ def merge(ctx, src_id, into, dst_id, dry_run):
 @click.pass_context
 def delete(ctx, version_id, move_fix_to, move_affected_to, dry_run):
     """Delete a version, optionally reassigning fixVersions/versions refs."""
+    _validate_numeric_id(version_id)
     client = ctx.obj["client"]
     if dry_run:
         try:
