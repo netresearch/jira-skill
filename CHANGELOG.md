@@ -560,7 +560,11 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.10.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.13.1...HEAD
+[3.13.1]: https://github.com/netresearch/jira-skill/compare/v3.13.0...v3.13.1
+[3.13.0]: https://github.com/netresearch/jira-skill/compare/v3.12.0...v3.13.0
+[3.12.0]: https://github.com/netresearch/jira-skill/compare/v3.11.0...v3.12.0
+[3.11.0]: https://github.com/netresearch/jira-skill/compare/v3.10.1...v3.11.0
 [3.10.1]: https://github.com/netresearch/jira-skill/compare/v3.10.0...v3.10.1
 [3.10.0]: https://github.com/netresearch/jira-skill/compare/v3.9.0...v3.10.0
 [3.9.0]: https://github.com/netresearch/jira-skill/compare/v3.8.0...v3.9.0
