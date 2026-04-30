@@ -616,9 +616,7 @@ class TestMockedCommands:
         """jira-worklog list must render extracted text from ADF comments (Cloud), not the raw dict."""
         adf_comment = {
             "type": "doc",
-            "content": [
-                {"type": "paragraph", "content": [{"type": "text", "text": "Implemented retry logic"}]}
-            ],
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Implemented retry logic"}]}],
         }
         mock_client = self._make_mock_client()
         mock_client.issue_get_worklog.return_value = {
