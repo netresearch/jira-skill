@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.13.1] - 2026-04-30
+
+### Added
+
+- `jira-syntax`: validator now flags `{code:LANG}` whose `LANG` is not in the Jira Server source-code formatter set, mirroring the server-side error and pointing at `{code:none}`. Quick reference replaces the vague "many more — check Jira documentation" line with the authoritative formatter list grouped by category, calls out the literal `c#`/`c++` form, and lists common identifiers that look valid but are not (typescript, rust, shell, yml, typoscript). ([#94](https://github.com/netresearch/jira-skill/pull/94))
+
+### Fixed
+
+- `jira-syntax` validator: switch ERRORS/WARNINGS counters to pre-increment so `(( ))` returns the new (non-zero) value — the post-increment form returned 0 on first call and tripped `set -e`, aborting the script before the summary printed and making warning-only runs exit with code 1.
+- `jira-syntax` validator: treat `{code:language}` as a placeholder warning rather than a hard error so the bundled templates (which intentionally ship the literal word "language" as a fill-in) still run cleanly.
+- `jira-syntax` validator: use Bash built-in `[[ ]]` pattern matching for the `{code:LANG}` membership test — avoids spawning `printf`+`grep` per unique language and keeps shell-significant identifiers (`c#`, `c++`) literal.
+- `jira-syntax` quick reference: backtick the `<name>` token in the reference blockquote so Markdown renderers don't strip it as an HTML tag.
+
+### Changed
+
+- CI/release: grant the reusable release workflow `id-token: write` and `attestations: write` (required by `actions/attest-build-provenance` for SLSA build-provenance attestations on release archives); drop unused `pull-requests: write`. Drop the deprecated `with: { bump, attest }` inputs and the `workflow_dispatch` trigger from `.github/workflows/release.yml` — both inputs are ignored upstream and the manual trigger did nothing useful since releases ship via signed tag-push only. ([#91](https://github.com/netresearch/jira-skill/pull/91), [#93](https://github.com/netresearch/jira-skill/pull/93))
+
 ## [3.13.0] - 2026-04-27
 
 ### Added
@@ -543,7 +560,11 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.10.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.13.1...HEAD
+[3.13.1]: https://github.com/netresearch/jira-skill/compare/v3.13.0...v3.13.1
+[3.13.0]: https://github.com/netresearch/jira-skill/compare/v3.12.0...v3.13.0
+[3.12.0]: https://github.com/netresearch/jira-skill/compare/v3.11.0...v3.12.0
+[3.11.0]: https://github.com/netresearch/jira-skill/compare/v3.10.1...v3.11.0
 [3.10.1]: https://github.com/netresearch/jira-skill/compare/v3.10.0...v3.10.1
 [3.10.0]: https://github.com/netresearch/jira-skill/compare/v3.9.0...v3.10.0
 [3.9.0]: https://github.com/netresearch/jira-skill/compare/v3.8.0...v3.9.0
