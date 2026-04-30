@@ -114,7 +114,7 @@ public class Example {
 
 The Jira Server source-code formatter accepts ONLY this fixed list. Using any other identifier (e.g. `typoscript`, `rust`, `typescript`, `yml`, `shell`) produces:
 
-> Unable to find source-code formatter for language: <name>. Available languages are: ...
+> Unable to find source-code formatter for language: `<name>`. Available languages are: ...
 
 | Group | Identifiers |
 |-------|-------------|
