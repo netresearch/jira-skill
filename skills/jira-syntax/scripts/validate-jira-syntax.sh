@@ -98,6 +98,17 @@ validate_file() {
         warning "Found {code} blocks without language. Consider: {code:java} for syntax highlighting"
     fi
 
+    # Check for {code:LANG} using a language Jira Server's formatter does not recognize.
+    # Authoritative list from the server error message ("Available languages are: ...").
+    # Anything outside this set causes "Unable to find source-code formatter for language: X".
+    local valid_langs="actionscript ada applescript bash c c# c++ cpp css erlang go groovy haskell html java javascript js json lua none nyan objc perl php python r rainbow ruby scala sh sql swift visualbasic xml yaml"
+    while IFS= read -r lang; do
+        [ -z "$lang" ] && continue
+        if ! printf ' %s ' $valid_langs | grep -qF " $lang "; then
+            error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
+        fi
+    done < <(grep -oE '\{code:[^}|]+' <<< "$content" | sed 's/^{code://' | sort -u)
+
     # Check for tables with incorrect header syntax (|Header| instead of ||Header||)
     if echo "$content" | grep -qE "^\|[^|]+\|$" && ! echo "$content" | grep -qE "^\|\|"; then
         warning "Potential table header without double pipes. Headers should use: ||Header||"
