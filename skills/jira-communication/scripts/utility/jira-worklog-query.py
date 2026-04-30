@@ -23,7 +23,7 @@ from datetime import date, timedelta
 
 import click
 from lib.client import LazyJiraClient
-from lib.output import error, format_json, warning
+from lib.output import comment_to_text, error, format_json, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Query building
@@ -167,12 +167,7 @@ def format_detail(worklogs: list[dict]) -> str:
         if len(author) > 20:
             author = author[:17] + "..."
         time_str = seconds_to_human(wl.get("timeSpentSeconds", 0))
-        comment = wl.get("comment", "")
-        if isinstance(comment, dict):
-            # ADF format — extract text
-            from lib.output import extract_adf_text
-
-            comment = extract_adf_text(comment)
+        comment = comment_to_text(wl.get("comment"))
         if len(comment) > 50:
             comment = comment[:47] + "..."
         lines.append(f"{key:<14} {date_str:<12} {author:<20} {time_str:>8} {comment}")

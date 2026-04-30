@@ -611,3 +611,61 @@ class TestMockedCommands:
         assert payload["key"] == "TEST-1"
         assert payload["current_status"] == "Open"
         assert "Open" in payload["time_in_status"]
+
+    def test_worklog_list_renders_adf_comment(self):
+        """jira-worklog list must render extracted text from ADF comments (Cloud), not the raw dict."""
+        adf_comment = {
+            "type": "doc",
+            "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "Implemented retry logic"}]}
+            ],
+        }
+        mock_client = self._make_mock_client()
+        mock_client.issue_get_worklog.return_value = {
+            "worklogs": [
+                {
+                    "id": "1",
+                    "author": {"displayName": "Alice"},
+                    "timeSpent": "2h",
+                    "started": "2026-04-30T08:00:00.000+0000",
+                    "comment": adf_comment,
+                }
+            ]
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_worklog_mod.cli, ["list", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert "Implemented retry logic" in result.output
+        # Regression guard: a raw ADF dict would render as repr() starting with "{'type'"
+        assert "{'type'" not in result.output
+
+    def test_worklog_list_truncate_does_not_raise_on_adf(self):
+        """--truncate must not raise TypeError when comment is an ADF dict (Cloud regression)."""
+        adf_comment = {
+            "type": "doc",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "A long worklog comment that exceeds twenty characters"}],
+                }
+            ],
+        }
+        mock_client = self._make_mock_client()
+        mock_client.issue_get_worklog.return_value = {
+            "worklogs": [
+                {
+                    "id": "1",
+                    "author": {"displayName": "Alice"},
+                    "timeSpent": "1h",
+                    "started": "2026-04-30T08:00:00.000+0000",
+                    "comment": adf_comment,
+                }
+            ]
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_worklog_mod.cli, ["list", "TEST-1", "--truncate", "20"])
+        # Pre-fix this raised TypeError ("unhashable type: 'slice'"-style on dict slicing).
+        assert result.exit_code == 0, result.output
+        assert "..." in result.output
