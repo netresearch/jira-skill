@@ -21,5 +21,6 @@ jobs:
     with:
       bump: ${{ inputs.bump }}
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write          # release upload
+      id-token: write          # OIDC for sigstore (required by the attest job)
+      attestations: write      # GitHub native attestation API (required by the attest job)
