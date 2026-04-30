@@ -1,4 +1,4 @@
-"""Tests for output.py — extract_adf_text() function."""
+"""Tests for output.py — extract_adf_text() and comment_to_text() helpers."""
 
 import sys
 from pathlib import Path
@@ -8,7 +8,7 @@ _test_dir = Path(__file__).parent
 _scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
 sys.path.insert(0, str(_scripts_path))
 
-from lib.output import compact_json, extract_adf_text
+from lib.output import comment_to_text, compact_json, extract_adf_text
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: extract_adf_text()
@@ -196,3 +196,45 @@ class TestCompactJson:
         assert compact_json("hello") == "hello"
         assert compact_json(42) == 42
         assert compact_json(None) is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: comment_to_text()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCommentToText:
+    """comment_to_text() must normalize Server-string and Cloud-ADF comments to plain text."""
+
+    def test_none_returns_empty(self):
+        assert comment_to_text(None) == ""
+
+    def test_missing_field_returns_empty(self):
+        # Typical caller: comment_to_text(wl.get("comment")) where the key is absent
+        assert comment_to_text({}.get("comment")) == ""
+
+    def test_empty_string(self):
+        assert comment_to_text("") == ""
+
+    def test_plain_string_passthrough(self):
+        # Server/DC: comment is already a plain string
+        assert comment_to_text("Worked on bugfix") == "Worked on bugfix"
+
+    def test_adf_dict_extracted(self):
+        # Cloud: comment is an ADF document
+        adf = {
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Hello world"}]}],
+        }
+        assert comment_to_text(adf) == "Hello world"
+
+    def test_empty_adf_returns_empty(self):
+        adf = {"type": "doc", "content": []}
+        assert comment_to_text(adf) == ""
+
+    def test_adf_dict_never_returns_repr(self):
+        # Regression guard for the original bug: a raw dict.__repr__ would start with "{'type'..."
+        adf = {"type": "doc", "content": [{"type": "text", "text": "real text"}]}
+        result = comment_to_text(adf)
+        assert "{'type'" not in result
+        assert "real text" in result

@@ -219,4 +219,22 @@ def _extract_text_recursive(node) -> list:
     return parts
 
 
+def comment_to_text(comment) -> str:
+    """Normalize a Jira comment field to plain text.
+
+    Comments come in three shapes:
+      - None / missing on the issue → empty string
+      - Server/DC: plain string (already plain text)
+      - Cloud: ADF dictionary → extracted via extract_adf_text()
+
+    Used by callers that render worklog/issue comments for terminal output,
+    where a raw ADF dict would print as ``{'type': 'doc', ...}``.
+    """
+    if comment is None:
+        return ""
+    if isinstance(comment, dict):
+        return extract_adf_text(comment) or ""
+    return str(comment)
+
+
 # === INLINE_END: output ===
