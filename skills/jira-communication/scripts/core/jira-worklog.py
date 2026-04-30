@@ -24,7 +24,7 @@ import re
 
 import click
 from lib.client import LazyJiraClient
-from lib.output import error, format_output, success
+from lib.output import error, extract_adf_text, format_output, success
 
 
 def normalize_iso_timestamp(timestamp: str) -> str:
@@ -197,6 +197,8 @@ def list_worklogs(ctx, issue_key: str, limit: int, truncate: int | None):
                     time_spent = wl.get("timeSpent", "N/A")
                     started = wl.get("started", "N/A")[:10] if wl.get("started") else "N/A"
                     comment = wl.get("comment", "")
+                    if isinstance(comment, dict):
+                        comment = extract_adf_text(comment)
 
                     print(f"  [{started}] {author}: {time_spent}")
                     if comment:
