@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `jira-worklog list`: extract plain text from Cloud ADF (`{type, content}`) comment payloads instead of rendering the raw dict's `repr()`; `--truncate` no longer raises `TypeError` when slicing such a comment. Adds a shared `comment_to_text()` helper in `lib/output.py` (also used by `jira-worklog-query.py`) that normalizes None / Server-string / Cloud ADF dict comment shapes to text. ([#92](https://github.com/netresearch/jira-skill/pull/92))
 - `jira-syntax` validator: switch ERRORS/WARNINGS counters to pre-increment so `(( ))` returns the new (non-zero) value — the post-increment form returned 0 on first call and tripped `set -e`, aborting the script before the summary printed and making warning-only runs exit with code 1.
 - `jira-syntax` validator: treat `{code:language}` as a placeholder warning rather than a hard error so the bundled templates (which intentionally ship the literal word "language" as a fill-in) still run cleanly.
 - `jira-syntax` validator: use Bash built-in `[[ ]]` pattern matching for the `{code:LANG}` membership test — avoids spawning `printf`+`grep` per unique language and keeps shell-significant identifiers (`c#`, `c++`) literal.
