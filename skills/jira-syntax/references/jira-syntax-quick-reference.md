@@ -110,11 +110,31 @@ public class Example {
 {code}
 ```
 
-**Supported Languages:**
-- `java`, `javascript`, `python`, `sql`, `xml`, `json`
-- `bash`, `shell`, `php`, `ruby`, `go`, `rust`
-- `html`, `css`, `typescript`, `c`, `cpp`, `csharp`
-- Many more - check Jira documentation
+**Supported Languages (Jira Server / Data Center):**
+
+The Jira Server source-code formatter accepts ONLY this fixed list. Using any other identifier (e.g. `typoscript`, `rust`, `typescript`, `yml`, `shell`) produces:
+
+> Unable to find source-code formatter for language: `<name>`. Available languages are: ...
+
+| Group | Identifiers |
+|-------|-------------|
+| General-purpose | `actionscript`, `ada`, `applescript`, `c`, `c#`, `c++`, `cpp`, `erlang`, `go`, `groovy`, `haskell`, `java`, `javascript`, `js`, `lua`, `objc`, `perl`, `php`, `python`, `r`, `ruby`, `scala`, `swift`, `visualbasic` |
+| Shell / scripting | `bash`, `sh` |
+| Data / markup | `css`, `html`, `json`, `sql`, `xml`, `yaml` |
+| Special | `none` (no highlighting), `nyan`, `rainbow` |
+
+**Notes:**
+- Use `c#` / `c++` literally, not `csharp` / `cplusplus` (though `cpp` is also accepted).
+- There is no `typescript`, `rust`, `kotlin`, `dart`, `shell`, `yml`, `dockerfile`, `terraform`, or `typoscript` formatter.
+- For unsupported languages, fall back to `{code:none}` (or `{noformat}`) to preserve the block without highlighting.
+
+```
+{code:none}
+[request && request.getNormalizedParams().getHttpHost() == "backend.example.de"]
+page.meta.robots = noindex,noarchive
+[END]
+{code}
+```
 
 ### Preformatted Text (No Highlighting)
 ```

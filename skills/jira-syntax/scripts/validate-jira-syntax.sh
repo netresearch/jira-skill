@@ -16,15 +16,17 @@ ERRORS=0
 WARNINGS=0
 
 # Function to print error
+# Use pre-increment so the (( )) expression is the new (non-zero) value;
+# `((ERRORS++))` returns the OLD value (0 on first call) and trips `set -e`.
 error() {
     echo -e "${RED}❌ ERROR:${NC} $1"
-    ((ERRORS++))
+    ((++ERRORS))
 }
 
 # Function to print warning
 warning() {
     echo -e "${YELLOW}⚠️  WARNING:${NC} $1"
-    ((WARNINGS++))
+    ((++WARNINGS))
 }
 
 # Function to print success
@@ -97,6 +99,26 @@ validate_file() {
     if echo "$content" | grep -qE "{code}[^{]"; then
         warning "Found {code} blocks without language. Consider: {code:java} for syntax highlighting"
     fi
+
+    # Check for {code:LANG} using a language Jira Server's formatter does not recognize.
+    # Authoritative list from the server error message ("Available languages are: ...").
+    # Anything outside this set causes "Unable to find source-code formatter for language: X".
+    # Use Bash built-in pattern matching with literal-quoted needle so identifiers
+    # containing shell-significant characters (c#, c++) are compared verbatim.
+    local valid_langs="actionscript ada applescript bash c c# c++ cpp css erlang go groovy haskell html java javascript js json lua none nyan objc perl php python r rainbow ruby scala sh sql swift visualbasic xml yaml"
+    local search_langs=" $valid_langs "
+    while IFS= read -r lang; do
+        [ -z "$lang" ] && continue
+        # Templates ship `{code:language}` as a fill-in placeholder; warn rather than
+        # error so templates stay validatable until users substitute a real lang.
+        if [ "$lang" = "language" ]; then
+            warning "Found {code:language} placeholder — replace with an actual language before submitting to Jira"
+            continue
+        fi
+        if [[ "$search_langs" != *" $lang "* ]]; then
+            error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
+        fi
+    done < <(grep -oE '\{code:[^}|]+' <<< "$content" | sed 's/^{code://' | sort -u)
 
     # Check for tables with incorrect header syntax (|Header| instead of ||Header||)
     if echo "$content" | grep -qE "^\|[^|]+\|$" && ! echo "$content" | grep -qE "^\|\|"; then
