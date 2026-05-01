@@ -21,7 +21,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient
+from lib.client import AuthenticationError, LazyJiraClient, SessionExpiredError
 from lib.output import error, format_output, format_table, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -382,6 +382,16 @@ def create(ctx, project_key, name, description, start_date, release_date, releas
             extra = f" (release {release_date})" if release_date else ""
             success(f'Created version {vid} "{name}" in {project_key}{extra}')
 
+    except SessionExpiredError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
+    except AuthenticationError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
     except Exception as e:
         if ctx.obj["debug"]:
             raise

@@ -232,6 +232,24 @@ class CaptchaError(Exception):
         self.login_url = login_url
 
 
+class SessionExpiredError(Exception):
+    """Raised when a 200 OK response carries an HTML session-expiry or login page.
+
+    Jira Server/DC redirects expired sessions to a login page that returns
+    200 OK with Content-Type: text/html and no Content-Disposition: attachment.
+    Without this check the HTML body would be silently written to disk as if it
+    were the requested file.
+    """
+
+
+class AuthenticationError(Exception):
+    """Raised when Jira returns 401 or 403 on an authenticated request.
+
+    Provides a typed alternative to inspecting raw HTTP status codes or
+    string-matching error messages for authentication failures.
+    """
+
+
 def _check_captcha_challenge(response: Response, jira_url: str) -> None:
     """Check response for CAPTCHA challenge and raise exception if found.
 
@@ -276,11 +294,86 @@ def _check_captcha_challenge(response: Response, jira_url: str) -> None:
     )
 
 
-def _patch_session_for_captcha(client: Jira, jira_url: str) -> None:
-    """Patch the Jira client session to detect CAPTCHA challenges.
+def _check_session_expiry(response: Response, url: str) -> None:
+    """Check whether a 200 OK response is actually an HTML session-expiry page.
 
-    The atlassian-python-api library doesn't check for CAPTCHA responses,
-    so we patch the session's request method to add this check.
+    Jira Server/DC returns 200 OK with Content-Type: text/html when the session
+    has expired and the request is redirected to a login page. Real HTML file
+    attachments are distinguished by the presence of Content-Disposition: attachment.
+
+    Args:
+        response: HTTP response to check
+        url: Effective URL of the response, used in the error message
+
+    Raises:
+        SessionExpiredError: If the response looks like a login/session-expiry page
+    """
+    if response.status_code != 200:
+        return
+    ct = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+    if not ct.startswith("text/html"):
+        return
+    cd = response.headers.get("Content-Disposition", "").lower()
+    if "attachment" in cd:
+        return
+    raise SessionExpiredError(
+        f"Request failed: response is HTML without an attachment disposition "
+        f"(Content-Type: {ct}, URL: {url}). "
+        "The session may have expired or the URL redirected to a login page."
+    )
+
+
+def _check_authentication(response: Response) -> None:
+    """Check whether the response signals an authentication failure.
+
+    Raises AuthenticationError for 401 and 403 responses. Must be called
+    after _check_captcha_challenge so that CAPTCHA-flavoured 401s (which carry
+    the X-Authentication-Denied-Reason header) are attributed to CaptchaError
+    rather than the more generic AuthenticationError.
+
+    Args:
+        response: HTTP response to check
+
+    Raises:
+        AuthenticationError: If the response status is 401 or 403
+    """
+    if response.status_code in (401, 403):
+        raise AuthenticationError(
+            f"Authentication failed (HTTP {response.status_code}). Check your credentials or token."
+        )
+
+
+def _handle_response(response: Response, jira_url: str, url: str | None = None) -> None:
+    """Run all response-level validation checks.
+
+    Centralises CAPTCHA detection, authentication failure detection, and
+    session-expiry detection so every request path benefits from the same
+    guards regardless of whether it goes through the patched Jira session
+    or a bare requests.get call.
+
+    Call order matters:
+    1. CAPTCHA — fires on 401 carrying X-Authentication-Denied-Reason header
+    2. Authentication — fires on any remaining 401/403
+    3. Session expiry — fires on 200 + text/html without attachment disposition
+
+    Args:
+        response: HTTP response to validate
+        jira_url: Base Jira URL, used for CAPTCHA login URL construction
+        url: Effective request URL for error messages; falls back to
+             response.url when not supplied
+    """
+    _check_captcha_challenge(response, jira_url)
+    _check_authentication(response)
+    _check_session_expiry(response, url or getattr(response, "url", ""))
+
+
+def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
+    """Patch the Jira client session to run response validation on every request.
+
+    The atlassian-python-api library doesn't inspect responses for CAPTCHA
+    challenges, authentication failures, or session-expiry HTML pages, so we
+    wrap the session's request method to call _handle_response after each
+    response is received.
 
     Args:
         client: Jira client instance to patch
@@ -290,7 +383,7 @@ def _patch_session_for_captcha(client: Jira, jira_url: str) -> None:
 
     def patched_request(method: str, url: str, **kwargs) -> Response:
         response = original_request(method, url, **kwargs)
-        _check_captcha_challenge(response, jira_url)
+        _handle_response(response, jira_url, url=url)
         return response
 
     client._session.request = patched_request
@@ -553,8 +646,8 @@ def get_jira_client(
         client._session.mount("https://", adapter)
         client._session.mount("http://", adapter)
 
-        # Patch session to detect CAPTCHA challenges (primarily for Server/DC)
-        _patch_session_for_captcha(client, jira_url)
+        # Patch session to run response validation (CAPTCHA, authentication failures, session-expiry HTML pages)
+        _patch_session_for_response_validation(client, jira_url)
 
         return client
     except CaptchaError:

@@ -22,7 +22,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.client import LazyJiraClient, _sanitize_error
+from lib.client import AuthenticationError, LazyJiraClient, SessionExpiredError, _sanitize_error
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -178,6 +178,16 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         else:
             response.raise_for_status()
 
+    except SessionExpiredError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
+    except AuthenticationError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
     except requests.HTTPError as e:
         if ctx.obj["debug"]:
             raise
