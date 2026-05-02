@@ -1,0 +1,40 @@
+{
+  "name": "@netresearch/jira-skill",
+  "version": "0.0.0-source",
+  "description": "Netresearch AI skill for Jira API operations and wiki markup syntax.",
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "author": "Netresearch DTT GmbH (https://www.netresearch.de/)",
+  "homepage": "https://github.com/netresearch/jira-skill",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/netresearch/jira-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/netresearch/jira-skill/issues"
+  },
+  "keywords": [
+    "ai-agent-skill",
+    "jira",
+    "wiki-markup",
+    "issue-tracking",
+    "atlassian",
+    "anthropic",
+    "claude-code"
+  ],
+  "aiAgentSkill": [
+    "skills/jira-communication/SKILL.md",
+    "skills/jira-syntax/SKILL.md"
+  ],
+  "files": [
+    "skills/jira-communication/",
+    "skills/jira-syntax/",
+    "hooks/",
+    "scripts/",
+    "LICENSE-MIT",
+    "LICENSE-CC-BY-SA-4.0",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@netresearch/agent-skill-coordinator": "^0.1"
+  }
+}
