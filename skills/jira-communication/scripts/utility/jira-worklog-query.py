@@ -23,16 +23,15 @@ from datetime import date, timedelta
 
 import click
 from lib.client import LazyJiraClient
+from lib.jql import jql_escape
 from lib.output import comment_to_text, error, format_json, warning
+
+# Backwards-compatible alias (older code paths/tests refer to the private name)
+_jql_escape = jql_escape
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Query building
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-def _jql_escape(value: str) -> str:
-    """Escape a value for use in a double-quoted JQL string."""
-    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def build_jql(
@@ -46,23 +45,23 @@ def build_jql(
 ) -> str:
     """Build JQL query from worklog filters."""
     clauses = [
-        f'worklogDate >= "{_jql_escape(from_date)}"',
-        f'worklogDate <= "{_jql_escape(to_date)}"',
+        f'worklogDate >= "{jql_escape(from_date)}"',
+        f'worklogDate <= "{jql_escape(to_date)}"',
     ]
     if user:
-        clauses.append(f'worklogAuthor = "{_jql_escape(user)}"')
+        clauses.append(f'worklogAuthor = "{jql_escape(user)}"')
     if project:
-        clauses.append(f'project = "{_jql_escape(project)}"')
+        clauses.append(f'project = "{jql_escape(project)}"')
     if issues:
-        quoted = ", ".join(f'"{_jql_escape(k)}"' for k in issues)
+        quoted = ", ".join(f'"{jql_escape(k)}"' for k in issues)
         clauses.append(f"issueKey in ({quoted})")
     if epic:
-        clauses.append(f'"Epic Link" = "{_jql_escape(epic)}"')
+        clauses.append(f'"Epic Link" = "{jql_escape(epic)}"')
     if sprint:
         if sprint.isdigit():
             clauses.append(f"sprint = {sprint}")
         else:
-            clauses.append(f'sprint = "{_jql_escape(sprint)}"')
+            clauses.append(f'sprint = "{jql_escape(sprint)}"')
     return " AND ".join(clauses)
 
 
