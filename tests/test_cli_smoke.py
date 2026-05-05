@@ -46,6 +46,7 @@ _weblink_mod = _load_script("jira-weblink", "utility")
 _watchers_mod = _load_script("jira-watchers", "utility")
 _version_mod = _load_script("jira-version", "workflow")
 _qa_gather_mod = _load_script("jira-qa-gather", "utility")
+_move_mod = _load_script("jira-move", "workflow")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -554,6 +555,95 @@ class TestMockedCommands:
         _, kwargs = mock_client.get.call_args
         params = kwargs.get("params", {})
         assert params.get("name") == "Lithium"
+
+    def test_board_list_paginates_until_last_page(self):
+        """jira-board list must follow agile pagination when isLast is false."""
+        mock_client = self._make_mock_client()
+        mock_client.get.side_effect = [
+            {"values": [{"id": 1, "name": "A", "type": "scrum", "location": {"projectKey": "P"}}], "isLast": False},
+            {"values": [{"id": 2, "name": "B", "type": "kanban", "location": {"projectKey": "P"}}], "isLast": True},
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_board_mod.cli, ["list"])
+        assert result.exit_code == 0, result.output
+        assert mock_client.get.call_count == 2
+        starts = [call.kwargs.get("params", {}).get("startAt") for call in mock_client.get.call_args_list]
+        assert starts == [0, 1]
+
+    def test_sprint_list_paginates_until_last_page(self):
+        """jira-sprint list must follow agile pagination when isLast is false."""
+        mock_client = self._make_mock_client()
+        mock_client.get.side_effect = [
+            {"values": [{"id": 10, "name": "S1", "state": "closed"}], "isLast": False},
+            {"values": [{"id": 11, "name": "S2", "state": "active"}], "isLast": True},
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_sprint_mod.cli, ["list", "42"])
+        assert result.exit_code == 0, result.output
+        assert mock_client.get.call_count == 2
+        paths = [call.args[0] for call in mock_client.get.call_args_list]
+        assert all("rest/agile/1.0/board/42/sprint" in p for p in paths)
+        starts = [call.kwargs.get("params", {}).get("startAt") for call in mock_client.get.call_args_list]
+        assert starts == [0, 1]
+
+    def test_issue_update_add_labels_splits_commas_and_dedupes_casefold(self):
+        """--add-label should accept comma-separated tokens and avoid case-duplicates."""
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {"fields": {"labels": ["Foo", "bar"]}}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--add-label", "foo,Baz", "--add-label", "baz"],
+            )
+        assert result.exit_code == 0, result.output
+        mock_client.update_issue_field.assert_called_once()
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[0] == "TEST-1"
+        payload = args[1]
+        assert payload["labels"] == ["bar", "Baz", "Foo"]
+
+    def test_issue_update_remove_labels_matches_case_insensitively(self):
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {"fields": {"labels": ["Foo", "BAR"]}}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["update", "TEST-1", "--remove-label", "foo,bar"])
+        assert result.exit_code == 0, result.output
+        mock_client.update_issue_field.assert_called_once()
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[1]["labels"] == []
+
+    def test_issue_update_rejects_labels_with_incremental_flags(self):
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--labels", "a,b", "--add-label", "c"],
+            )
+        assert result.exit_code != 0
+        mock_client.issue.assert_not_called()
+        mock_client.update_issue_field.assert_not_called()
+
+    def test_move_issue_cross_project_refused_even_for_dry_run(self):
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "fields": {
+                "summary": "Hi",
+                "issuetype": {"name": "Task"},
+                "status": {"name": "Open"},
+                "project": {"key": "SRC"},
+            }
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_move_mod.cli, ["issue", "SRC-1", "DST", "--dry-run"])
+        assert result.exit_code != 0
+        mock_client.issue.assert_called_once()
+        mock_client._session.put.assert_not_called()
 
     def test_issue_get_json_compact_by_default(self):
         """jira-issue --json get must strip null/empty fields by default."""

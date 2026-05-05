@@ -156,7 +156,8 @@ class TestAttachmentUploadMimeType:
         name, _fh, mime = files["file"]
         assert name == "report.pdf"
         assert mime == "application/pdf"
-        assert kwargs.get("timeout") == jira_attachment.JIRA_TIMEOUT
+        assert kwargs.get("timeout") == jira_attachment.UPLOAD_TIMEOUT
+        assert kwargs.get("headers", {}).get("X-Atlassian-Token") == "nocheck"
 
     def test_add_falls_back_to_octet_stream(self, tmp_path):
         fpath = tmp_path / "blob.unknownext"

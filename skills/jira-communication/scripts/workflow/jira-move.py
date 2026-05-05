@@ -71,7 +71,7 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
 
       jira-move issue NRS-4301 PROJ --issue-type Task  (change type, same project)
 
-      jira-move issue NRS-4301 SRVUC --dry-run
+      jira-move issue NRS-4301 NRS --issue-type Task --dry-run
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
@@ -97,19 +97,24 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             error(f"{issue_key} is already type {current_type} in project {target_project}")
             sys.exit(1)
 
-        # Dry run
+        # IMPORTANT: Cross-project moves are NOT safely supported via the standard
+        # issue edit endpoint. Refuse even for --dry-run so we never preview an
+        # operation this command will not execute.
+        if not same_project:
+            error(
+                "Cross-project move is not supported safely by this command yet. "
+                "Refusing to proceed to avoid partial moves. "
+                "Use the Jira UI Move action (or implement bulk move API support)."
+            )
+            sys.exit(1)
+
+        # Dry run (same project only — cross-project moves are refused above)
         if dry_run:
             warning("DRY RUN - No changes will be made")
-            if same_project:
-                print(f"\nWould change type of {issue_key}:")
-                print(f"  Summary:  {summary}")
-                print(f"  From:     {current_type}")
-                print(f"  To:       {target_type}")
-            else:
-                print(f"\nWould move {issue_key}:")
-                print(f"  Summary:  {summary}")
-                print(f"  From:     {current_project} ({current_type})")
-                print(f"  To:       {target_project} ({target_type})")
+            print(f"\nWould change type of {issue_key}:")
+            print(f"  Summary:  {summary}")
+            print(f"  From:     {current_type}")
+            print(f"  To:       {target_type}")
             print(f"  Status:   {status}")
             return
 
@@ -119,14 +124,6 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         # issue edit endpoint. Some Jira Server/DC versions silently ignore
         # `project` updates, which looks like success but leaves the issue in the
         # old project with a changed issue type (data corruption).
-        if not same_project:
-            error(
-                "Cross-project move is not supported safely by this command yet. "
-                "Refusing to proceed to avoid partial moves. "
-                "Use the Jira UI Move action (or implement bulk move API support)."
-            )
-            sys.exit(1)
-
         # PUT /rest/api/2/issue/{issueKey} with issuetype change (same project)
         update_fields = {"fields": {"issuetype": {"name": target_type}}}
 
@@ -151,24 +148,23 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             if refreshed_type and refreshed_type != target_type:
                 error(f"Type verification failed: issue is type {refreshed_type} (expected {target_type})")
                 sys.exit(1)
-            if same_project:
-                # Type change within same project — key stays the same
-                if ctx.obj["quiet"]:
-                    print(issue_key)
-                elif ctx.obj["json"]:
-                    format_output(
-                        {
-                            "key": issue_key,
-                            "old_type": current_type,
-                            "new_type": target_type,
-                            "project": current_project,
-                            "summary": summary,
-                        },
-                        as_json=True,
-                    )
-                else:
-                    success(f"Changed {issue_key} type: {current_type} → {target_type}")
-                    print(f"  Summary:    {summary}")
+            # Type change within same project — key stays the same
+            if ctx.obj["quiet"]:
+                print(issue_key)
+            elif ctx.obj["json"]:
+                format_output(
+                    {
+                        "key": issue_key,
+                        "old_type": current_type,
+                        "new_type": target_type,
+                        "project": current_project,
+                        "summary": summary,
+                    },
+                    as_json=True,
+                )
+            else:
+                success(f"Changed {issue_key} type: {current_type} → {target_type}")
+                print(f"  Summary:    {summary}")
         elif response.status_code == 400:
             # Common: issue type not available in target project
             detail = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}

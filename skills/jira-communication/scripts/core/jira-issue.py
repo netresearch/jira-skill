@@ -31,6 +31,42 @@ from lib.changelog import (
 from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee, resolve_status
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 
+
+def _expand_label_args(raw: tuple[str, ...]) -> list[str]:
+    """Split repeatable CLI args on commas and strip whitespace."""
+    out: list[str] = []
+    for entry in raw:
+        if not entry:
+            continue
+        for part in entry.split(","):
+            cleaned = part.strip()
+            if cleaned:
+                out.append(cleaned)
+    return out
+
+
+def _labels_after_add_remove(existing: list[str], add: list[str], remove: list[str]) -> list[str]:
+    """Merge labels case-insensitively while preserving first-seen casing from Jira."""
+    by_lower: dict[str, str] = {}
+    for lab in existing:
+        if not lab:
+            continue
+        low = lab.casefold()
+        if low not in by_lower:
+            by_lower[low] = lab
+
+    for lab in add:
+        low = lab.casefold()
+        if low not in by_lower:
+            by_lower[low] = lab
+
+    remove_lower = {lab.casefold() for lab in remove}
+    for low in remove_lower:
+        by_lower.pop(low, None)
+
+    return sorted(by_lower.values(), key=str.casefold)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -436,8 +472,16 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 @click.option("--summary", "-s", help="New summary")
 @click.option("--priority", "-p", help="Priority name")
 @click.option("--labels", "-l", help="Comma-separated labels (replaces existing)")
-@click.option("--add-label", multiple=True, help="Add a label (repeatable)")
-@click.option("--remove-label", multiple=True, help="Remove a label (repeatable)")
+@click.option(
+    "--add-label",
+    multiple=True,
+    help="Add label(s); repeatable and comma-separated (case-insensitive dedupe)",
+)
+@click.option(
+    "--remove-label",
+    multiple=True,
+    help="Remove label(s); repeatable and comma-separated (matches case-insensitively)",
+)
 @click.option("--assignee", "-a", help="Assignee username or email")
 @click.option("--fields-json", help="JSON string of additional fields to update")
 @click.option("--dry-run", is_flag=True, help="Show what would be updated without making changes")
@@ -489,13 +533,10 @@ def update(
 
     if add_label or remove_label:
         issue = client.issue(issue_key, fields="labels")
-        existing = set((issue.get("fields") or {}).get("labels") or [])
-        next_labels = set(existing)
-        add_clean = [l.strip() for l in add_label if l and l.strip()]
-        remove_clean = [l.strip() for l in remove_label if l and l.strip()]
-        next_labels.update(add_clean)
-        next_labels.difference_update(remove_clean)
-        update_fields["labels"] = sorted(next_labels)
+        existing = (issue.get("fields") or {}).get("labels") or []
+        add_clean = _expand_label_args(add_label)
+        remove_clean = _expand_label_args(remove_label)
+        update_fields["labels"] = _labels_after_add_remove(list(existing), add_clean, remove_clean)
 
     if assignee:
         update_fields["assignee"] = resolve_assignee(client, assignee)

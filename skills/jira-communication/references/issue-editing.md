@@ -2,7 +2,7 @@
 
 ## When to load
 
-Load this reference whenever the user wants to set `--fields-json`, set a custom `--reporter`, delete an issue (especially with sub-tasks), move an issue between projects, or change any field that is not assignee, priority, or labels.
+Load this reference whenever the user wants to set `--fields-json`, set a custom `--reporter`, delete an issue (especially with sub-tasks), attempt an unsupported cross-project move via CLI (see below), or change any field that is not assignee, priority, or labels.
 
 ## `--fields-json` for description and custom fields
 
@@ -26,6 +26,21 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
 The script merges `--fields-json` onto the typed-flag payload (`update_fields.update(extra_fields)`), so any key present in both is taken from `--fields-json`. Use typed flags for fields the CLI exposes directly, and reach for `--fields-json` only for the long tail.
 
 Look up custom field IDs with `jira-fields.py` — see `fields-and-users.md`.
+
+## Labels: replace vs incremental updates
+
+`jira-issue.py update` supports three modes:
+
+- `--labels a,b,c` replaces the full label set.
+- `--add-label` / `--remove-label` incrementally update labels without wiping unrelated tags.
+- Do **not** combine `--labels` with `--add-label` / `--remove-label` in one invocation.
+
+Each `--add-label` / `--remove-label` may be repeated and may contain comma-separated values. Matching for removals is **case-insensitive**, and additions **dedupe case-insensitively** while preserving the casing already stored in Jira when possible.
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
+  --add-label backend --add-label urgent,frontend --remove-label stale
+```
 
 ## Setting a custom reporter
 
@@ -56,12 +71,16 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py delete PROJ-100 --delete-s
 
 ## Moving an issue between projects
 
+Cross-project moves are **not implemented** in `jira-move.py` because some Jira Server/DC versions accept `project` edits via the standard issue endpoint without actually moving the issue (silent partial updates / corruption risk). The command **refuses** cross-project targets for both real execution and `--dry-run`.
+
+Use the Jira UI **Move** action (or a bulk-move workflow your admins provide) for cross-project relocation.
+
+Within the **same** project, `jira-move.py` can change issue type:
+
 ```bash
-# Preview the move (destination project must accept the issue type)
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue PROJ-100 TARGET --dry-run
+# Preview a same-project type change
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue PROJ-100 PROJ --issue-type Task --dry-run
 
-# Execute the move
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue PROJ-100 TARGET
+# Execute the type change (issue key stays the same)
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue PROJ-100 PROJ --issue-type Task
 ```
-
-The issue key changes after the move; the script prints the new key.
