@@ -3,6 +3,9 @@
 import importlib.util
 import sys
 from pathlib import Path
+from unittest import mock
+
+import click.testing
 
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
@@ -125,3 +128,55 @@ class TestValidateOutputPath:
         # The output path resolves to sibling dir — must be rejected
         result = jira_attachment.validate_output_path(str(payload), str(tmp_path))
         assert result is None
+
+
+class TestAttachmentUploadMimeType:
+    def test_add_sets_mime_type_and_timeout(self, tmp_path):
+        fpath = tmp_path / "report.pdf"
+        fpath.write_bytes(b"%PDF-1.4\n")
+
+        mc = mock.Mock()
+        mc.url = "https://jira.example.com"
+        mc.with_context = mock.Mock()
+
+        response = mock.Mock()
+        response.raise_for_status = mock.Mock()
+        response.json.return_value = [{"id": "123"}]
+        mc._session.post.return_value = response
+
+        runner = click.testing.CliRunner()
+        with mock.patch.object(jira_attachment, "LazyJiraClient", return_value=mc):
+            result = runner.invoke(jira_attachment.cli, ["--json", "add", "TEST-1", str(fpath)])
+        assert result.exit_code == 0, result.output
+
+        mc._session.post.assert_called_once()
+        _, kwargs = mc._session.post.call_args
+        files = kwargs["files"]
+        assert "file" in files
+        name, _fh, mime = files["file"]
+        assert name == "report.pdf"
+        assert mime == "application/pdf"
+        assert kwargs.get("timeout") == jira_attachment.UPLOAD_TIMEOUT
+        assert kwargs.get("headers", {}).get("X-Atlassian-Token") == "nocheck"
+
+    def test_add_falls_back_to_octet_stream(self, tmp_path):
+        fpath = tmp_path / "blob.unknownext"
+        fpath.write_bytes(b"data")
+
+        mc = mock.Mock()
+        mc.url = "https://jira.example.com"
+        mc.with_context = mock.Mock()
+
+        response = mock.Mock()
+        response.raise_for_status = mock.Mock()
+        response.json.return_value = [{"id": "123"}]
+        mc._session.post.return_value = response
+
+        runner = click.testing.CliRunner()
+        with mock.patch.object(jira_attachment, "LazyJiraClient", return_value=mc):
+            result = runner.invoke(jira_attachment.cli, ["--json", "add", "TEST-1", str(fpath)])
+        assert result.exit_code == 0, result.output
+
+        _, kwargs = mc._session.post.call_args
+        _name, _fh, mime = kwargs["files"]["file"]
+        assert mime == "application/octet-stream"

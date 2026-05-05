@@ -46,6 +46,7 @@ _weblink_mod = _load_script("jira-weblink", "utility")
 _watchers_mod = _load_script("jira-watchers", "utility")
 _version_mod = _load_script("jira-version", "workflow")
 _qa_gather_mod = _load_script("jira-qa-gather", "utility")
+_move_mod = _load_script("jira-move", "workflow")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -319,6 +320,32 @@ class TestMockedCommands:
         assert "total: 234" in result.output
         assert "--start-at" in result.output
 
+    def test_search_query_warns_when_capped_and_more_pages_exist(self):
+        """If server caps page size below requested and more results exist, warn on stderr."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {
+            "issues": [{"key": "A-1"}],
+            "total": 100,
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_search_mod.cli, ["query", "project=A", "--max-results", "50", "--start-at", "0"])
+        assert result.exit_code == 0, result.output
+        assert "Server capped results" in result.output
+
+    def test_search_query_does_not_warn_on_final_page(self):
+        """Don't warn when fewer results is explained by being on the final page."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {
+            "issues": [{"key": "A-99"}],
+            "total": 100,
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_search_mod.cli, ["query", "project=A", "--max-results", "50", "--start-at", "99"])
+        assert result.exit_code == 0, result.output
+        assert "Server capped results" not in result.output
+
     def test_create_issue_dry_run(self):
         """jira-create issue with --dry-run must not call API."""
         mock_client = self._make_mock_client()
@@ -421,6 +448,59 @@ class TestMockedCommands:
         assert read_pos != -1, "stdin.read() missing from add command"
         assert isatty_pos < read_pos, "isatty() guard must come before stdin.read()"
 
+    def test_comment_list_rejects_negative_limit(self):
+        """jira-comment list --limit -1 must be rejected by Click before API calls."""
+        mc = self._make_mock_client()
+        mc.issue = mock.Mock()
+        result, mc = self._run_comment_cmd(["list", "PROJ-123", "--limit", "-1"], mock_client=mc)
+        assert result.exit_code != 0
+        mc.issue.assert_not_called()
+
+    def test_comment_list_header_shows_total_when_limited(self):
+        """jira-comment list must show 'N of M' when Jira reports more than shown."""
+        mc = self._make_mock_client()
+        mc.issue.return_value = {
+            "fields": {
+                "comment": {
+                    "comments": [
+                        {
+                            "id": "1",
+                            "author": {"displayName": "A"},
+                            "created": "2026-01-01T00:00:00.000+0000",
+                            "body": "a",
+                        },
+                        {
+                            "id": "2",
+                            "author": {"displayName": "B"},
+                            "created": "2026-01-02T00:00:00.000+0000",
+                            "body": "b",
+                        },
+                    ],
+                    "total": 5,
+                }
+            }
+        }
+        result, mc = self._run_comment_cmd(["list", "PROJ-123", "--limit", "2"], mock_client=mc)
+        assert result.exit_code == 0, result.output
+        assert "2 of 5 shown" in result.output
+
+    def test_comment_list_limit_zero_uses_paginated_endpoint(self):
+        """jira-comment list --limit 0 should paginate via /issue/{key}/comment."""
+        mc = self._make_mock_client()
+        mc.issue = mock.Mock()
+        mc.get = mock.Mock()
+        mc.get.side_effect = [
+            {"comments": [{"id": "1"}, {"id": "2"}], "total": 3},
+            {"comments": [{"id": "3"}], "total": 3},
+        ]
+        result, mc = self._run_comment_cmd(["--json", "list", "PROJ-123", "--limit", "0"], mock_client=mc)
+        assert result.exit_code == 0, result.output
+        # issue endpoint should not be used in this mode
+        mc.issue.assert_not_called()
+        assert mc.get.call_count == 2
+        first_call = mc.get.call_args_list[0]
+        assert "rest/api/2/issue/PROJ-123/comment" in first_call.args[0]
+
     def test_comment_add_stdin_oversized_fails(self):
         """stdin input exceeding size limit must fail."""
         big_input = "x" * (256 * 1024 + 100)
@@ -475,6 +555,95 @@ class TestMockedCommands:
         _, kwargs = mock_client.get.call_args
         params = kwargs.get("params", {})
         assert params.get("name") == "Lithium"
+
+    def test_board_list_paginates_until_last_page(self):
+        """jira-board list must follow agile pagination when isLast is false."""
+        mock_client = self._make_mock_client()
+        mock_client.get.side_effect = [
+            {"values": [{"id": 1, "name": "A", "type": "scrum", "location": {"projectKey": "P"}}], "isLast": False},
+            {"values": [{"id": 2, "name": "B", "type": "kanban", "location": {"projectKey": "P"}}], "isLast": True},
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_board_mod.cli, ["list"])
+        assert result.exit_code == 0, result.output
+        assert mock_client.get.call_count == 2
+        starts = [call.kwargs.get("params", {}).get("startAt") for call in mock_client.get.call_args_list]
+        assert starts == [0, 1]
+
+    def test_sprint_list_paginates_until_last_page(self):
+        """jira-sprint list must follow agile pagination when isLast is false."""
+        mock_client = self._make_mock_client()
+        mock_client.get.side_effect = [
+            {"values": [{"id": 10, "name": "S1", "state": "closed"}], "isLast": False},
+            {"values": [{"id": 11, "name": "S2", "state": "active"}], "isLast": True},
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_sprint_mod.cli, ["list", "42"])
+        assert result.exit_code == 0, result.output
+        assert mock_client.get.call_count == 2
+        paths = [call.args[0] for call in mock_client.get.call_args_list]
+        assert all("rest/agile/1.0/board/42/sprint" in p for p in paths)
+        starts = [call.kwargs.get("params", {}).get("startAt") for call in mock_client.get.call_args_list]
+        assert starts == [0, 1]
+
+    def test_issue_update_add_labels_splits_commas_and_dedupes_casefold(self):
+        """--add-label should accept comma-separated tokens and avoid case-duplicates."""
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {"fields": {"labels": ["Foo", "bar"]}}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--add-label", "foo,Baz", "--add-label", "baz"],
+            )
+        assert result.exit_code == 0, result.output
+        mock_client.update_issue_field.assert_called_once()
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[0] == "TEST-1"
+        payload = args[1]
+        assert payload["labels"] == ["bar", "Baz", "Foo"]
+
+    def test_issue_update_remove_labels_matches_case_insensitively(self):
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {"fields": {"labels": ["Foo", "BAR"]}}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_issue_mod.cli, ["update", "TEST-1", "--remove-label", "foo,bar"])
+        assert result.exit_code == 0, result.output
+        mock_client.update_issue_field.assert_called_once()
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[1]["labels"] == []
+
+    def test_issue_update_rejects_labels_with_incremental_flags(self):
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--labels", "a,b", "--add-label", "c"],
+            )
+        assert result.exit_code != 0
+        mock_client.issue.assert_not_called()
+        mock_client.update_issue_field.assert_not_called()
+
+    def test_move_issue_cross_project_refused_even_for_dry_run(self):
+        mock_client = self._make_mock_client()
+        mock_client.issue.return_value = {
+            "fields": {
+                "summary": "Hi",
+                "issuetype": {"name": "Task"},
+                "status": {"name": "Open"},
+                "project": {"key": "SRC"},
+            }
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_move_mod.cli, ["issue", "SRC-1", "DST", "--dry-run"])
+        assert result.exit_code != 0
+        mock_client.issue.assert_called_once()
+        mock_client._session.put.assert_not_called()
 
     def test_issue_get_json_compact_by_default(self):
         """jira-issue --json get must strip null/empty fields by default."""

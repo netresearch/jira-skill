@@ -28,6 +28,32 @@ from lib.output import error, extract_adf_text, format_output, success, warning
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _fetch_comments_paginated(client, issue_key: str) -> tuple[list[dict], int | None]:
+    comments: list[dict] = []
+    start_at = 0
+    page_size = 100
+    total: int | None = None
+    while True:
+        payload = (
+            client.get(
+                f"rest/api/2/issue/{issue_key}/comment",
+                params={"startAt": start_at, "maxResults": page_size},
+            )
+            or {}
+        )
+        values = payload.get("comments", []) or []
+        if total is None:
+            raw_total = payload.get("total")
+            total = raw_total if isinstance(raw_total, int) else None
+        comments.extend(values)
+        if not values:
+            break
+        if total is not None and (start_at + len(values)) >= total:
+            break
+        start_at += len(values)
+    return comments, total
+
+
 @click.group()
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 @click.option("--quiet", "-q", is_flag=True, help="Minimal output")
@@ -257,7 +283,14 @@ def delete(ctx, issue_key: str, comment_id: str, dry_run: bool):
 
 @cli.command("list")
 @click.argument("issue_key")
-@click.option("--limit", "-n", default=10, help="Max comments to show")
+@click.option(
+    "--limit",
+    "-n",
+    default=10,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="Max comments to show (0 = all)",
+)
 @click.option("--truncate", type=int, metavar="N", help="Truncate comment body to N characters")
 @click.pass_context
 def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
@@ -275,24 +308,33 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
     client = ctx.obj["client"]
 
     try:
-        # Get issue with comments
-        issue = client.issue(issue_key, fields="comment")
-        comments = issue.get("fields", {}).get("comment", {}).get("comments", [])
+        show_all = limit == 0
+        if show_all:
+            comments, total = _fetch_comments_paginated(client, issue_key)
+        else:
+            issue = client.issue(issue_key, fields="comment")
+            comment_block = (issue.get("fields") or {}).get("comment") or {}
+            comments = comment_block.get("comments", []) or []
+            total = comment_block.get("total")
 
         # Limit and reverse (newest first)
-        comments = list(reversed(comments))[:limit]
+        comments = list(reversed(comments))
+        shown = comments if show_all else comments[:limit]
 
         if ctx.obj["json"]:
-            format_output(comments, as_json=True)
+            format_output(shown, as_json=True)
         elif ctx.obj["quiet"]:
-            for c in comments:
+            for c in shown:
                 print(c.get("id", ""))
         else:
-            if not comments:
+            if not shown:
                 print(f"No comments on {issue_key}")
             else:
-                print(f"Comments on {issue_key} ({len(comments)} shown):\n")
-                for c in comments:
+                if total is not None and not show_all and len(shown) < total:
+                    print(f"Comments on {issue_key} ({len(shown)} of {total} shown — use --limit 0 to show all):\n")
+                else:
+                    print(f"Comments on {issue_key} ({len(shown)} shown):\n")
+                for c in shown:
                     author = c.get("author", {}).get("displayName", "Unknown")
                     created = c.get("created", "")[:16].replace("T", " ") if c.get("created") else "N/A"
                     body = c.get("body", "")

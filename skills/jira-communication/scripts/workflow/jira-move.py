@@ -40,7 +40,11 @@ from lib.output import error, format_output, success, warning
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue move.
 
-    Move issues between projects, preserving fields where possible.
+    Change issue type within the same project.
+
+    Cross-project moves are intentionally refused by this command because
+    they are not safely supported via the standard issue edit endpoint
+    (some Jira versions ignore project changes without error).
     """
     ctx.ensure_object(dict)
     ctx.obj["json"] = output_json
@@ -56,22 +60,18 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
 def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None, dry_run: bool):
-    """Move an issue to a different project or change its type.
+    """Change an issue's type within the same project.
 
     ISSUE_KEY: The Jira issue key to move (e.g., NRS-4301)
 
-    TARGET_PROJECT: Target project key (e.g., SRVUC). Use the same project
-    key to change issue type without moving.
+    TARGET_PROJECT: Target project key (e.g., SRVUC). Use the same project key
+    to change issue type. Cross-project moves are refused.
 
     Examples:
 
-      jira-move issue NRS-4301 SRVUC
-
-      jira-move issue NRS-4301 SRVUC --issue-type Bug
-
       jira-move issue NRS-4301 PROJ --issue-type Task  (change type, same project)
 
-      jira-move issue NRS-4301 SRVUC --dry-run
+      jira-move issue NRS-4301 NRS --issue-type Task --dry-run
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
@@ -97,27 +97,35 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             error(f"{issue_key} is already type {current_type} in project {target_project}")
             sys.exit(1)
 
-        # Dry run
+        # IMPORTANT: Cross-project moves are NOT safely supported via the standard
+        # issue edit endpoint. Refuse even for --dry-run so we never preview an
+        # operation this command will not execute.
+        if not same_project:
+            error(
+                "Cross-project move is not supported safely by this command yet. "
+                "Refusing to proceed to avoid partial moves. "
+                "Use the Jira UI Move action (or implement bulk move API support)."
+            )
+            sys.exit(1)
+
+        # Dry run (same project only — cross-project moves are refused above)
         if dry_run:
             warning("DRY RUN - No changes will be made")
-            if same_project:
-                print(f"\nWould change type of {issue_key}:")
-                print(f"  Summary:  {summary}")
-                print(f"  From:     {current_type}")
-                print(f"  To:       {target_type}")
-            else:
-                print(f"\nWould move {issue_key}:")
-                print(f"  Summary:  {summary}")
-                print(f"  From:     {current_project} ({current_type})")
-                print(f"  To:       {target_project} ({target_type})")
+            print(f"\nWould change type of {issue_key}:")
+            print(f"  Summary:  {summary}")
+            print(f"  From:     {current_type}")
+            print(f"  To:       {target_type}")
             print(f"  Status:   {status}")
             return
 
-        # Use the REST API directly — atlassian-python-api doesn't have a move method
-        # PUT /rest/api/2/issue/{issueKey} with project + issuetype change
+        # Use the REST API directly — atlassian-python-api doesn't have a move method.
+        #
+        # IMPORTANT: Cross-project moves are NOT safely supported via the standard
+        # issue edit endpoint. Some Jira Server/DC versions silently ignore
+        # `project` updates, which looks like success but leaves the issue in the
+        # old project with a changed issue type (data corruption).
+        # PUT /rest/api/2/issue/{issueKey} with issuetype change (same project)
         update_fields = {"fields": {"issuetype": {"name": target_type}}}
-        if not same_project:
-            update_fields["fields"]["project"] = {"key": target_project.upper()}
 
         url = f"{client.url}/rest/api/2/issue/{issue_key}"
         # atlassian-python-api has no public method for issue move/edit.
@@ -126,47 +134,37 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         response = client._session.put(url, json=update_fields)
 
         if response.status_code == 204:
-            if same_project:
-                # Type change within same project — key stays the same
-                if ctx.obj["quiet"]:
-                    print(issue_key)
-                elif ctx.obj["json"]:
-                    format_output(
-                        {
-                            "key": issue_key,
-                            "old_type": current_type,
-                            "new_type": target_type,
-                            "project": current_project,
-                            "summary": summary,
-                        },
-                        as_json=True,
-                    )
-                else:
-                    success(f"Changed {issue_key} type: {current_type} → {target_type}")
-                    print(f"  Summary:    {summary}")
+            # Verify the update actually applied (defense against silent failures)
+            refreshed = client.issue(issue_key, fields="issuetype,project")
+            refreshed_fields = refreshed.get("fields") or {}
+            refreshed_type = (refreshed_fields.get("issuetype") or {}).get("name")
+            refreshed_project = (refreshed_fields.get("project") or {}).get("key")
+            if refreshed_project and refreshed_project.upper() != current_project.upper():
+                error(
+                    f"Move verification failed: issue ended up in unexpected project "
+                    f"{refreshed_project} (expected {current_project})"
+                )
+                sys.exit(1)
+            if refreshed_type and refreshed_type != target_type:
+                error(f"Type verification failed: issue is type {refreshed_type} (expected {target_type})")
+                sys.exit(1)
+            # Type change within same project — key stays the same
+            if ctx.obj["quiet"]:
+                print(issue_key)
+            elif ctx.obj["json"]:
+                format_output(
+                    {
+                        "key": issue_key,
+                        "old_type": current_type,
+                        "new_type": target_type,
+                        "project": current_project,
+                        "summary": summary,
+                    },
+                    as_json=True,
+                )
             else:
-                # Cross-project move — fetch new key (Jira may reassign it)
-                moved = client.issue(issue_key, fields="project")
-                new_key = moved["key"]
-
-                if ctx.obj["quiet"]:
-                    print(new_key)
-                elif ctx.obj["json"]:
-                    format_output(
-                        {
-                            "old_key": issue_key,
-                            "new_key": new_key,
-                            "project": target_project.upper(),
-                            "issue_type": target_type,
-                            "summary": summary,
-                        },
-                        as_json=True,
-                    )
-                else:
-                    success(f"Moved {issue_key} → {new_key}")
-                    print(f"  Project:    {target_project.upper()}")
-                    print(f"  Type:       {target_type}")
-                    print(f"  Summary:    {summary}")
+                success(f"Changed {issue_key} type: {current_type} → {target_type}")
+                print(f"  Summary:    {summary}")
         elif response.status_code == 400:
             # Common: issue type not available in target project
             detail = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}

@@ -21,7 +21,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient
-from lib.output import error, format_output, format_table
+from lib.output import error, format_output, format_table, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -93,6 +93,13 @@ def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate:
         # Execute search
         results = client.jql(jql, limit=max_results, start=start_at, fields=field_list)
         issues = results.get("issues", [])
+        total = results.get("total")
+        if isinstance(total, int) and max_results > len(issues) and (start_at + len(issues)) < total:
+            warning(
+                f"Server capped results: requested --max-results {max_results}, "
+                f"received {len(issues)} (total matches: {total}). "
+                "Use pagination with --start-at to fetch further pages."
+            )
 
         if ctx.obj["json"]:
             format_output(issues, as_json=True)
@@ -101,7 +108,6 @@ def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate:
                 print(issue["key"])
         else:
             # Table output
-            total = results.get("total")
             if total is None:
                 total = len(issues)
             if not issues:

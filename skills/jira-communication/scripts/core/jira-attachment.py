@@ -10,6 +10,7 @@
 """Jira attachment operations - download and upload attachments."""
 
 import json
+import mimetypes
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -33,6 +34,9 @@ CHUNK_SIZE = 1048576
 
 # Timeout for attachment downloads (connect_timeout, read_timeout)
 DOWNLOAD_TIMEOUT = (10, 300)
+
+# Uploads can be large — keep connect timeout low but allow long reads.
+UPLOAD_TIMEOUT = (10, 300)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -270,7 +274,16 @@ def add(ctx, issue_key: str, file_path: str, dry_run: bool):
         return
 
     try:
-        result = client.add_attachment(issue_key, str(path))
+        mime_type, _ = mimetypes.guess_type(path.name)
+        mime_type = mime_type or "application/octet-stream"
+
+        url = f"{client.url}/rest/api/2/issue/{issue_key}/attachments"
+        headers = {"X-Atlassian-Token": "nocheck"}
+        with path.open("rb") as f:
+            files = {"file": (path.name, f, mime_type)}
+            response = client._session.post(url, files=files, headers=headers, timeout=UPLOAD_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()
 
         if ctx.obj["quiet"]:
             if isinstance(result, list) and result and isinstance(result[0], dict):
@@ -284,6 +297,11 @@ def add(ctx, issue_key: str, file_path: str, dry_run: bool):
 
     except CaptchaError:
         raise
+    except requests.HTTPError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to upload attachment: {_sanitize_error(str(e))}")
+        sys.exit(1)
     except Exception as e:
         if ctx.obj["debug"]:
             raise
