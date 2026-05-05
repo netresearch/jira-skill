@@ -283,7 +283,14 @@ def delete(ctx, issue_key: str, comment_id: str, dry_run: bool):
 
 @cli.command("list")
 @click.argument("issue_key")
-@click.option("--limit", "-n", default=10, show_default=True, help="Max comments to show (0 = all)")
+@click.option(
+    "--limit",
+    "-n",
+    default=10,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="Max comments to show (0 = all)",
+)
 @click.option("--truncate", type=int, metavar="N", help="Truncate comment body to N characters")
 @click.pass_context
 def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
