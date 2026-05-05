@@ -149,10 +149,7 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                 )
                 sys.exit(1)
             if refreshed_type and refreshed_type != target_type:
-                error(
-                    f"Type verification failed: issue is type {refreshed_type} "
-                    f"(expected {target_type})"
-                )
+                error(f"Type verification failed: issue is type {refreshed_type} (expected {target_type})")
                 sys.exit(1)
             if same_project:
                 # Type change within same project — key stays the same
