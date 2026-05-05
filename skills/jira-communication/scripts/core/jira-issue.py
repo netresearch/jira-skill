@@ -480,6 +480,10 @@ def update(
     if priority:
         update_fields["priority"] = {"name": priority}
 
+    if labels and (add_label or remove_label):
+        error("Do not combine --labels with --add-label/--remove-label (choose replace or incremental update).")
+        sys.exit(1)
+
     if labels:
         update_fields["labels"] = [l.strip() for l in labels.split(",")]
 
