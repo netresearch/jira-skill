@@ -28,6 +28,32 @@ from lib.output import error, extract_adf_text, format_output, success, warning
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _fetch_comments_paginated(client, issue_key: str) -> tuple[list[dict], int | None]:
+    comments: list[dict] = []
+    start_at = 0
+    page_size = 100
+    total: int | None = None
+    while True:
+        payload = (
+            client.get(
+                f"rest/api/2/issue/{issue_key}/comment",
+                params={"startAt": start_at, "maxResults": page_size},
+            )
+            or {}
+        )
+        values = payload.get("comments", []) or []
+        if total is None:
+            raw_total = payload.get("total")
+            total = raw_total if isinstance(raw_total, int) else None
+        comments.extend(values)
+        if not values:
+            break
+        if total is not None and (start_at + len(values)) >= total:
+            break
+        start_at += len(values)
+    return comments, total
+
+
 @click.group()
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 @click.option("--quiet", "-q", is_flag=True, help="Minimal output")
@@ -275,15 +301,17 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
     client = ctx.obj["client"]
 
     try:
-        # Get issue with comments
-        issue = client.issue(issue_key, fields="comment")
-        comment_block = (issue.get("fields") or {}).get("comment") or {}
-        comments = comment_block.get("comments", []) or []
-        total = comment_block.get("total")
+        show_all = limit == 0
+        if show_all:
+            comments, total = _fetch_comments_paginated(client, issue_key)
+        else:
+            issue = client.issue(issue_key, fields="comment")
+            comment_block = (issue.get("fields") or {}).get("comment") or {}
+            comments = comment_block.get("comments", []) or []
+            total = comment_block.get("total")
 
         # Limit and reverse (newest first)
         comments = list(reversed(comments))
-        show_all = limit == 0
         shown = comments if show_all else comments[:limit]
 
         if ctx.obj["json"]:

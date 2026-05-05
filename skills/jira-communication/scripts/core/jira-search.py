@@ -94,7 +94,7 @@ def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate:
         results = client.jql(jql, limit=max_results, start=start_at, fields=field_list)
         issues = results.get("issues", [])
         total = results.get("total")
-        if isinstance(total, int) and max_results > len(issues) and total > len(issues):
+        if isinstance(total, int) and max_results > len(issues) and (start_at + len(issues)) < total:
             warning(
                 f"Server capped results: requested --max-results {max_results}, "
                 f"received {len(issues)} (total matches: {total}). "

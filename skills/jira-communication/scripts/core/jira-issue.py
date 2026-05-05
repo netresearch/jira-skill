@@ -491,8 +491,10 @@ def update(
         issue = client.issue(issue_key, fields="labels")
         existing = set((issue.get("fields") or {}).get("labels") or [])
         next_labels = set(existing)
-        next_labels.update(l for l in add_label if l)
-        next_labels.difference_update(l for l in remove_label if l)
+        add_clean = [l.strip() for l in add_label if l and l.strip()]
+        remove_clean = [l.strip() for l in remove_label if l and l.strip()]
+        next_labels.update(add_clean)
+        next_labels.difference_update(remove_clean)
         update_fields["labels"] = sorted(next_labels)
 
     if assignee:
