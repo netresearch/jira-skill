@@ -113,11 +113,22 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             print(f"  Status:   {status}")
             return
 
-        # Use the REST API directly — atlassian-python-api doesn't have a move method
-        # PUT /rest/api/2/issue/{issueKey} with project + issuetype change
-        update_fields = {"fields": {"issuetype": {"name": target_type}}}
+        # Use the REST API directly — atlassian-python-api doesn't have a move method.
+        #
+        # IMPORTANT: Cross-project moves are NOT safely supported via the standard
+        # issue edit endpoint. Some Jira Server/DC versions silently ignore
+        # `project` updates, which looks like success but leaves the issue in the
+        # old project with a changed issue type (data corruption).
         if not same_project:
-            update_fields["fields"]["project"] = {"key": target_project.upper()}
+            error(
+                "Cross-project move is not supported safely by this command yet. "
+                "Refusing to proceed to avoid partial moves. "
+                "Use the Jira UI Move action (or implement bulk move API support)."
+            )
+            sys.exit(1)
+
+        # PUT /rest/api/2/issue/{issueKey} with issuetype change (same project)
+        update_fields = {"fields": {"issuetype": {"name": target_type}}}
 
         url = f"{client.url}/rest/api/2/issue/{issue_key}"
         # atlassian-python-api has no public method for issue move/edit.
@@ -126,6 +137,23 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         response = client._session.put(url, json=update_fields)
 
         if response.status_code == 204:
+            # Verify the update actually applied (defense against silent failures)
+            refreshed = client.issue(issue_key, fields="issuetype,project")
+            refreshed_fields = refreshed.get("fields") or {}
+            refreshed_type = (refreshed_fields.get("issuetype") or {}).get("name")
+            refreshed_project = (refreshed_fields.get("project") or {}).get("key")
+            if refreshed_project and refreshed_project.upper() != current_project.upper():
+                error(
+                    f"Move verification failed: issue ended up in unexpected project "
+                    f"{refreshed_project} (expected {current_project})"
+                )
+                sys.exit(1)
+            if refreshed_type and refreshed_type != target_type:
+                error(
+                    f"Type verification failed: issue is type {refreshed_type} "
+                    f"(expected {target_type})"
+                )
+                sys.exit(1)
             if same_project:
                 # Type change within same project — key stays the same
                 if ctx.obj["quiet"]:
@@ -143,29 +171,6 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                     )
                 else:
                     success(f"Changed {issue_key} type: {current_type} → {target_type}")
-                    print(f"  Summary:    {summary}")
-            else:
-                # Cross-project move — fetch new key (Jira may reassign it)
-                moved = client.issue(issue_key, fields="project")
-                new_key = moved["key"]
-
-                if ctx.obj["quiet"]:
-                    print(new_key)
-                elif ctx.obj["json"]:
-                    format_output(
-                        {
-                            "old_key": issue_key,
-                            "new_key": new_key,
-                            "project": target_project.upper(),
-                            "issue_type": target_type,
-                            "summary": summary,
-                        },
-                        as_json=True,
-                    )
-                else:
-                    success(f"Moved {issue_key} → {new_key}")
-                    print(f"  Project:    {target_project.upper()}")
-                    print(f"  Type:       {target_type}")
                     print(f"  Summary:    {summary}")
         elif response.status_code == 400:
             # Common: issue type not available in target project

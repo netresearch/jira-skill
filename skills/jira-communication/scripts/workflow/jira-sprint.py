@@ -72,9 +72,18 @@ def list_sprints(ctx, board_id: int, state: str | None):
         if state:
             params["state"] = state
 
-        # Use the Jira agile API
-        response = client.get(f"rest/agile/1.0/board/{board_id}/sprint", params=params)
-        sprints = response.get("values", [])
+        sprints: list[dict] = []
+        start_at = 0
+        while True:
+            page_params = dict(params)
+            page_params["startAt"] = start_at
+            response = client.get(f"rest/agile/1.0/board/{board_id}/sprint", params=page_params) or {}
+            values = response.get("values", []) or []
+            sprints.extend(values)
+            is_last = bool(response.get("isLast"))
+            if is_last or not values:
+                break
+            start_at += len(values)
 
         if ctx.obj["json"]:
             format_output(sprints, as_json=True)
@@ -181,9 +190,9 @@ def current(ctx, board_id: int):
     client = ctx.obj["client"]
 
     try:
-        # Get active sprints
-        response = client.get(f"rest/agile/1.0/board/{board_id}/sprint", params={"state": "active"})
-        sprints = response.get("values", [])
+        # Get active sprints (first page is enough for "current")
+        response = client.get(f"rest/agile/1.0/board/{board_id}/sprint", params={"state": "active"}) or {}
+        sprints = response.get("values", []) or []
 
         if not sprints:
             print(f"No active sprint for board {board_id}")

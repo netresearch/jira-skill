@@ -436,6 +436,8 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 @click.option("--summary", "-s", help="New summary")
 @click.option("--priority", "-p", help="Priority name")
 @click.option("--labels", "-l", help="Comma-separated labels (replaces existing)")
+@click.option("--add-label", multiple=True, help="Add a label (repeatable)")
+@click.option("--remove-label", multiple=True, help="Remove a label (repeatable)")
 @click.option("--assignee", "-a", help="Assignee username or email")
 @click.option("--fields-json", help="JSON string of additional fields to update")
 @click.option("--dry-run", is_flag=True, help="Show what would be updated without making changes")
@@ -446,6 +448,8 @@ def update(
     summary: str | None,
     priority: str | None,
     labels: str | None,
+    add_label: tuple[str, ...],
+    remove_label: tuple[str, ...],
     assignee: str | None,
     fields_json: str | None,
     dry_run: bool,
@@ -479,6 +483,14 @@ def update(
     if labels:
         update_fields["labels"] = [l.strip() for l in labels.split(",")]
 
+    if add_label or remove_label:
+        issue = client.issue(issue_key, fields="labels")
+        existing = set((issue.get("fields") or {}).get("labels") or [])
+        next_labels = set(existing)
+        next_labels.update(l for l in add_label if l)
+        next_labels.difference_update(l for l in remove_label if l)
+        update_fields["labels"] = sorted(next_labels)
+
     if assignee:
         update_fields["assignee"] = resolve_assignee(client, assignee)
 
@@ -492,7 +504,10 @@ def update(
 
     if not update_fields:
         error("No fields specified for update")
-        click.echo("\nUse one or more of: --summary, --priority, --labels, --assignee, --fields-json")
+        click.echo(
+            "\nUse one or more of: --summary, --priority, --labels, "
+            "--add-label, --remove-label, --assignee, --fields-json"
+        )
         sys.exit(1)
 
     if dry_run:
