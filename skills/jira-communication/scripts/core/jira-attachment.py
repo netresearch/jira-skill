@@ -25,7 +25,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.client import CaptchaError, LazyJiraClient, _sanitize_error
+from lib.client import CaptchaError, JIRA_TIMEOUT, LazyJiraClient, _sanitize_error
 from lib.config import load_config, normalize_netloc
 from lib.output import error, success, warning
 
@@ -278,7 +278,7 @@ def add(ctx, issue_key: str, file_path: str, dry_run: bool):
         headers = {"X-Atlassian-Token": "nocheck"}
         with path.open("rb") as f:
             files = {"file": (path.name, f, mime_type)}
-            response = client._session.post(url, files=files, headers=headers)
+            response = client._session.post(url, files=files, headers=headers, timeout=JIRA_TIMEOUT)
         response.raise_for_status()
         result = response.json()
 
