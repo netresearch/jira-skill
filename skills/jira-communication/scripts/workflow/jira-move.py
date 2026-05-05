@@ -40,7 +40,11 @@ from lib.output import error, format_output, success, warning
 def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str | None, debug: bool):
     """Jira issue move.
 
-    Move issues between projects, preserving fields where possible.
+    Change issue type within the same project.
+
+    Cross-project moves are intentionally refused by this command because
+    they are not safely supported via the standard issue edit endpoint
+    (some Jira versions ignore project changes without error).
     """
     ctx.ensure_object(dict)
     ctx.obj["json"] = output_json
@@ -60,14 +64,10 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
 
     ISSUE_KEY: The Jira issue key to move (e.g., NRS-4301)
 
-    TARGET_PROJECT: Target project key (e.g., SRVUC). Use the same project
-    key to change issue type without moving.
+    TARGET_PROJECT: Target project key (e.g., SRVUC). Use the same project key
+    to change issue type. Cross-project moves are refused.
 
     Examples:
-
-      jira-move issue NRS-4301 SRVUC
-
-      jira-move issue NRS-4301 SRVUC --issue-type Bug
 
       jira-move issue NRS-4301 PROJ --issue-type Task  (change type, same project)
 
