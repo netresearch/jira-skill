@@ -60,7 +60,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
 def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None, dry_run: bool):
-    """Move an issue to a different project or change its type.
+    """Change an issue's type within the same project.
 
     ISSUE_KEY: The Jira issue key to move (e.g., NRS-4301)
 
