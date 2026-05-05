@@ -30,6 +30,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient, _sanitize_error
+from lib.jql import jql_escape
 from lib.output import error, extract_adf_text, format_output, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -254,9 +255,9 @@ def cli(
     if not no_siblings and summary:
         keywords = _summary_keywords(summary)
         if keywords:
-            kw_clause = " OR ".join(f'summary ~ "{k}"' for k in keywords)
+            kw_clause = " OR ".join(f'summary ~ "{jql_escape(k)}"' for k in keywords)
             jql = (
-                f'project = "{project_key}" AND key != "{issue_key}" '
+                f'project = "{jql_escape(project_key)}" AND key != "{jql_escape(issue_key)}" '
                 f"AND ({kw_clause}) AND updated >= -{sibling_window}d "
                 f"ORDER BY updated DESC"
             )
