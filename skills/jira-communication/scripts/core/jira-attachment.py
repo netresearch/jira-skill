@@ -25,7 +25,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.client import CaptchaError, JIRA_TIMEOUT, LazyJiraClient, _sanitize_error
+from lib.client import JIRA_TIMEOUT, CaptchaError, LazyJiraClient, _sanitize_error
 from lib.config import load_config, normalize_netloc
 from lib.output import error, success, warning
 
