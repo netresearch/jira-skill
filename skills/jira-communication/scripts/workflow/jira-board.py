@@ -76,8 +76,18 @@ def list_boards(ctx, project: str | None, board_type: str | None, name_pattern: 
         if name_pattern:
             params["name"] = name_pattern
 
-        response = client.get("rest/agile/1.0/board", params=params)
-        boards = response.get("values", [])
+        boards: list[dict] = []
+        start_at = 0
+        while True:
+            page_params = dict(params)
+            page_params["startAt"] = start_at
+            response = client.get("rest/agile/1.0/board", params=page_params) or {}
+            values = response.get("values", []) or []
+            boards.extend(values)
+            is_last = bool(response.get("isLast"))
+            if is_last or not values:
+                break
+            start_at += len(values)
 
         if ctx.obj["json"]:
             format_output(boards, as_json=True)

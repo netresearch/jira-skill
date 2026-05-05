@@ -257,7 +257,7 @@ def delete(ctx, issue_key: str, comment_id: str, dry_run: bool):
 
 @cli.command("list")
 @click.argument("issue_key")
-@click.option("--limit", "-n", default=10, help="Max comments to show")
+@click.option("--limit", "-n", default=10, show_default=True, help="Max comments to show (0 = all)")
 @click.option("--truncate", type=int, metavar="N", help="Truncate comment body to N characters")
 @click.pass_context
 def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
@@ -277,22 +277,29 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
     try:
         # Get issue with comments
         issue = client.issue(issue_key, fields="comment")
-        comments = issue.get("fields", {}).get("comment", {}).get("comments", [])
+        comment_block = (issue.get("fields") or {}).get("comment") or {}
+        comments = comment_block.get("comments", []) or []
+        total = comment_block.get("total")
 
         # Limit and reverse (newest first)
-        comments = list(reversed(comments))[:limit]
+        comments = list(reversed(comments))
+        show_all = limit == 0
+        shown = comments if show_all else comments[:limit]
 
         if ctx.obj["json"]:
-            format_output(comments, as_json=True)
+            format_output(shown, as_json=True)
         elif ctx.obj["quiet"]:
-            for c in comments:
+            for c in shown:
                 print(c.get("id", ""))
         else:
-            if not comments:
+            if not shown:
                 print(f"No comments on {issue_key}")
             else:
-                print(f"Comments on {issue_key} ({len(comments)} shown):\n")
-                for c in comments:
+                if total is not None and not show_all and len(shown) < total:
+                    print(f"Comments on {issue_key} ({len(shown)} of {total} shown — use --limit 0 to show all):\n")
+                else:
+                    print(f"Comments on {issue_key} ({len(shown)} shown):\n")
+                for c in shown:
                     author = c.get("author", {}).get("displayName", "Unknown")
                     created = c.get("created", "")[:16].replace("T", " ") if c.get("created") else "N/A"
                     body = c.get("body", "")
