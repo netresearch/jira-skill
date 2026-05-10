@@ -49,18 +49,27 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 
 
 _ORDER_BY_RE = re.compile(r"\border\s+by\b", re.IGNORECASE)
+# Strip 'single-quoted' and "double-quoted" string literals so values
+# like `summary ~ 'order by'` don't trip the ORDER BY detector.
+_QUOTED_RE = re.compile(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"")
+
+
+def _has_top_level_order_by(jql: str) -> bool:
+    """True if JQL contains a real ORDER BY clause (ignores quoted literals)."""
+    return bool(_ORDER_BY_RE.search(_QUOTED_RE.sub("", jql)))
 
 
 def _append_order_by(jql: str, order_by_clauses: tuple[str, ...]) -> str:
     """Append --order-by clauses to a JQL string.
 
-    Errors if the JQL already contains an ORDER BY (case-insensitive); the
-    user has to choose one form because concatenation would produce invalid
-    JQL.
+    Errors if the JQL already contains an ORDER BY (case-insensitive,
+    ignoring quoted string literals so `summary ~ 'order by'` does not
+    trigger). The user has to choose one form because concatenation would
+    produce invalid JQL.
     """
     if not order_by_clauses:
         return jql
-    if _ORDER_BY_RE.search(jql):
+    if _has_top_level_order_by(jql):
         raise click.UsageError(
             "JQL already contains 'ORDER BY'; pass either --order-by or embed "
             "ORDER BY in the JQL, not both. "

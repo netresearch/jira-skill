@@ -11,7 +11,7 @@ Load this reference whenever the user wants to create, list, or delete a link be
 > Mnemonic: **TO is the *agent*, FROM is the *patient*.**
 > Read the call as: *"on FROM, record that TO does X to it."*
 
-This matches Atlassian's REST API convention (`outwardIssue` is the source; `inwardIssue` is the destination). The `--source` / `--target` aliases in step 4 below make the intent explicit:
+This matches Atlassian's REST API convention — but watch the field-name trap: in the stored link object, **`inwardIssue` holds the source (active actor with the outward verb)** and **`outwardIssue` holds the destination (passive recipient with the inward verb)**. The names *seem* to imply the opposite; they don't. Verify after every `create` by reading the success sentence. The `--source` / `--target` aliases in the next section make the intent explicit:
 
 - `create FROM TO --type X`  ≡  `create --source TO --target FROM --type X`
 

@@ -402,6 +402,21 @@ class TestMockedCommands:
         assert "Tip" in result.output
         mock_client.jql.assert_not_called()
 
+    def test_search_query_order_by_ignores_quoted_order_by(self):
+        """--order-by must not be rejected when 'order by' appears inside a quoted string literal."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {"issues": [], "total": 0}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            # 'order by' inside a single-quoted value must NOT trip the detector
+            result = runner.invoke(
+                _search_mod.cli,
+                ["query", "summary ~ 'order by'", "--order-by", "updated DESC"],
+            )
+        assert result.exit_code == 0, result.output
+        called_jql = mock_client.jql.call_args[0][0]
+        assert "ORDER BY updated DESC" in called_jql
+
     def test_create_issue_dry_run(self):
         """jira-create issue with --dry-run must not call API."""
         mock_client = self._make_mock_client()
