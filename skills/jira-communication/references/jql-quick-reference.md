@@ -6,6 +6,24 @@ Load this reference whenever a JQL query goes beyond the inline SKILL.md example
 
 Common JQL patterns for `jira-search.py query "<JQL>"`.
 
+## Sorting (`ORDER BY`)
+
+Two equivalent forms — pick one, never both (the script rejects mixing them):
+
+```bash
+# Embedded in the JQL string
+jira-search query "project = PROJ AND status = Open ORDER BY updated DESC"
+
+# Via the --order-by flag (repeatable for multi-key sorts)
+jira-search query "project = PROJ AND status = Open" --order-by "updated DESC"
+jira-search query "project = PROJ" \
+    --order-by "priority DESC" --order-by "created ASC"
+```
+
+Both forms support the same sort keys (any indexed Jira field) and the
+same `ASC` / `DESC` direction modifiers. The flag form is friendlier when
+JQL is composed programmatically and the base query should stay untouched.
+
 ## Operators
 
 ### Comparison
