@@ -456,25 +456,44 @@ def delete(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _open_csv_rows(path: str) -> tuple[list[str], list[dict]]:
-    """Read a CSV (or '-' for stdin) into (fieldnames, rows). Buffers fully.
+def _normalize_csv_rows(reader: csv.DictReader) -> tuple[list[str], list[dict]]:
+    """Strip + casefold field names so 'From' / ' to ' / 'TYPE' all work.
 
-    Returns ([], []) for an empty input (no header, no rows).
+    The header validator is already case/whitespace-insensitive; without
+    matching normalization on row extraction, headers that pass validation
+    can still produce rows whose `.get('from')` returns None.
     """
-    if path == "-":
-        reader = csv.DictReader(sys.stdin)
-    else:
-        reader = csv.DictReader(open(path, newline="", encoding="utf-8"))  # noqa: SIM115
-    fieldnames = list(reader.fieldnames or [])
-    rows = list(reader) if fieldnames else []
+    raw_fields = list(reader.fieldnames or [])
+    if not raw_fields:
+        return [], []
+    fieldnames = [(f or "").strip().casefold() for f in raw_fields]
+    rows: list[dict] = []
+    for raw_row in reader:
+        rows.append({fieldnames[i]: (raw_row.get(raw_fields[i]) or "") for i in range(len(raw_fields))})
     return fieldnames, rows
 
 
+def _open_csv_rows(path: str) -> tuple[list[str], list[dict]]:
+    """Read a CSV (or '-' for stdin) into (fieldnames, rows). Buffers fully.
+
+    Field names and per-row keys are normalized to lower-case stripped form
+    so headers like `From, To, Type` work the same as `from,to,type`.
+    Returns ([], []) for an empty input (no header, no rows).
+    """
+    if path == "-":
+        return _normalize_csv_rows(csv.DictReader(sys.stdin))
+    with open(path, newline="", encoding="utf-8") as f:
+        return _normalize_csv_rows(csv.DictReader(f))
+
+
 def _validate_bulk_create_header(fieldnames: list[str]) -> None:
-    """Exit 2 with a usage error if any of from/to/type is missing."""
+    """Exit 2 with a usage error if any of from/to/type is missing.
+
+    Field names are already normalized (lower-cased + stripped) by
+    `_open_csv_rows`, so this is a plain set check.
+    """
     required = {"from", "to", "type"}
-    have = {(f or "").strip().casefold() for f in fieldnames}
-    missing = required - have
+    missing = required - set(fieldnames)
     if missing:
         error(f"CSV header missing required column(s): {', '.join(sorted(missing))}")
         sys.exit(2)
@@ -511,14 +530,24 @@ def _resolve_type_from_cache(cache: dict, link_type: str) -> dict:
     return verbs
 
 
-def _existing_link_between(client, from_key: str, to_key: str, type_name: str) -> dict | None:
+def _existing_link_between(
+    client, from_key: str, to_key: str, type_name: str, links_cache: dict | None = None
+) -> dict | None:
     """Return the first link of *type_name* between FROM and TO, ignoring direction.
 
     Reuses the existing `_link_matches` helper (case-insensitive match on
     type name AND on the other-issue key, in either inward or outward).
+    Pass `links_cache` (a dict keyed by from_key) to memoize the per-issue
+    fetch across rows — avoids the N+1 hit when many rows share the same
+    `from_key`.
     """
-    issue = client.issue(from_key, fields="issuelinks")
-    raw = (issue.get("fields") or {}).get("issuelinks") or []
+    if links_cache is not None and from_key in links_cache:
+        raw = links_cache[from_key]
+    else:
+        issue = client.issue(from_key, fields="issuelinks")
+        raw = (issue.get("fields") or {}).get("issuelinks") or []
+        if links_cache is not None:
+            links_cache[from_key] = raw
     for lnk in raw:
         if _link_matches(lnk, to_key, type_name):
             return lnk
@@ -599,10 +628,22 @@ def bulk_create(ctx, csv_path: str, dry_run: bool, continue_on_error: bool, skip
         sys.exit(1)
 
     counts = {"created": 0, "skipped": 0, "failed": 0}
+    # Per-issue links cache: avoid re-fetching the same FROM ticket's
+    # issuelinks for every row that shares it (N+1 → 1 per unique FROM).
+    links_cache: dict = {}
     total = len(rows)
     for idx, row in enumerate(rows, start=1):
         ok = _bulk_create_row(
-            ctx, client, type_cache, row, idx, total, dry_run=dry_run, skip_existing=skip_existing, counts=counts
+            ctx,
+            client,
+            type_cache,
+            row,
+            idx,
+            total,
+            dry_run=dry_run,
+            skip_existing=skip_existing,
+            counts=counts,
+            links_cache=links_cache,
         )
         if not ok and not continue_on_error:
             _emit_bulk_summary(ctx, **counts)
@@ -614,7 +655,17 @@ def bulk_create(ctx, csv_path: str, dry_run: bool, continue_on_error: bool, skip
 
 
 def _bulk_create_row(
-    ctx, client, type_cache: dict, row: dict, idx: int, total: int, *, dry_run: bool, skip_existing: bool, counts: dict
+    ctx,
+    client,
+    type_cache: dict,
+    row: dict,
+    idx: int,
+    total: int,
+    *,
+    dry_run: bool,
+    skip_existing: bool,
+    counts: dict,
+    links_cache: dict | None = None,
 ) -> bool:
     """Process a single bulk-create row. Returns True on success or skip, False on failure."""
     from_key = (row.get("from") or "").strip()
@@ -637,7 +688,7 @@ def _bulk_create_row(
 
     if skip_existing:
         try:
-            existing = _existing_link_between(client, from_key, to_key, canonical_name)
+            existing = _existing_link_between(client, from_key, to_key, canonical_name, links_cache=links_cache)
         except Exception as e:
             _emit_bulk_row(ctx, idx, total, status="failed", reason=_sanitize_error(str(e)))
             counts["failed"] += 1
@@ -791,7 +842,7 @@ def bulk_delete(ctx, ids: str | None, ids_file: str | None, dry_run: bool, conti
     """
     id_list = _resolve_bulk_delete_ids(ids, ids_file)
     if not id_list:
-        _emit_bulk_summary(ctx, created=0, skipped=0, failed=0)
+        _emit_bulk_delete_summary(ctx, {"created": 0, "failed": 0})
         return
 
     client = ctx.obj["client"]

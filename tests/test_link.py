@@ -555,6 +555,38 @@ class TestBulkCreate:
         assert "[1/1] Would create: B-2 blocks A-1 (link-type: Blocks)" in result.output
         mc.create_issue_link.assert_not_called()
 
+    def test_csv_header_is_case_and_whitespace_insensitive(self, tmp_path):
+        # Mixed case + spaces in header — must still extract correctly
+        csv_path = _write_csv(tmp_path, " From, TO ,Type\nIOS-18,NRS-878,cause\n")
+        mc = _bulk_client()
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 0, result.output
+        assert "[1/1] NRS-878 causes IOS-18" in result.output
+        first_call = mc.create_issue_link.call_args_list[0][0][0]
+        assert first_call == {
+            "type": {"name": "Cause"},
+            "inwardIssue": {"key": "NRS-878"},
+            "outwardIssue": {"key": "IOS-18"},
+        }
+
+    def test_skip_existing_caches_per_from_key(self, tmp_path):
+        # Three rows all share the same FROM — `client.issue()` should be
+        # called exactly once, not three times. (Regression: N+1 fix)
+        csv_path = _write_csv(
+            tmp_path,
+            "from,to,type\nIOS-18,NRS-1,Cause\nIOS-18,NRS-2,Cause\nIOS-18,NRS-3,Cause\n",
+        )
+        mc = _bulk_client()
+
+        def issue_side_effect(key, fields=None):
+            return _issue_with_links(key, [])
+
+        mc.issue.side_effect = issue_side_effect
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path, "--skip-existing"], mc)
+        assert result.exit_code == 0, result.output
+        assert mc.issue.call_count == 1, f"expected 1 fetch (cached), got {mc.issue.call_count}"
+        assert mc.create_issue_link.call_count == 3
+
     def test_skip_existing_skips_matching_link(self, tmp_path):
         csv_path = _write_csv(tmp_path, "from,to,type\nIOS-18,NRS-878,Cause\nIOS-18,NRS-879,Cause\n")
         mc = _bulk_client()
@@ -674,6 +706,19 @@ class TestBulkDelete:
         result, _ = _run_link(["bulk-delete"])
         assert result.exit_code == 1
         assert "--ids" in result.output
+
+    def test_empty_ids_file_emits_delete_summary_not_create(self, tmp_path):
+        # Regression: empty input previously fell through to the bulk-create
+        # summary emitter, printing 'created/skipped/failed' instead of
+        # 'deleted/failed'. Schema must stay consistent across all bulk-delete
+        # invocations.
+        empty = tmp_path / "empty.txt"
+        empty.write_text("")
+        result, _ = _run_link(["bulk-delete", "--ids-file", str(empty)])
+        assert result.exit_code == 0, result.output
+        assert "deleted: 0, failed: 0" in result.output
+        assert "created" not in result.output
+        assert "skipped" not in result.output
 
     def test_rejects_both_ids_and_ids_file(self, tmp_path):
         f = tmp_path / "ids.txt"
