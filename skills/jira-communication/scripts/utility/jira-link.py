@@ -47,45 +47,143 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
+def _resolve_link_type_verbs(client, link_type: str) -> dict:
+    """Look up the canonical name + outward/inward verbs for a link type.
+
+    Match is case-insensitive against the link type's ``name`` so users can
+    pass e.g. ``blocks`` or ``Blocks``. Raises ValueError if the type is
+    unknown, with a helpful list of available names.
+    """
+    types = client.get_issue_link_types() or []
+    target = link_type.casefold()
+    for entry in types:
+        if not isinstance(entry, dict):
+            continue
+        if (entry.get("name") or "").casefold() == target:
+            return {
+                "name": entry.get("name") or link_type,
+                "outward": entry.get("outward") or "links to",
+                "inward": entry.get("inward") or "is linked from",
+            }
+    available = ", ".join(sorted({(e.get("name") or "").strip() for e in types if isinstance(e, dict)} - {""}))
+    raise ValueError(
+        f"Unknown link type {link_type!r}. "
+        f"Available: {available or '(none returned by Jira)'}"
+    )
+
+
 @cli.command()
-@click.argument("from_key")
-@click.argument("to_key")
+@click.argument("from_key", required=False)
+@click.argument("to_key", required=False)
+@click.option("--source", "source_key", help="Source/active actor (outward verb applies). Alias for TO_KEY.")
+@click.option("--target", "target_key", help="Target/passive recipient (inward verb applies). Alias for FROM_KEY.")
 @click.option("--type", "-t", "link_type", required=True, help='Link type name (e.g., "Blocks", "Relates")')
 @click.option("--dry-run", is_flag=True, help="Show what would be created")
 @click.pass_context
-def create(ctx, from_key: str, to_key: str, link_type: str, dry_run: bool):
+def create(
+    ctx,
+    from_key: str | None,
+    to_key: str | None,
+    source_key: str | None,
+    target_key: str | None,
+    link_type: str,
+    dry_run: bool,
+):
     """Create a link between two issues.
 
-    FROM_KEY: Source issue key
+    Direction (matches Atlassian REST convention): the link is stored such
+    that TO_KEY is the source/active actor (outward verb applies) and
+    FROM_KEY is the destination/passive recipient (inward verb applies).
+    Read 'create FROM TO --type X' as: "on FROM, record that TO does X to it".
 
-    TO_KEY: Target issue key
+    FROM_KEY: Destination/passive recipient (positional)
+
+    TO_KEY: Source/active actor (positional)
+
+    Use --source / --target for an explicit named alternative:
+
+      --source S --target T --type X
+        is equivalent to
+      create T S --type X
 
     Examples:
 
-      jira-link create PROJ-123 PROJ-456 --type "Blocks"
+      jira-link create FRONTEND-12 INFRA-99 --type Blockade
+      # → "INFRA-99 blocks FRONTEND-12"
 
-      jira-link create PROJ-123 PROJ-456 --type "Relates" --dry-run
+      jira-link create --source INFRA-99 --target FRONTEND-12 --type Blockade
+      # same as above, more explicit
+
+      jira-link create EFFECT-1 ROOT-2 --type Cause --dry-run
     """
+    # Resolve positional vs named-alias forms. Forbid mixing them.
+    using_named = source_key is not None or target_key is not None
+    using_positional = from_key is not None or to_key is not None
+
+    if using_named and using_positional:
+        error("Use either positional FROM_KEY TO_KEY or --source/--target, not both")
+        sys.exit(1)
+
+    if using_named:
+        if source_key is None or target_key is None:
+            error("Both --source and --target are required when using the named form")
+            sys.exit(1)
+        from_key = target_key
+        to_key = source_key
+    else:
+        if from_key is None or to_key is None:
+            error("Provide FROM_KEY and TO_KEY (or --source and --target)")
+            sys.exit(1)
+
     ctx.obj["client"].with_context(issue_key=from_key)
     client = ctx.obj["client"]
 
+    try:
+        verbs = _resolve_link_type_verbs(client, link_type)
+    except ValueError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to resolve link type: {e}")
+        sys.exit(1)
+
+    canonical_name = verbs["name"]
+    outward_verb = verbs["outward"]
+    sentence = f"{to_key} {outward_verb} {from_key}"
+
     if dry_run:
         warning("DRY RUN - No link will be created")
-        print("\nWould create link:")
-        print(f"  {from_key} --[{link_type}]--> {to_key}")
+        print(f"Would create: {sentence} (link-type: {canonical_name})")
         return
 
     try:
         client.create_issue_link(
-            {"type": {"name": link_type}, "inwardIssue": {"key": to_key}, "outwardIssue": {"key": from_key}}
+            {"type": {"name": canonical_name}, "inwardIssue": {"key": to_key}, "outwardIssue": {"key": from_key}}
         )
 
         if ctx.obj["json"]:
-            format_output({"from": from_key, "to": to_key, "type": link_type, "created": True}, as_json=True)
+            format_output(
+                {
+                    "from": from_key,
+                    "to": to_key,
+                    "source": to_key,
+                    "target": from_key,
+                    "type": canonical_name,
+                    "outward": outward_verb,
+                    "inward": verbs["inward"],
+                    "sentence": sentence,
+                    "created": True,
+                },
+                as_json=True,
+            )
         elif ctx.obj["quiet"]:
             print("ok")
         else:
-            success(f"Created link: {from_key} --[{link_type}]--> {to_key}")
+            success(f"Created: {sentence} (link-type: {canonical_name})")
 
     except Exception as e:
         if ctx.obj["debug"]:
