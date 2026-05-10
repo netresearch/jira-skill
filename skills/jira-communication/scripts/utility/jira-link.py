@@ -66,10 +66,7 @@ def _resolve_link_type_verbs(client, link_type: str) -> dict:
                 "inward": entry.get("inward") or "is linked from",
             }
     available = ", ".join(sorted({(e.get("name") or "").strip() for e in types if isinstance(e, dict)} - {""}))
-    raise ValueError(
-        f"Unknown link type {link_type!r}. "
-        f"Available: {available or '(none returned by Jira)'}"
-    )
+    raise ValueError(f"Unknown link type {link_type!r}. Available: {available or '(none returned by Jira)'}")
 
 
 @cli.command()

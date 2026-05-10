@@ -419,9 +419,7 @@ class TestLinkCreate:
 
     def test_create_dry_run_prints_sentence(self):
         mc = _client_with_link_types()
-        result, _ = _run_link(
-            ["create", "FRONTEND-12", "INFRA-99", "--type", "Blocks", "--dry-run"], mc
-        )
+        result, _ = _run_link(["create", "FRONTEND-12", "INFRA-99", "--type", "Blocks", "--dry-run"], mc)
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
         assert "Would create: INFRA-99 blocks FRONTEND-12" in result.output
@@ -429,9 +427,7 @@ class TestLinkCreate:
 
     def test_create_dry_run_unknown_type_errors(self):
         mc = _client_with_link_types()
-        result, _ = _run_link(
-            ["create", "A-1", "B-2", "--type", "Bogus", "--dry-run"], mc
-        )
+        result, _ = _run_link(["create", "A-1", "B-2", "--type", "Bogus", "--dry-run"], mc)
         assert result.exit_code == 1
         assert "Unknown link type" in result.output
         mc.create_issue_link.assert_not_called()
@@ -474,9 +470,7 @@ class TestLinkCreate:
 
     def test_create_named_requires_both_source_and_target(self):
         mc = _client_with_link_types()
-        result, _ = _run_link(
-            ["create", "--source", "ONLY-1", "--type", "Cause"], mc
-        )
+        result, _ = _run_link(["create", "--source", "ONLY-1", "--type", "Cause"], mc)
         assert result.exit_code == 1
         assert "--source" in result.output and "--target" in result.output
 
@@ -491,9 +485,7 @@ class TestLinkCreate:
 
     def test_create_json_output_includes_sentence(self):
         mc = _client_with_link_types()
-        result, _ = _run_link(
-            ["--json", "create", "EFFECT-1", "ROOT-2", "--type", "Cause"], mc
-        )
+        result, _ = _run_link(["--json", "create", "EFFECT-1", "ROOT-2", "--type", "Cause"], mc)
         assert result.exit_code == 0, result.output
         data = json.loads(result.output)
         assert data["created"] is True

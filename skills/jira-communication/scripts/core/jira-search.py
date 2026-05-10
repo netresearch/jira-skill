@@ -71,7 +71,7 @@ def _append_order_by(jql: str, order_by_clauses: tuple[str, ...]) -> str:
         clause = (clause or "").strip()
         if not clause:
             raise click.UsageError(
-                "--order-by requires a non-empty value, e.g. --order-by \"updated DESC\". "
+                '--order-by requires a non-empty value, e.g. --order-by "updated DESC". '
                 "Tip: ORDER BY can also be embedded directly in the JQL string."
             )
         cleaned.append(clause)
@@ -95,7 +95,7 @@ def _append_order_by(jql: str, order_by_clauses: tuple[str, ...]) -> str:
     multiple=True,
     metavar="FIELD [ASC|DESC]",
     help=(
-        "Append an ORDER BY clause to the JQL (e.g. \"updated DESC\"). "
+        'Append an ORDER BY clause to the JQL (e.g. "updated DESC"). '
         "Repeatable for multi-key sorts. Errors if the JQL already contains ORDER BY. "
         "Tip: ORDER BY can also be embedded directly in the JQL string."
     ),
