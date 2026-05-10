@@ -81,7 +81,7 @@ ${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh path/to/content.txt
 ## References
 
 - `references/jira-syntax-quick-reference.md` - Complete syntax documentation
-- `references/cross-project-refs.md` - GitLab cross-project ref convention (`project!N`, `project#N`, `project@tag`) when linking to GitLab from Jira
+- `references/cross-project-refs.md` - GitLab cross-project ref convention (`group/project!N`, `group/project#N`, `group/project@tag`) when linking to GitLab from Jira
 - `templates/bug-report-template.md` - Bug report template
 - `templates/feature-request-template.md` - Feature request template
 - `${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh` - Automated syntax checker
