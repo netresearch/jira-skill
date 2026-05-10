@@ -8,6 +8,7 @@
 # ///
 """Jira search operations - query issues using JQL."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -47,6 +48,36 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
+_ORDER_BY_RE = re.compile(r"\border\s+by\b", re.IGNORECASE)
+
+
+def _append_order_by(jql: str, order_by_clauses: tuple[str, ...]) -> str:
+    """Append --order-by clauses to a JQL string.
+
+    Errors if the JQL already contains an ORDER BY (case-insensitive); the
+    user has to choose one form because concatenation would produce invalid
+    JQL.
+    """
+    if not order_by_clauses:
+        return jql
+    if _ORDER_BY_RE.search(jql):
+        raise click.UsageError(
+            "JQL already contains 'ORDER BY'; pass either --order-by or embed "
+            "ORDER BY in the JQL, not both. "
+            "Tip: ORDER BY can also be embedded directly in the JQL string."
+        )
+    cleaned: list[str] = []
+    for clause in order_by_clauses:
+        clause = (clause or "").strip()
+        if not clause:
+            raise click.UsageError(
+                "--order-by requires a non-empty value, e.g. --order-by \"updated DESC\". "
+                "Tip: ORDER BY can also be embedded directly in the JQL string."
+            )
+        cleaned.append(clause)
+    return f"{jql.rstrip()} ORDER BY {', '.join(cleaned)}"
+
+
 @cli.command()
 @click.argument("jql")
 @click.option("--max-results", "-n", default=50, help="Maximum results to return")
@@ -58,8 +89,27 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     help="Starting index for pagination (0-based)",
 )
 @click.option("--truncate", type=int, metavar="N", help="Truncate field values to N characters")
+@click.option(
+    "--order-by",
+    "order_by",
+    multiple=True,
+    metavar="FIELD [ASC|DESC]",
+    help=(
+        "Append an ORDER BY clause to the JQL (e.g. \"updated DESC\"). "
+        "Repeatable for multi-key sorts. Errors if the JQL already contains ORDER BY. "
+        "Tip: ORDER BY can also be embedded directly in the JQL string."
+    ),
+)
 @click.pass_context
-def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate: int | None):
+def query(
+    ctx,
+    jql: str,
+    max_results: int,
+    fields: str,
+    start_at: int,
+    truncate: int | None,
+    order_by: tuple[str, ...],
+):
     """Search issues using JQL.
 
     JQL: Jira Query Language query string (passed directly to Jira API — treat as trusted input)
@@ -69,6 +119,10 @@ def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate:
       jira-search query "project = PROJ AND status = 'In Progress'"
 
       jira-search query "assignee = currentUser()" --max-results 20
+
+      jira-search query "project = PROJ" --order-by "updated DESC"
+
+      jira-search query "project = PROJ" --order-by "priority DESC" --order-by "created ASC"
 
       jira-search --json query "updated >= -7d"
 
@@ -83,8 +137,20 @@ def query(ctx, jql: str, max_results: int, fields: str, start_at: int, truncate:
       sprint in openSprints()           # Current sprint
       labels = backend                  # By label
       priority = High                   # By priority
+
+    Sorting:
+
+      ORDER BY can be embedded directly in the JQL string
+      (e.g. "project = PROJ ORDER BY updated DESC") or supplied via the
+      --order-by flag. Use one form or the other, not both.
     """
     client = ctx.obj["client"]
+
+    try:
+        jql = _append_order_by(jql, order_by)
+    except click.UsageError as e:
+        error(str(e))
+        sys.exit(2)
 
     try:
         # Parse fields
