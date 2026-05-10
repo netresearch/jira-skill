@@ -346,6 +346,62 @@ class TestMockedCommands:
         assert result.exit_code == 0, result.output
         assert "Server capped results" not in result.output
 
+    def test_search_query_order_by_appends_to_jql(self):
+        """--order-by must append a single ORDER BY clause to the JQL string."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {"issues": [], "total": 0}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _search_mod.cli,
+                ["query", "project = PROJ", "--order-by", "updated DESC"],
+            )
+        assert result.exit_code == 0, result.output
+        mock_client.jql.assert_called_once()
+        called_jql = mock_client.jql.call_args[0][0]
+        assert called_jql == "project = PROJ ORDER BY updated DESC"
+
+    def test_search_query_order_by_multi_repeats_join_with_comma(self):
+        """Multiple --order-by flags must produce one comma-separated ORDER BY."""
+        mock_client = self._make_mock_client()
+        mock_client.jql.return_value = {"issues": [], "total": 0}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _search_mod.cli,
+                [
+                    "query",
+                    "project = PROJ",
+                    "--order-by",
+                    "priority DESC",
+                    "--order-by",
+                    "created ASC",
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        called_jql = mock_client.jql.call_args[0][0]
+        assert called_jql == "project = PROJ ORDER BY priority DESC, created ASC"
+
+    def test_search_query_order_by_rejects_when_jql_already_orders(self):
+        """If JQL already contains ORDER BY, --order-by must error (no jql() call)."""
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _search_mod.cli,
+                [
+                    "query",
+                    "project = PROJ ORDER BY key",
+                    "--order-by",
+                    "updated DESC",
+                ],
+            )
+        assert result.exit_code == 2
+        assert "ORDER BY" in result.output
+        # Tip about the embedded form must surface
+        assert "Tip" in result.output
+        mock_client.jql.assert_not_called()
+
     def test_create_issue_dry_run(self):
         """jira-create issue with --dry-run must not call API."""
         mock_client = self._make_mock_client()
@@ -370,11 +426,18 @@ class TestMockedCommands:
     def test_link_create_dry_run(self):
         """jira-link create with --dry-run must not call API."""
         mock_client = self._make_mock_client()
+        # Dry-run still resolves the link type so the preview can use the
+        # outward verb — give it a minimal table to look up.
+        mock_client.get_issue_link_types.return_value = [
+            {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+        ]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(_link_mod.cli, ["create", "A-1", "A-2", "--type", "Blocks", "--dry-run"])
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
+        # Direction: A-2 is the active actor, A-1 is the recipient
+        assert "A-2 blocks A-1" in result.output
         mock_client.create_issue_link.assert_not_called()
 
     def _run_comment_cmd(self, args, mock_client=None, **invoke_kwargs):

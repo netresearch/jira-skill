@@ -377,3 +377,127 @@ class TestLinkDelete:
         # proj-a matches outward (PROJ-A), so display should use outward verb + inward key
         assert "blocks PROJ-B" in result.output
         assert "is blocked by" not in result.output
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: create subcommand (success message direction, --source/--target, dry-run)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+_LINK_TYPES = [
+    {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+    {"name": "Cause", "outward": "causes", "inward": "is caused by"},
+    {"name": "Side effect", "outward": "affects", "inward": "is affected by"},
+]
+
+
+def _client_with_link_types():
+    mc = _make_mock_client()
+    mc.get_issue_link_types.return_value = _LINK_TYPES
+    mc.create_issue_link.return_value = None
+    return mc
+
+
+class TestLinkCreate:
+    def test_create_success_uses_outward_sentence(self):
+        """create FROM TO --type Cause prints 'TO causes FROM'."""
+        mc = _client_with_link_types()
+        result, _ = _run_link(["create", "EFFECT-1", "ROOT-2", "--type", "Cause"], mc)
+        assert result.exit_code == 0, result.output
+        assert "Created: ROOT-2 causes EFFECT-1" in result.output
+        assert "link-type: Cause" in result.output
+        # Must NOT use the legacy misleading arrow
+        assert "-->" not in result.output
+        # Verify the API payload preserves the outward/inward direction.
+        mc.create_issue_link.assert_called_once_with(
+            {
+                "type": {"name": "Cause"},
+                "inwardIssue": {"key": "ROOT-2"},
+                "outwardIssue": {"key": "EFFECT-1"},
+            }
+        )
+
+    def test_create_dry_run_prints_sentence(self):
+        mc = _client_with_link_types()
+        result, _ = _run_link(
+            ["create", "FRONTEND-12", "INFRA-99", "--type", "Blocks", "--dry-run"], mc
+        )
+        assert result.exit_code == 0, result.output
+        assert "DRY RUN" in result.output
+        assert "Would create: INFRA-99 blocks FRONTEND-12" in result.output
+        mc.create_issue_link.assert_not_called()
+
+    def test_create_dry_run_unknown_type_errors(self):
+        mc = _client_with_link_types()
+        result, _ = _run_link(
+            ["create", "A-1", "B-2", "--type", "Bogus", "--dry-run"], mc
+        )
+        assert result.exit_code == 1
+        assert "Unknown link type" in result.output
+        mc.create_issue_link.assert_not_called()
+
+    def test_create_named_aliases_equivalent_to_swapped_positional(self):
+        """--source S --target T must POST {outward: T, inward: S}."""
+        mc = _client_with_link_types()
+        result, _ = _run_link(
+            ["create", "--source", "INFRA-99", "--target", "FRONTEND-12", "--type", "Blocks"],
+            mc,
+        )
+        assert result.exit_code == 0, result.output
+        assert "Created: INFRA-99 blocks FRONTEND-12" in result.output
+        mc.create_issue_link.assert_called_once_with(
+            {
+                "type": {"name": "Blocks"},
+                "inwardIssue": {"key": "INFRA-99"},
+                "outwardIssue": {"key": "FRONTEND-12"},
+            }
+        )
+
+    def test_create_rejects_mixed_positional_and_named(self):
+        mc = _client_with_link_types()
+        result, _ = _run_link(
+            [
+                "create",
+                "EFFECT-1",
+                "ROOT-2",
+                "--source",
+                "X",
+                "--target",
+                "Y",
+                "--type",
+                "Cause",
+            ],
+            mc,
+        )
+        assert result.exit_code == 1
+        assert "not both" in result.output or "either" in result.output
+
+    def test_create_named_requires_both_source_and_target(self):
+        mc = _client_with_link_types()
+        result, _ = _run_link(
+            ["create", "--source", "ONLY-1", "--type", "Cause"], mc
+        )
+        assert result.exit_code == 1
+        assert "--source" in result.output and "--target" in result.output
+
+    def test_create_case_insensitive_type_matches_canonical_name(self):
+        """User passes --type 'cause'; script normalizes to 'Cause' for the API."""
+        mc = _client_with_link_types()
+        result, _ = _run_link(["create", "EFFECT-1", "ROOT-2", "--type", "cause"], mc)
+        assert result.exit_code == 0, result.output
+        mc.create_issue_link.assert_called_once()
+        payload = mc.create_issue_link.call_args[0][0]
+        assert payload["type"]["name"] == "Cause"
+
+    def test_create_json_output_includes_sentence(self):
+        mc = _client_with_link_types()
+        result, _ = _run_link(
+            ["--json", "create", "EFFECT-1", "ROOT-2", "--type", "Cause"], mc
+        )
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["created"] is True
+        assert data["sentence"] == "ROOT-2 causes EFFECT-1"
+        assert data["source"] == "ROOT-2"
+        assert data["target"] == "EFFECT-1"
+        assert data["outward"] == "causes"
