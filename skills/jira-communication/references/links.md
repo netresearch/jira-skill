@@ -99,6 +99,68 @@ After creation:
 - On **AFFECTED-3** you see: `is affected by ← CHANGE-4`
 - On **CHANGE-4** you see: `affects → AFFECTED-3`
 
+## Bulk operations
+
+### `bulk-create` — create many links from a CSV
+
+```bash
+# CSV format (header required)
+$ cat links.csv
+from,to,type
+IOS-18,NRS-878,Cause
+IOS-18,NRT-4388,Deploy
+IOS-18,NRS-3106,Side effect
+
+# Preview every row's resolved sentence (no API calls)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py bulk-create \
+    --from-csv links.csv --dry-run
+
+# Run for real, halting on first failure
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py bulk-create \
+    --from-csv links.csv
+
+# Skip rows where a same-type link between FROM and TO already exists
+# (Jira Server is NOT idempotent on link creation — duplicates are possible)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py bulk-create \
+    --from-csv links.csv --skip-existing
+
+# Keep going past failures (records, doesn't abort)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py bulk-create \
+    --from-csv links.csv --continue-on-error
+```
+
+The CSV `from`, `to`, `type` columns map to `create FROM TO --type X` exactly — same direction rule applies. Each row resolves through the same dry-run sentence before commit.
+
+### `bulk-delete` — delete many links by ID
+
+```bash
+# By comma-separated IDs
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py bulk-delete \
+    --ids 10042,10043,10044 --dry-run
+
+# From a file (one ID per line)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py bulk-delete \
+    --ids-file ids.txt
+```
+
+Get the IDs from `jira-link list <ISSUE-KEY> --json` first.
+
+### `invert` — fix a backwards link in one shot
+
+```bash
+# Preview: shows current sentence and inverted sentence
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py invert \
+    --id 10042 --dry-run
+# Would invert: ROOT-2 causes EFFECT-1 → EFFECT-1 causes ROOT-2
+
+# Commit the inversion (deletes original, creates swapped)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py invert --id 10042
+```
+
+Destructive — the original link is **deleted** before the inverted one is created. If the create fails, the script attempts to recreate the original. If both calls fail, you'll get an `INCONSISTENT STATE` error pointing at the link ID — fix it in the Jira UI.
+
+This is the one-shot fix when `--dry-run` shows you a backwards sentence after a `create`.
+
 ## Real-world reference
 
 The `netresearch-jira` skill bundles a [linking-conventions reference](https://github.com/netresearch/netresearch-jira-skill/blob/main/skills/netresearch-jira/references/linking-conventions.md) with concrete `CHILD`/`PARENT` examples for the Netresearch Jira instance. The direction semantics there agree with this document and serve as a sanity check before you call `create`.
