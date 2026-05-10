@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.14.0] - 2026-05-10
-
 ### Fixed
 
 - `jira-link create`: success message and `--dry-run` preview now print the link in natural language using the link type's *outward* verb fetched from `get_issue_link_types()`. `create FROM TO --type X` POSTs `{outwardIssue: FROM, inwardIssue: TO}` — per Atlassian's convention `TO` is the source/active actor, so the new output is `Created: <to> <outward verb> <from> (link-type: <name>)` (e.g. `Created: ROOT-2 causes EFFECT-1`). The previous `Created link: FROM --[type]--> TO` arrow read in the opposite direction and led at least one agent to create ~30 backwards Jira links. Dry-run now errors out if the link type cannot be resolved instead of degrading to the misleading arrow form. Technically a behavior change but no known parser depended on the arrow format.
