@@ -81,6 +81,17 @@ validate_file() {
         warning "Found Markdown inline code (\`code\`). Consider Jira format: {{code}}"
     fi
 
+    # Check for literal { or } inside {{...}} monospace blocks. The Jira parser
+    # is greedy and breaks on inner braces, rendering the block as raw text
+    # (e.g. {{compose.example.{yml,override.pga.yml}}} renders verbatim).
+    # Pattern: an opening {{, followed by content containing { or } (other than
+    # the closing }}), followed by }}. Skip the trivial {{}} case.
+    if grep -qE '\{\{[^}]*[{][^}]*\}\}|\{\{[^{]*\}[^{]*\}\}' <<< "$content"; then
+        error "Found literal { or } inside {{...}} monospace block — Jira parser will render it as raw text. Split the reference or escape the braces."
+        echo "   Examples found:"
+        grep -oE '\{\{[^}]*[{][^}]*\}\}|\{\{[^{]*\}[^{]*\}\}' <<< "$content" | head -3
+    fi
+
     # Check for Markdown-style links ([text](url) instead of [text|url])
     if echo "$content" | grep -qE "\[([^\]]+)\]\(([^)]+)\)"; then
         error "Found Markdown-style links ([text](url)). Use Jira format: [text|url]"
