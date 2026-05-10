@@ -140,12 +140,12 @@ def create(
     except ValueError as e:
         if ctx.obj["debug"]:
             raise
-        error(str(e))
+        error(_sanitize_error(str(e)))
         sys.exit(1)
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to resolve link type: {e}")
+        error(f"Failed to resolve link type: {_sanitize_error(str(e))}")
         sys.exit(1)
 
     canonical_name = verbs["name"]
@@ -157,6 +157,12 @@ def create(
         print(f"Would create: {sentence} (link-type: {canonical_name})")
         return
 
+    # Atlassian REST convention: inwardIssue is the source of the outward
+    # arrow (active actor), outwardIssue is the destination (passive
+    # recipient). Empirically verified: a stored link with
+    # inwardIssue=A, outwardIssue=B and link type "Cause" is rendered as
+    # "A causes B" / "B is caused by A" by the Jira UI.
+    # In our CLI, TO_KEY is the active actor → inwardIssue=TO_KEY.
     try:
         client.create_issue_link(
             {"type": {"name": canonical_name}, "inwardIssue": {"key": to_key}, "outwardIssue": {"key": from_key}}
@@ -185,7 +191,7 @@ def create(
     except Exception as e:
         if ctx.obj["debug"]:
             raise
-        error(f"Failed to create link: {e}")
+        error(f"Failed to create link: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 

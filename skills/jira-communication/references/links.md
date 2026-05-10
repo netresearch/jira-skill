@@ -42,7 +42,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py list PROJ-123
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-link.py delete PROJ-123 --id 10042
 ```
 
-**Link type naming:** use the exact name shown by `jira-link.py list-types` or `jira-fields.py search "link"`. Names are case-sensitive and vary per instance.
+**Link type naming:** the canonical name (as displayed by Jira and stored in the link object) varies per instance — confirm yours via `jira-link.py list-types` or `jira-fields.py search "link"`. The `--type` argument matches case-insensitively against the canonical name (`blocks`, `Blocks`, `BLOCKS` all resolve to the same type), so case mismatches will not fail; non-existent type names will.
 
 ## Typical link types (names vary per instance)
 
