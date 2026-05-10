@@ -8,6 +8,8 @@
 # ///
 """Jira issue link operations - create links and list link types."""
 
+import csv
+import json
 import sys
 from pathlib import Path
 
@@ -447,6 +449,635 @@ def delete(
             raise
         error(f"Failed to delete issue link: {_sanitize_error(str(e))}")
         sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# bulk-create / bulk-delete / invert: shared helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _normalize_csv_rows(reader: csv.DictReader) -> tuple[list[str], list[dict]]:
+    """Strip + casefold field names so 'From' / ' to ' / 'TYPE' all work.
+
+    The header validator is already case/whitespace-insensitive; without
+    matching normalization on row extraction, headers that pass validation
+    can still produce rows whose `.get('from')` returns None.
+    """
+    raw_fields = list(reader.fieldnames or [])
+    if not raw_fields:
+        return [], []
+    fieldnames = [(f or "").strip().casefold() for f in raw_fields]
+    rows: list[dict] = []
+    for raw_row in reader:
+        rows.append({fieldnames[i]: (raw_row.get(raw_fields[i]) or "") for i in range(len(raw_fields))})
+    return fieldnames, rows
+
+
+def _open_csv_rows(path: str) -> tuple[list[str], list[dict]]:
+    """Read a CSV (or '-' for stdin) into (fieldnames, rows). Buffers fully.
+
+    Field names and per-row keys are normalized to lower-case stripped form
+    so headers like `From, To, Type` work the same as `from,to,type`.
+    Returns ([], []) for an empty input (no header, no rows).
+    """
+    if path == "-":
+        return _normalize_csv_rows(csv.DictReader(sys.stdin))
+    with open(path, newline="", encoding="utf-8") as f:
+        return _normalize_csv_rows(csv.DictReader(f))
+
+
+def _validate_bulk_create_header(fieldnames: list[str]) -> None:
+    """Exit 2 with a usage error if any of from/to/type is missing.
+
+    Field names are already normalized (lower-cased + stripped) by
+    `_open_csv_rows`, so this is a plain set check.
+    """
+    required = {"from", "to", "type"}
+    missing = required - set(fieldnames)
+    if missing:
+        error(f"CSV header missing required column(s): {', '.join(sorted(missing))}")
+        sys.exit(2)
+
+
+def _build_link_type_cache(client) -> dict:
+    """Single API call → casefolded-name → verbs dict.
+
+    Used so bulk operations resolve every type name from one HTTP round-trip
+    rather than one per row.
+    """
+    types = client.get_issue_link_types() or []
+    cache: dict = {}
+    for entry in types:
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or "").strip()
+        if not name:
+            continue
+        cache[name.casefold()] = {
+            "name": name,
+            "outward": entry.get("outward") or "links to",
+            "inward": entry.get("inward") or "is linked from",
+        }
+    return cache
+
+
+def _resolve_type_from_cache(cache: dict, link_type: str) -> dict:
+    """Look up a verbs dict from the cache. Raise ValueError if unknown."""
+    verbs = cache.get(link_type.casefold())
+    if verbs is None:
+        available = ", ".join(sorted(v["name"] for v in cache.values()))
+        raise ValueError(f"Unknown link type {link_type!r}. Available: {available or '(none returned by Jira)'}")
+    return verbs
+
+
+def _existing_link_between(
+    client, from_key: str, to_key: str, type_name: str, links_cache: dict | None = None
+) -> dict | None:
+    """Return the first link of *type_name* between FROM and TO, ignoring direction.
+
+    Reuses the existing `_link_matches` helper (case-insensitive match on
+    type name AND on the other-issue key, in either inward or outward).
+    Pass `links_cache` (a dict keyed by from_key) to memoize the per-issue
+    fetch across rows — avoids the N+1 hit when many rows share the same
+    `from_key`.
+    """
+    if links_cache is not None and from_key in links_cache:
+        raw = links_cache[from_key]
+    else:
+        issue = client.issue(from_key, fields="issuelinks")
+        raw = (issue.get("fields") or {}).get("issuelinks") or []
+        if links_cache is not None:
+            links_cache[from_key] = raw
+    for lnk in raw:
+        if _link_matches(lnk, to_key, type_name):
+            return lnk
+    return None
+
+
+def _emit_jsonl(obj: dict) -> None:
+    """One JSON object per line — JSONL, not a pretty-printed array."""
+    print(json.dumps(obj, default=str))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# bulk-create
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@cli.command("bulk-create")
+@click.option(
+    "--from-csv",
+    "csv_path",
+    required=True,
+    help="CSV file path with header 'from,to,type'. Use '-' to read from stdin.",
+)
+@click.option("--dry-run", is_flag=True, help="Resolve verbs and print sentences; do not POST anything.")
+@click.option(
+    "--continue-on-error/--abort-on-error",
+    "continue_on_error",
+    default=False,
+    help="On a failed row, keep going (default: abort with non-zero exit).",
+)
+@click.option(
+    "--skip-existing",
+    is_flag=True,
+    help="Skip rows where a link of the same type already connects FROM and TO (either direction).",
+)
+@click.pass_context
+def bulk_create(ctx, csv_path: str, dry_run: bool, continue_on_error: bool, skip_existing: bool):
+    """Create many links from a CSV file.
+
+    The CSV must have a header row with columns 'from', 'to', and 'type'.
+    Each subsequent row creates one link via the same direction convention as
+    `create FROM TO --type X` ("TO does X to FROM").
+
+    \b
+    Example CSV:
+        from,to,type
+        IOS-18,NRS-878,Cause
+        IOS-18,NRT-4388,Deploy
+        IOS-18,NRS-3106,Side effect
+
+    Examples:
+
+      jira-link bulk-create --from-csv links.csv --dry-run
+
+      jira-link bulk-create --from-csv links.csv --skip-existing --continue-on-error
+
+      cat links.csv | jira-link bulk-create --from-csv -
+    """
+    try:
+        fieldnames, rows = _open_csv_rows(csv_path)
+    except OSError as e:
+        error(f"Cannot read CSV: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+    if not fieldnames and not rows:
+        _emit_bulk_summary(ctx, created=0, skipped=0, failed=0)
+        return
+
+    _validate_bulk_create_header(fieldnames)
+
+    client = ctx.obj["client"]
+    try:
+        type_cache = _build_link_type_cache(client)
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to fetch link types: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+    counts = {"created": 0, "skipped": 0, "failed": 0}
+    # Per-issue links cache: avoid re-fetching the same FROM ticket's
+    # issuelinks for every row that shares it (N+1 → 1 per unique FROM).
+    links_cache: dict = {}
+    total = len(rows)
+    for idx, row in enumerate(rows, start=1):
+        ok = _bulk_create_row(
+            ctx,
+            client,
+            type_cache,
+            row,
+            idx,
+            total,
+            dry_run=dry_run,
+            skip_existing=skip_existing,
+            counts=counts,
+            links_cache=links_cache,
+        )
+        if not ok and not continue_on_error:
+            _emit_bulk_summary(ctx, **counts)
+            sys.exit(1)
+
+    _emit_bulk_summary(ctx, **counts)
+    if counts["failed"] and not continue_on_error:
+        sys.exit(1)
+
+
+def _bulk_create_row(
+    ctx,
+    client,
+    type_cache: dict,
+    row: dict,
+    idx: int,
+    total: int,
+    *,
+    dry_run: bool,
+    skip_existing: bool,
+    counts: dict,
+    links_cache: dict | None = None,
+) -> bool:
+    """Process a single bulk-create row. Returns True on success or skip, False on failure."""
+    from_key = (row.get("from") or "").strip()
+    to_key = (row.get("to") or "").strip()
+    raw_type = (row.get("type") or "").strip()
+    if not (from_key and to_key and raw_type):
+        _emit_bulk_row(ctx, idx, total, status="failed", reason="missing from/to/type column value")
+        counts["failed"] += 1
+        return False
+
+    try:
+        verbs = _resolve_type_from_cache(type_cache, raw_type)
+    except ValueError as e:
+        _emit_bulk_row(ctx, idx, total, status="failed", reason=_sanitize_error(str(e)))
+        counts["failed"] += 1
+        return False
+
+    canonical_name = verbs["name"]
+    sentence = f"{to_key} {verbs['outward']} {from_key}"
+
+    if skip_existing:
+        try:
+            existing = _existing_link_between(client, from_key, to_key, canonical_name, links_cache=links_cache)
+        except Exception as e:
+            _emit_bulk_row(ctx, idx, total, status="failed", reason=_sanitize_error(str(e)))
+            counts["failed"] += 1
+            return False
+        if existing is not None:
+            _emit_bulk_row(
+                ctx,
+                idx,
+                total,
+                status="skipped",
+                from_key=from_key,
+                to_key=to_key,
+                type_name=canonical_name,
+                sentence=sentence,
+            )
+            counts["skipped"] += 1
+            return True
+
+    if dry_run:
+        _emit_bulk_row(
+            ctx,
+            idx,
+            total,
+            status="created",
+            sentence=sentence,
+            type_name=canonical_name,
+            from_key=from_key,
+            to_key=to_key,
+            dry_run=True,
+        )
+        counts["created"] += 1
+        return True
+
+    try:
+        client.create_issue_link(
+            {
+                "type": {"name": canonical_name},
+                "inwardIssue": {"key": to_key},
+                "outwardIssue": {"key": from_key},
+            }
+        )
+    except Exception as e:
+        _emit_bulk_row(ctx, idx, total, status="failed", reason=_sanitize_error(str(e)))
+        counts["failed"] += 1
+        return False
+
+    _emit_bulk_row(
+        ctx,
+        idx,
+        total,
+        status="created",
+        sentence=sentence,
+        type_name=canonical_name,
+        from_key=from_key,
+        to_key=to_key,
+    )
+    counts["created"] += 1
+    return True
+
+
+def _emit_bulk_row(ctx, idx: int, total: int, *, status: str, **fields) -> None:
+    """Emit a per-row line (text/JSON/quiet)."""
+    if ctx.obj["quiet"]:
+        return
+    if ctx.obj["json"]:
+        payload = {"index": idx, "total": total, "status": status, **fields}
+        _emit_jsonl(payload)
+        return
+
+    prefix = f"[{idx}/{total}]"
+    if status == "created":
+        sentence = fields.get("sentence", "")
+        type_name = fields.get("type_name", "")
+        if fields.get("dry_run"):
+            print(f"{prefix} Would create: {sentence} (link-type: {type_name})")
+        else:
+            print(f"{prefix} {sentence} (link-type: {type_name})")
+    elif status == "skipped":
+        from_key = fields.get("from_key", "")
+        to_key = fields.get("to_key", "")
+        type_name = fields.get("type_name", "")
+        print(f"{prefix} SKIP existing: {from_key} ↔ {to_key} ({type_name})")
+    elif status == "failed":
+        print(f"{prefix} FAIL: {fields.get('reason', '')}")
+
+
+def _emit_bulk_summary(ctx, *, created: int, skipped: int, failed: int) -> None:
+    """Emit the end-of-run summary."""
+    if ctx.obj["json"]:
+        _emit_jsonl({"summary": True, "created": created, "skipped": skipped, "failed": failed})
+        return
+    print(f"created: {created}, skipped: {skipped}, failed: {failed}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# bulk-delete
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _read_ids_from_file(path: str) -> list[str]:
+    """Read one ID per line from a file (or stdin if path == '-'). Blank lines ignored."""
+    if path == "-":
+        text = sys.stdin.read()
+    else:
+        text = Path(path).read_text(encoding="utf-8")
+    return [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+
+def _resolve_bulk_delete_ids(ids: str | None, ids_file: str | None) -> list[str]:
+    """Resolve --ids / --ids-file (mutually exclusive, exactly one required) to a list."""
+    if (ids is None) == (ids_file is None):
+        error("Provide exactly one of --ids or --ids-file")
+        sys.exit(1)
+    if ids is not None:
+        return [s.strip() for s in ids.split(",") if s.strip()]
+    try:
+        return _read_ids_from_file(ids_file or "-")
+    except OSError as e:
+        error(f"Cannot read --ids-file: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+@cli.command("bulk-delete")
+@click.option("--ids", help="Comma-separated link IDs (e.g. '101,102,103').")
+@click.option(
+    "--ids-file",
+    help="Path with one link ID per line. Use '-' to read from stdin. Mutually exclusive with --ids.",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted; do not call the API.")
+@click.option(
+    "--continue-on-error/--abort-on-error",
+    "continue_on_error",
+    default=False,
+    help="On a failed row, keep going (default: abort with non-zero exit).",
+)
+@click.pass_context
+def bulk_delete(ctx, ids: str | None, ids_file: str | None, dry_run: bool, continue_on_error: bool):
+    """Delete many issue links by ID.
+
+    Pass IDs as a comma-separated list (--ids) OR as a file with one per line
+    (--ids-file). Each ID is looked up first so the per-row log shows the
+    affected issues, then deleted.
+
+    Examples:
+
+      jira-link bulk-delete --ids 101,102,103 --dry-run
+
+      jira-link bulk-delete --ids-file stale-links.txt --continue-on-error
+
+      jira-link list PROJ-1 --quiet | awk '{print $1}' | jira-link bulk-delete --ids-file -
+    """
+    id_list = _resolve_bulk_delete_ids(ids, ids_file)
+    if not id_list:
+        _emit_bulk_delete_summary(ctx, {"created": 0, "failed": 0})
+        return
+
+    client = ctx.obj["client"]
+    counts = {"created": 0, "skipped": 0, "failed": 0}  # 'created' = deleted in this command's reporting
+    total = len(id_list)
+    for idx, link_id in enumerate(id_list, start=1):
+        ok = _bulk_delete_row(ctx, client, link_id, idx, total, dry_run=dry_run, counts=counts)
+        if not ok and not continue_on_error:
+            _emit_bulk_delete_summary(ctx, counts)
+            sys.exit(1)
+
+    _emit_bulk_delete_summary(ctx, counts)
+    if counts["failed"] and not continue_on_error:
+        sys.exit(1)
+
+
+def _bulk_delete_row(ctx, client, link_id: str, idx: int, total: int, *, dry_run: bool, counts: dict) -> bool:
+    """Delete one link by ID, with optional pre-fetch to log which issues are affected."""
+    display = f"link {link_id}"
+    try:
+        link = client.get_issue_link(link_id)
+        inward = (link.get("inwardIssue") or {}).get("key") or "?"
+        outward = (link.get("outwardIssue") or {}).get("key") or "?"
+        type_name = (link.get("type") or {}).get("name") or "?"
+        display = f"[{link_id}] {outward} ↔ {inward} ({type_name})"
+    except Exception as e:
+        if not dry_run:
+            _emit_bulk_delete_line(ctx, idx, total, status="failed", link_id=link_id, reason=_sanitize_error(str(e)))
+            counts["failed"] += 1
+            return False
+        # In dry-run, lookup failure is not fatal — just keep the bare ID display.
+
+    if dry_run:
+        _emit_bulk_delete_line(ctx, idx, total, status="dry_run", link_id=link_id, display=display)
+        counts["created"] += 1
+        return True
+
+    try:
+        client.remove_issue_link(link_id)
+    except Exception as e:
+        _emit_bulk_delete_line(ctx, idx, total, status="failed", link_id=link_id, reason=_sanitize_error(str(e)))
+        counts["failed"] += 1
+        return False
+
+    _emit_bulk_delete_line(ctx, idx, total, status="deleted", link_id=link_id, display=display)
+    counts["created"] += 1
+    return True
+
+
+def _emit_bulk_delete_line(ctx, idx: int, total: int, *, status: str, link_id: str, **fields) -> None:
+    """Emit a per-row line for bulk-delete."""
+    if ctx.obj["quiet"]:
+        return
+    if ctx.obj["json"]:
+        _emit_jsonl({"index": idx, "total": total, "status": status, "id": link_id, **fields})
+        return
+
+    prefix = f"[{idx}/{total}]"
+    if status == "deleted":
+        print(f"{prefix} Deleted {fields.get('display', link_id)}")
+    elif status == "dry_run":
+        print(f"{prefix} Would delete {fields.get('display', link_id)}")
+    elif status == "failed":
+        print(f"{prefix} FAIL: link {link_id}: {fields.get('reason', '')}")
+
+
+def _emit_bulk_delete_summary(ctx, counts: dict) -> None:
+    """Summary for bulk-delete (renames 'created' → 'deleted' in the public output)."""
+    deleted = counts["created"]
+    failed = counts["failed"]
+    if ctx.obj["json"]:
+        _emit_jsonl({"summary": True, "deleted": deleted, "failed": failed})
+        return
+    print(f"deleted: {deleted}, failed: {failed}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# invert
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _invert_compute_plan(client, link_id: str) -> dict:
+    """Fetch the link and compute the inversion plan.
+
+    Returns a dict with: id, type_name, original_outward, original_inward,
+    outward_verb, inward_verb, current_sentence, new_sentence.
+
+    'Current' direction interpretation (matches the script's create convention):
+      sentence = "<inwardIssue> <outward verb> <outwardIssue>"
+    Inverting swaps the two issue keys.
+    """
+    link = client.get_issue_link(link_id)
+    type_obj = link.get("type") or {}
+    type_name = type_obj.get("name") or ""
+    if not type_name:
+        raise ValueError(f"Link {link_id} has no type name")
+    outward_verb = type_obj.get("outward") or "links to"
+    inward_verb = type_obj.get("inward") or "is linked from"
+    outward_key = (link.get("outwardIssue") or {}).get("key") or ""
+    inward_key = (link.get("inwardIssue") or {}).get("key") or ""
+    if not (outward_key and inward_key):
+        raise ValueError(f"Link {link_id} is missing outwardIssue/inwardIssue keys")
+    current_sentence = f"{inward_key} {outward_verb} {outward_key}"
+    new_sentence = f"{outward_key} {outward_verb} {inward_key}"
+    return {
+        "id": link_id,
+        "type_name": type_name,
+        "original_outward": outward_key,
+        "original_inward": inward_key,
+        "outward_verb": outward_verb,
+        "inward_verb": inward_verb,
+        "current_sentence": current_sentence,
+        "new_sentence": new_sentence,
+    }
+
+
+def _invert_execute_with_rollback(client, plan: dict) -> None:
+    """Delete the original link and create the inverted one. Rolls back on failure.
+
+    Raises RuntimeError("INCONSISTENT STATE...") if both the inverted-create
+    AND the rollback re-create fail — that's the case where a human needs to
+    fix Jira manually.
+    """
+    link_id = plan["id"]
+    type_name = plan["type_name"]
+    original_outward = plan["original_outward"]
+    original_inward = plan["original_inward"]
+
+    # Capture the original payload BEFORE deletion (so rollback doesn't depend
+    # on the link still existing).
+    original_payload = {
+        "type": {"name": type_name},
+        "inwardIssue": {"key": original_inward},
+        "outwardIssue": {"key": original_outward},
+    }
+    inverted_payload = {
+        "type": {"name": type_name},
+        "inwardIssue": {"key": original_outward},
+        "outwardIssue": {"key": original_inward},
+    }
+
+    client.remove_issue_link(link_id)
+    try:
+        client.create_issue_link(inverted_payload)
+    except Exception as inverted_exc:
+        try:
+            client.create_issue_link(original_payload)
+        except Exception as rollback_exc:
+            raise RuntimeError(
+                f"INCONSISTENT STATE — original link {link_id} deleted but neither the inverted "
+                f"link ({plan['new_sentence']}) nor the rollback ({plan['current_sentence']}) could "
+                f"be created. Inverted error: {_sanitize_error(str(inverted_exc))}. "
+                f"Rollback error: {_sanitize_error(str(rollback_exc))}."
+            ) from rollback_exc
+        # Rollback succeeded — surface the original failure to the caller.
+        raise RuntimeError(
+            f"Failed to create inverted link ({plan['new_sentence']}); original link restored. "
+            f"Reason: {_sanitize_error(str(inverted_exc))}"
+        ) from inverted_exc
+
+
+@cli.command()
+@click.option("--id", "link_id", required=True, help="Issue link ID to invert (from `jira-link list`).")
+@click.option("--dry-run", is_flag=True, help="Show the current and inverted sentences; do not modify Jira.")
+@click.pass_context
+def invert(ctx, link_id: str, dry_run: bool):
+    """Invert a link by deleting it and re-creating it with FROM/TO swapped.
+
+    This is destructive: the original link is DELETED before the new one is
+    created. If the create POST fails, the script attempts to recreate the
+    original (best-effort). If that rollback also fails, you'll get an
+    "INCONSISTENT STATE" error pointing at the link ID — fix it manually in
+    the Jira UI.
+
+    Always prefer --dry-run first.
+
+    Examples:
+
+      jira-link invert --id 10042 --dry-run
+      # → "Would invert: ROOT-2 causes EFFECT-1 → EFFECT-1 causes ROOT-2"
+
+      jira-link invert --id 10042
+    """
+    client = ctx.obj["client"]
+    try:
+        plan = _invert_compute_plan(client, link_id)
+    except ValueError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(_sanitize_error(str(e)))
+        sys.exit(1)
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to fetch link {link_id}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+    if dry_run:
+        warning("DRY RUN - No link will be modified")
+        print(f"Would invert: {plan['current_sentence']} → {plan['new_sentence']}")
+        return
+
+    try:
+        _invert_execute_with_rollback(client, plan)
+    except RuntimeError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to invert link {link_id}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+    _emit_invert_output(ctx, plan)
+
+
+def _emit_invert_output(ctx, plan: dict) -> None:
+    """Emit the success result for invert (json / quiet / human)."""
+    if ctx.obj["json"]:
+        format_output(
+            {
+                "id": plan["id"],
+                "type": plan["type_name"],
+                "old_sentence": plan["current_sentence"],
+                "new_sentence": plan["new_sentence"],
+                "inverted": True,
+            },
+            as_json=True,
+        )
+    elif ctx.obj["quiet"]:
+        print("ok")
+    else:
+        success(f"Inverted: {plan['current_sentence']} → {plan['new_sentence']}")
 
 
 if __name__ == "__main__":

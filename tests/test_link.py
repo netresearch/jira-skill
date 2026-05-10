@@ -83,7 +83,9 @@ def _issue_with_links(key="TEST-1", links=None):
 class TestLinkHelp:
     """Subcommands must respond to --help with exit code 0."""
 
-    @pytest.mark.parametrize("subcmd", ["create", "list", "list-types", "delete"])
+    @pytest.mark.parametrize(
+        "subcmd", ["create", "list", "list-types", "delete", "bulk-create", "bulk-delete", "invert"]
+    )
     def test_subcommand_help(self, subcmd):
         runner = click.testing.CliRunner()
         result = runner.invoke(_link_mod.cli, [subcmd, "--help"])
@@ -493,3 +495,338 @@ class TestLinkCreate:
         assert data["source"] == "ROOT-2"
         assert data["target"] == "EFFECT-1"
         assert data["outward"] == "causes"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: bulk-create subcommand
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _write_csv(tmp_path, content: str):
+    """Helper: write a CSV string to tmp_path/'links.csv' and return the path."""
+    p = tmp_path / "links.csv"
+    p.write_text(content, encoding="utf-8")
+    return str(p)
+
+
+def _bulk_client():
+    """Mock client preloaded with link types covering every type used in bulk tests."""
+    mc = _make_mock_client()
+    mc.get_issue_link_types.return_value = [
+        {"name": "Cause", "outward": "causes", "inward": "is caused by"},
+        {"name": "Deploy", "outward": "deploys", "inward": "is deployed by"},
+        {"name": "Side effect", "outward": "affects", "inward": "is affected by"},
+        {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+    ]
+    mc.create_issue_link.return_value = None
+    # No existing links by default
+    mc.issue.return_value = _issue_with_links("DEFAULT-1", [])
+    return mc
+
+
+class TestBulkCreate:
+    def test_happy_path_three_rows_three_types(self, tmp_path):
+        csv_text = "from,to,type\nIOS-18,NRS-878,Cause\nIOS-18,NRT-4388,Deploy\nIOS-18,NRS-3106,Side effect\n"
+        csv_path = _write_csv(tmp_path, csv_text)
+        mc = _bulk_client()
+
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 0, result.output
+        assert "[1/3] NRS-878 causes IOS-18 (link-type: Cause)" in result.output
+        assert "[2/3] NRT-4388 deploys IOS-18 (link-type: Deploy)" in result.output
+        assert "[3/3] NRS-3106 affects IOS-18 (link-type: Side effect)" in result.output
+        assert "created: 3, skipped: 0, failed: 0" in result.output
+        assert mc.create_issue_link.call_count == 3
+        # Verify direction of the first call: TO is the inward side, FROM is outward.
+        first_call = mc.create_issue_link.call_args_list[0][0][0]
+        assert first_call == {
+            "type": {"name": "Cause"},
+            "inwardIssue": {"key": "NRS-878"},
+            "outwardIssue": {"key": "IOS-18"},
+        }
+        # get_issue_link_types should be called exactly once (cache).
+        assert mc.get_issue_link_types.call_count == 1
+
+    def test_dry_run_does_not_call_api(self, tmp_path):
+        csv_path = _write_csv(tmp_path, "from,to,type\nA-1,B-2,Blocks\n")
+        mc = _bulk_client()
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path, "--dry-run"], mc)
+        assert result.exit_code == 0, result.output
+        assert "[1/1] Would create: B-2 blocks A-1 (link-type: Blocks)" in result.output
+        mc.create_issue_link.assert_not_called()
+
+    def test_csv_header_is_case_and_whitespace_insensitive(self, tmp_path):
+        # Mixed case + spaces in header — must still extract correctly
+        csv_path = _write_csv(tmp_path, " From, TO ,Type\nIOS-18,NRS-878,cause\n")
+        mc = _bulk_client()
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 0, result.output
+        assert "[1/1] NRS-878 causes IOS-18" in result.output
+        first_call = mc.create_issue_link.call_args_list[0][0][0]
+        assert first_call == {
+            "type": {"name": "Cause"},
+            "inwardIssue": {"key": "NRS-878"},
+            "outwardIssue": {"key": "IOS-18"},
+        }
+
+    def test_skip_existing_caches_per_from_key(self, tmp_path):
+        # Three rows all share the same FROM — `client.issue()` should be
+        # called exactly once, not three times. (Regression: N+1 fix)
+        csv_path = _write_csv(
+            tmp_path,
+            "from,to,type\nIOS-18,NRS-1,Cause\nIOS-18,NRS-2,Cause\nIOS-18,NRS-3,Cause\n",
+        )
+        mc = _bulk_client()
+
+        def issue_side_effect(key, fields=None):
+            return _issue_with_links(key, [])
+
+        mc.issue.side_effect = issue_side_effect
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path, "--skip-existing"], mc)
+        assert result.exit_code == 0, result.output
+        assert mc.issue.call_count == 1, f"expected 1 fetch (cached), got {mc.issue.call_count}"
+        assert mc.create_issue_link.call_count == 3
+
+    def test_skip_existing_skips_matching_link(self, tmp_path):
+        csv_path = _write_csv(tmp_path, "from,to,type\nIOS-18,NRS-878,Cause\nIOS-18,NRS-879,Cause\n")
+        mc = _bulk_client()
+        # First row's FROM (IOS-18) already has a Cause link to NRS-878 → skip.
+        # Second row's FROM (IOS-18) has no Cause link to NRS-879 → create.
+        # Mock issue() per row by inspecting the fields-fetch.
+        existing_link = _issue_link("999", "Cause", "outward", "NRS-878", "Existing")
+
+        def issue_side_effect(key, fields=None):
+            return _issue_with_links(key, [existing_link])
+
+        mc.issue.side_effect = issue_side_effect
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path, "--skip-existing"], mc)
+        assert result.exit_code == 0, result.output
+        assert "[1/2] SKIP existing: IOS-18 ↔ NRS-878 (Cause)" in result.output
+        assert "[2/2] NRS-879 causes IOS-18" in result.output
+        assert "created: 1, skipped: 1, failed: 0" in result.output
+        # Only ONE create call (row 2), since row 1 was skipped.
+        assert mc.create_issue_link.call_count == 1
+
+    def test_abort_on_error_halts_on_row_2(self, tmp_path):
+        csv_text = "from,to,type\nA-1,B-2,Cause\nA-1,B-3,Cause\nA-1,B-4,Cause\n"
+        csv_path = _write_csv(tmp_path, csv_text)
+        mc = _bulk_client()
+        # First call succeeds, second raises — abort default → no third call.
+        mc.create_issue_link.side_effect = [None, Exception("500 Server Error"), None]
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 1
+        assert "[1/3] B-2 causes A-1" in result.output
+        assert "[2/3] FAIL" in result.output
+        assert "[3/3]" not in result.output
+        assert mc.create_issue_link.call_count == 2
+        assert "created: 1, skipped: 0, failed: 1" in result.output
+
+    def test_continue_on_error_records_failures_and_continues(self, tmp_path):
+        csv_text = "from,to,type\nA-1,B-2,Cause\nA-1,B-3,Cause\nA-1,B-4,Cause\n"
+        csv_path = _write_csv(tmp_path, csv_text)
+        mc = _bulk_client()
+        mc.create_issue_link.side_effect = [None, Exception("500 Server Error"), None]
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path, "--continue-on-error"], mc)
+        # continue-on-error means we keep going AND exit 0 even with failures
+        # (per spec: it "logs and keeps going").
+        assert result.exit_code == 0, result.output
+        assert mc.create_issue_link.call_count == 3
+        assert "created: 2, skipped: 0, failed: 1" in result.output
+
+    def test_empty_csv_exits_zero(self, tmp_path):
+        csv_path = _write_csv(tmp_path, "")
+        mc = _bulk_client()
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 0, result.output
+        assert "created: 0" in result.output
+
+    def test_malformed_csv_missing_column_exits_2(self, tmp_path):
+        csv_path = _write_csv(tmp_path, "from,to\nA-1,B-2\n")
+        mc = _bulk_client()
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 2
+        assert "type" in result.output
+
+    def test_unknown_link_type_emits_failure(self, tmp_path):
+        csv_path = _write_csv(tmp_path, "from,to,type\nA-1,B-2,Bogus\n")
+        mc = _bulk_client()
+        # Default = abort; one bad row → exit 1.
+        result, _ = _run_link(["bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 1
+        assert "Unknown link type" in result.output
+        mc.create_issue_link.assert_not_called()
+
+    def test_json_emits_jsonl_with_summary(self, tmp_path):
+        csv_path = _write_csv(tmp_path, "from,to,type\nA-1,B-2,Cause\n")
+        mc = _bulk_client()
+        result, _ = _run_link(["--json", "bulk-create", "--from-csv", csv_path], mc)
+        assert result.exit_code == 0, result.output
+        lines = [ln for ln in result.output.splitlines() if ln.strip()]
+        assert len(lines) == 2
+        row = json.loads(lines[0])
+        summary = json.loads(lines[1])
+        assert row["status"] == "created"
+        assert row["sentence"] == "B-2 causes A-1"
+        assert summary == {"summary": True, "created": 1, "skipped": 0, "failed": 0}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: bulk-delete subcommand
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBulkDelete:
+    def test_happy_path_by_ids(self):
+        mc = _make_mock_client()
+        mc.get_issue_link.side_effect = [
+            {
+                "id": "101",
+                "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+                "outwardIssue": {"key": "TEST-2"},
+                "inwardIssue": {"key": "TEST-1"},
+            },
+            {
+                "id": "102",
+                "type": {"name": "Cause", "outward": "causes", "inward": "is caused by"},
+                "outwardIssue": {"key": "ROOT-2"},
+                "inwardIssue": {"key": "EFFECT-1"},
+            },
+        ]
+        mc.remove_issue_link.return_value = None
+        result, _ = _run_link(["bulk-delete", "--ids", "101,102"], mc)
+        assert result.exit_code == 0, result.output
+        assert "[1/2] Deleted [101] TEST-2 ↔ TEST-1 (Blocks)" in result.output
+        assert "[2/2] Deleted [102] ROOT-2 ↔ EFFECT-1 (Cause)" in result.output
+        assert "deleted: 2, failed: 0" in result.output
+        assert mc.remove_issue_link.call_count == 2
+        mc.remove_issue_link.assert_any_call("101")
+        mc.remove_issue_link.assert_any_call("102")
+
+    def test_requires_exactly_one_of_ids_or_ids_file(self):
+        result, _ = _run_link(["bulk-delete"])
+        assert result.exit_code == 1
+        assert "--ids" in result.output
+
+    def test_empty_ids_file_emits_delete_summary_not_create(self, tmp_path):
+        # Regression: empty input previously fell through to the bulk-create
+        # summary emitter, printing 'created/skipped/failed' instead of
+        # 'deleted/failed'. Schema must stay consistent across all bulk-delete
+        # invocations.
+        empty = tmp_path / "empty.txt"
+        empty.write_text("")
+        result, _ = _run_link(["bulk-delete", "--ids-file", str(empty)])
+        assert result.exit_code == 0, result.output
+        assert "deleted: 0, failed: 0" in result.output
+        assert "created" not in result.output
+        assert "skipped" not in result.output
+
+    def test_rejects_both_ids_and_ids_file(self, tmp_path):
+        f = tmp_path / "ids.txt"
+        f.write_text("101\n", encoding="utf-8")
+        result, _ = _run_link(["bulk-delete", "--ids", "1", "--ids-file", str(f)])
+        assert result.exit_code == 1
+
+    def test_dry_run_does_not_call_remove(self):
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = {
+            "id": "101",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "outwardIssue": {"key": "TEST-2"},
+            "inwardIssue": {"key": "TEST-1"},
+        }
+        result, _ = _run_link(["bulk-delete", "--ids", "101", "--dry-run"], mc)
+        assert result.exit_code == 0, result.output
+        assert "Would delete [101]" in result.output
+        mc.remove_issue_link.assert_not_called()
+
+    def test_ids_file_reads_one_per_line(self, tmp_path):
+        f = tmp_path / "ids.txt"
+        f.write_text("101\n102\n\n", encoding="utf-8")
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = {
+            "id": "?",
+            "type": {"name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "outwardIssue": {"key": "X"},
+            "inwardIssue": {"key": "Y"},
+        }
+        mc.remove_issue_link.return_value = None
+        result, _ = _run_link(["bulk-delete", "--ids-file", str(f)], mc)
+        assert result.exit_code == 0, result.output
+        assert "deleted: 2, failed: 0" in result.output
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: invert subcommand
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _link_for_invert():
+    """Sample link: 'EFFECT-1 causes ROOT-2' (inward=EFFECT-1, outward=ROOT-2)."""
+    return {
+        "id": "42",
+        "type": {"name": "Cause", "outward": "causes", "inward": "is caused by"},
+        "inwardIssue": {"key": "EFFECT-1"},
+        "outwardIssue": {"key": "ROOT-2"},
+    }
+
+
+class TestInvert:
+    def test_dry_run_shows_both_sentences(self):
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = _link_for_invert()
+        result, _ = _run_link(["invert", "--id", "42", "--dry-run"], mc)
+        assert result.exit_code == 0, result.output
+        assert "DRY RUN" in result.output
+        assert "Would invert: EFFECT-1 causes ROOT-2 → ROOT-2 causes EFFECT-1" in result.output
+        mc.remove_issue_link.assert_not_called()
+        mc.create_issue_link.assert_not_called()
+
+    def test_happy_path_deletes_then_creates_swapped(self):
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = _link_for_invert()
+        mc.remove_issue_link.return_value = None
+        mc.create_issue_link.return_value = None
+
+        result, _ = _run_link(["invert", "--id", "42"], mc)
+        assert result.exit_code == 0, result.output
+        assert "Inverted: EFFECT-1 causes ROOT-2 → ROOT-2 causes EFFECT-1" in result.output
+        mc.remove_issue_link.assert_called_once_with("42")
+        mc.create_issue_link.assert_called_once_with(
+            {
+                "type": {"name": "Cause"},
+                "inwardIssue": {"key": "ROOT-2"},
+                "outwardIssue": {"key": "EFFECT-1"},
+            }
+        )
+
+    def test_rollback_when_invert_create_fails(self):
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = _link_for_invert()
+        mc.remove_issue_link.return_value = None
+        # First create (inverted) raises; second create (rollback) succeeds.
+        mc.create_issue_link.side_effect = [Exception("400 invalid"), None]
+        result, _ = _run_link(["invert", "--id", "42"], mc)
+        assert result.exit_code == 1
+        assert "original link restored" in result.output
+        # Both creates were attempted: the inverted, then the rollback.
+        assert mc.create_issue_link.call_count == 2
+        # Rollback payload matches the original direction.
+        rollback_call = mc.create_issue_link.call_args_list[1][0][0]
+        assert rollback_call == {
+            "type": {"name": "Cause"},
+            "inwardIssue": {"key": "EFFECT-1"},
+            "outwardIssue": {"key": "ROOT-2"},
+        }
+
+    def test_inconsistent_state_when_rollback_also_fails(self):
+        mc = _make_mock_client()
+        mc.get_issue_link.return_value = _link_for_invert()
+        mc.remove_issue_link.return_value = None
+        mc.create_issue_link.side_effect = [Exception("first boom"), Exception("rollback boom")]
+        result, _ = _run_link(["invert", "--id", "42"], mc)
+        assert result.exit_code == 1
+        assert "INCONSISTENT STATE" in result.output
+        assert "42" in result.output
+        # Both directions referenced in the error so the human can fix it.
+        assert "EFFECT-1 causes ROOT-2" in result.output
+        assert "ROOT-2 causes EFFECT-1" in result.output

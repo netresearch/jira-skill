@@ -217,6 +217,27 @@ class TestSubcommandHelp:
     def test_link_list_types_help(self):
         self._run_help(_link_mod.cli, ["list-types", "--help"])
 
+    def test_link_bulk_create_help(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_link_mod.cli, ["bulk-create", "--help"])
+        assert result.exit_code == 0, result.output
+        assert "--from-csv" in result.output
+        assert "--skip-existing" in result.output
+
+    def test_link_bulk_delete_help(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_link_mod.cli, ["bulk-delete", "--help"])
+        assert result.exit_code == 0, result.output
+        assert "--ids" in result.output
+        assert "--ids-file" in result.output
+
+    def test_link_invert_help(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_link_mod.cli, ["invert", "--help"])
+        assert result.exit_code == 0, result.output
+        assert "--id" in result.output
+        assert "--dry-run" in result.output
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: Commands with mocked client produce expected output
@@ -453,6 +474,24 @@ class TestMockedCommands:
         assert "DRY RUN" in result.output
         # Direction: A-2 is the active actor, A-1 is the recipient
         assert "A-2 blocks A-1" in result.output
+        mock_client.create_issue_link.assert_not_called()
+
+    def test_link_invert_dry_run(self):
+        """jira-link invert with --dry-run must not modify Jira."""
+        mock_client = self._make_mock_client()
+        mock_client.get_issue_link.return_value = {
+            "id": "42",
+            "type": {"name": "Cause", "outward": "causes", "inward": "is caused by"},
+            "inwardIssue": {"key": "EFFECT-1"},
+            "outwardIssue": {"key": "ROOT-2"},
+        }
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_link_mod.cli, ["invert", "--id", "42", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        assert "DRY RUN" in result.output
+        assert "Would invert: EFFECT-1 causes ROOT-2 → ROOT-2 causes EFFECT-1" in result.output
+        mock_client.remove_issue_link.assert_not_called()
         mock_client.create_issue_link.assert_not_called()
 
     def _run_comment_cmd(self, args, mock_client=None, **invoke_kwargs):
