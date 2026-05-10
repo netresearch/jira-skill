@@ -152,45 +152,51 @@ def query(
         error(str(e))
         sys.exit(2)
 
+    field_list = [f.strip() for f in fields.split(",")]
+
     try:
-        # Parse fields
-        field_list = [f.strip() for f in fields.split(",")]
-
-        # Execute search
         results = client.jql(jql, limit=max_results, start=start_at, fields=field_list)
-        issues = results.get("issues", [])
-        total = results.get("total")
-        if isinstance(total, int) and max_results > len(issues) and (start_at + len(issues)) < total:
-            warning(
-                f"Server capped results: requested --max-results {max_results}, "
-                f"received {len(issues)} (total matches: {total}). "
-                "Use pagination with --start-at to fetch further pages."
-            )
-
-        if ctx.obj["json"]:
-            format_output(issues, as_json=True)
-        elif ctx.obj["quiet"]:
-            for issue in issues:
-                print(issue["key"])
-        else:
-            # Table output
-            if total is None:
-                total = len(issues)
-            if not issues:
-                if total > 0:
-                    print(f"No issues on this page (total: {total}). Try a smaller --start-at.")
-                else:
-                    print("No issues found")
-            else:
-                _print_results_table(issues, field_list, truncate=truncate)
-                issue_label = "issue" if total == 1 else "issues"
-                print(f"\n(showing {start_at + 1}-{start_at + len(issues)} of {total} {issue_label})")
-
     except Exception as e:
         if ctx.obj["debug"]:
             raise
         error(f"Search failed: {e}")
         sys.exit(1)
+
+    issues = results.get("issues", [])
+    total = results.get("total")
+    _warn_if_capped(issues, total, max_results, start_at)
+    _emit_query_output(ctx, issues, field_list, truncate, total, start_at)
+
+
+def _warn_if_capped(issues: list, total, max_results: int, start_at: int) -> None:
+    if isinstance(total, int) and max_results > len(issues) and (start_at + len(issues)) < total:
+        warning(
+            f"Server capped results: requested --max-results {max_results}, "
+            f"received {len(issues)} (total matches: {total}). "
+            "Use pagination with --start-at to fetch further pages."
+        )
+
+
+def _emit_query_output(ctx, issues: list, field_list: list, truncate: int | None, total, start_at: int) -> None:
+    """Render search results in json / quiet / table form."""
+    if ctx.obj["json"]:
+        format_output(issues, as_json=True)
+        return
+    if ctx.obj["quiet"]:
+        for issue in issues:
+            print(issue["key"])
+        return
+    if total is None:
+        total = len(issues)
+    if not issues:
+        if total > 0:
+            print(f"No issues on this page (total: {total}). Try a smaller --start-at.")
+        else:
+            print("No issues found")
+        return
+    _print_results_table(issues, field_list, truncate=truncate)
+    issue_label = "issue" if total == 1 else "issues"
+    print(f"\n(showing {start_at + 1}-{start_at + len(issues)} of {total} {issue_label})")
 
 
 def _print_results_table(issues: list, fields: list, truncate: int | None = None) -> None:

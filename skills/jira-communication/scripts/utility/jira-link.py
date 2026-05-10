@@ -113,40 +113,11 @@ def create(
 
       jira-link create EFFECT-1 ROOT-2 --type Cause --dry-run
     """
-    # Resolve positional vs named-alias forms. Forbid mixing them.
-    using_named = source_key is not None or target_key is not None
-    using_positional = from_key is not None or to_key is not None
-
-    if using_named and using_positional:
-        error("Use either positional FROM_KEY TO_KEY or --source/--target, not both")
-        sys.exit(1)
-
-    if using_named:
-        if source_key is None or target_key is None:
-            error("Both --source and --target are required when using the named form")
-            sys.exit(1)
-        from_key = target_key
-        to_key = source_key
-    else:
-        if from_key is None or to_key is None:
-            error("Provide FROM_KEY and TO_KEY (or --source and --target)")
-            sys.exit(1)
+    from_key, to_key = _resolve_create_args(from_key, to_key, source_key, target_key)
 
     ctx.obj["client"].with_context(issue_key=from_key)
     client = ctx.obj["client"]
-
-    try:
-        verbs = _resolve_link_type_verbs(client, link_type)
-    except ValueError as e:
-        if ctx.obj["debug"]:
-            raise
-        error(_sanitize_error(str(e)))
-        sys.exit(1)
-    except Exception as e:
-        if ctx.obj["debug"]:
-            raise
-        error(f"Failed to resolve link type: {_sanitize_error(str(e))}")
-        sys.exit(1)
+    verbs = _fetch_verbs_or_exit(client, link_type, ctx.obj["debug"])
 
     canonical_name = verbs["name"]
     outward_verb = verbs["outward"]
@@ -167,32 +138,75 @@ def create(
         client.create_issue_link(
             {"type": {"name": canonical_name}, "inwardIssue": {"key": to_key}, "outwardIssue": {"key": from_key}}
         )
-
-        if ctx.obj["json"]:
-            format_output(
-                {
-                    "from": from_key,
-                    "to": to_key,
-                    "source": to_key,
-                    "target": from_key,
-                    "type": canonical_name,
-                    "outward": outward_verb,
-                    "inward": verbs["inward"],
-                    "sentence": sentence,
-                    "created": True,
-                },
-                as_json=True,
-            )
-        elif ctx.obj["quiet"]:
-            print("ok")
-        else:
-            success(f"Created: {sentence} (link-type: {canonical_name})")
-
     except Exception as e:
         if ctx.obj["debug"]:
             raise
         error(f"Failed to create link: {_sanitize_error(str(e))}")
         sys.exit(1)
+
+    _emit_create_output(
+        ctx, from_key=from_key, to_key=to_key, canonical_name=canonical_name, verbs=verbs, sentence=sentence
+    )
+
+
+def _resolve_create_args(
+    from_key: str | None, to_key: str | None, source_key: str | None, target_key: str | None
+) -> tuple[str, str]:
+    """Resolve positional FROM/TO vs --source/--target. Mixing the two forms is rejected."""
+    using_named = source_key is not None or target_key is not None
+    using_positional = from_key is not None or to_key is not None
+
+    if using_named and using_positional:
+        error("Use either positional FROM_KEY TO_KEY or --source/--target, not both")
+        sys.exit(1)
+    if using_named:
+        if source_key is None or target_key is None:
+            error("Both --source and --target are required when using the named form")
+            sys.exit(1)
+        return target_key, source_key
+    if from_key is None or to_key is None:
+        error("Provide FROM_KEY and TO_KEY (or --source and --target)")
+        sys.exit(1)
+    return from_key, to_key
+
+
+def _fetch_verbs_or_exit(client, link_type: str, debug: bool) -> dict:
+    """Resolve the link type's verbs. On unknown/transport errors, print and exit."""
+    try:
+        return _resolve_link_type_verbs(client, link_type)
+    except ValueError as e:
+        if debug:
+            raise
+        error(_sanitize_error(str(e)))
+        sys.exit(1)
+    except Exception as e:
+        if debug:
+            raise
+        error(f"Failed to resolve link type: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+def _emit_create_output(ctx, *, from_key: str, to_key: str, canonical_name: str, verbs: dict, sentence: str) -> None:
+    """Render the create result in json / quiet / human form."""
+    if ctx.obj["json"]:
+        format_output(
+            {
+                "from": from_key,
+                "to": to_key,
+                "source": to_key,
+                "target": from_key,
+                "type": canonical_name,
+                "outward": verbs["outward"],
+                "inward": verbs["inward"],
+                "sentence": sentence,
+                "created": True,
+            },
+            as_json=True,
+        )
+    elif ctx.obj["quiet"]:
+        print("ok")
+    else:
+        success(f"Created: {sentence} (link-type: {canonical_name})")
 
 
 @cli.command("list-types")
