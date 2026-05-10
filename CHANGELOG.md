@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.14.0] - 2026-05-10
+
+### Fixed
+
+- `jira-link create`: success message and `--dry-run` preview now print the link in natural language using the link type's *outward* verb fetched from `get_issue_link_types()`. `create FROM TO --type X` POSTs `{outwardIssue: FROM, inwardIssue: TO}` — per Atlassian's convention `TO` is the source/active actor, so the new output is `Created: <to> <outward verb> <from> (link-type: <name>)` (e.g. `Created: ROOT-2 causes EFFECT-1`). The previous `Created link: FROM --[type]--> TO` arrow read in the opposite direction and led at least one agent to create ~30 backwards Jira links. Dry-run now errors out if the link type cannot be resolved instead of degrading to the misleading arrow form. Technically a behavior change but no known parser depended on the arrow format.
+- `references/links.md`: the link-direction table and prose were rewritten — the previous `Outward (PROJ-A → PROJ-B)` header implied `FROM` was the active party. The doc now leads with a clear DIRECTION RULE callout, agent/patient mnemonic, three worked examples (Blockade, Cause, Side effect) showing both endpoints' Jira-UI display, and a cross-link to the `netresearch-jira` skill's `linking-conventions.md` as a real-world reference.
+
+### Added
+
+- `jira-link create`: `--source` / `--target` named aliases for `FROM_KEY` / `TO_KEY`. `--source S --target T --type X` is equivalent to `create T S --type X`. Mixing positional with named forms is rejected. The named form is recommended when the direction matters (it always does) so the call-site reads as English instead of relying on positional convention.
+- `jira-search query --order-by "FIELD [ASC|DESC]"`: append an `ORDER BY` clause to the JQL without editing the query string. Repeatable for multi-key sorts (`--order-by "priority DESC" --order-by "created ASC"` produces one comma-separated `ORDER BY`). Errors with exit 2 if the JQL already contains `ORDER BY` and points at the embedded form as the natural alternative.
+- `references/jql-quick-reference.md`: new top-level "Sorting (`ORDER BY`)" section near the top showing both equivalent forms (embedded vs. flag).
+
 ## [3.13.1] - 2026-04-30
 
 ### Added
