@@ -352,6 +352,44 @@ class LazyJiraClient:
             object.__setattr__(self, "_client", client)
         return getattr(client, name)
 
+    def jql(self, jql: str, limit: int = 50, start: int = 0, fields=None, **kwargs) -> dict:
+        """Execute a JQL search, using /rest/api/3/search/jql on Cloud.
+
+        Atlassian removed /rest/api/2/search and /rest/api/3/search from Cloud
+        instances (see CHANGE-2046). The new endpoint is /rest/api/3/search/jql.
+        atlassian-python-api hardcodes api_version=2, so we bypass it for Cloud.
+
+        On Server/DC the library's jql() method still works fine via api/2.
+        """
+        client = object.__getattribute__(self, "_client")
+        if client is None:
+            client = get_jira_client(
+                env_file=object.__getattribute__(self, "_env_file"),
+                profile=object.__getattribute__(self, "_profile"),
+                issue_key=object.__getattribute__(self, "_issue_key"),
+                url=object.__getattribute__(self, "_url"),
+            )
+            object.__setattr__(self, "_client", client)
+
+        if not getattr(client, "cloud", False):
+            # Server/DC: delegate to the library as normal
+            return client.jql(jql, fields=fields, start=start, limit=limit, **kwargs)
+
+        # Cloud: use the new /rest/api/3/search/jql endpoint directly
+        if fields is None:
+            fields = "*all"
+        if isinstance(fields, (list, tuple, set)):
+            fields = ",".join(fields)
+        params = {
+            "jql": jql,
+            "startAt": start,
+            "maxResults": limit,
+            "fields": fields,
+        }
+        if "expand" in kwargs and kwargs["expand"] is not None:
+            params["expand"] = kwargs["expand"]
+        return client.get("rest/api/3/search/jql", params=params) or {}
+
 
 def get_jira_client(
     env_file: str | None = None, profile: str | None = None, issue_key: str | None = None, url: str | None = None
