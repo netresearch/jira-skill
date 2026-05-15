@@ -16,7 +16,20 @@ CLI scripts via `uv run`. All support `--help`, `--json`, `--quiet`, `--debug`.
 
 ## Auto-Trigger
 
-On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues → `jira-setup.py`.
+On Jira URL or issue key (PROJ-123), pick by **intent** — each is a single call:
+
+| Intent / phrase | Tool |
+|---|---|
+| "schau dir X an" / "lies X" / triage / work on a ticket | `jira-issue.py work KEY` |
+| "QA für X starten" / "review X" | `jira-issue.py qa KEY` |
+| "warum failed X" / "QA fail follow-up" | `jira-issue.py qa-fail KEY` |
+| "wer ist Assignee" / "welche Priority" / field-only | `jira-issue.py get KEY --fields ...` |
+| "status auf Y ändern" / "transition X" | `jira-issue.py act KEY` → `jira-transition.py do` |
+| comprehensive audit, sibling discovery | `jira-qa-gather.py KEY` |
+
+Auth issues → `jira-setup.py`.
+
+**Anti-pattern:** `jira-issue get` followed by `jira-comment list` for the same key. Use the matching intent verb instead — single call, right bundle. See `references/intent-verbs.md`.
 
 ## Scripts
 
@@ -64,6 +77,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 - `references/watchers.md` — when the user asks to watch, subscribe, notify on, or list watchers of an issue
 - `references/versions.md` — when the user asks about fix/affects versions, releases, or version CRUD
 - `references/qa-gather.md` — when reviewing tickets in QA / "ready for review", or when a peer-review style runbook needs single-call context discovery
+- `references/intent-verbs.md` — when using `jira-issue.py work / qa / qa-fail / act` (single-call intent bundles); covers the QA-handover heuristic and the qa/working/resolved status-set configuration
 
 ## Authentication
 

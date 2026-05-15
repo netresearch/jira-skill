@@ -1,6 +1,9 @@
 """Helpers for Jira issue changelog / status-history analysis."""
 
 from datetime import datetime, timedelta
+from typing import Literal
+
+TransitionKind = Literal["into_qa", "reject", "forward", "resolved", "out", "other"]
 
 
 def parse_jira_datetime(s: str) -> datetime:
@@ -97,6 +100,95 @@ def compute_time_in_status(
     _add(last["to"] or current_status, now - last["created"])
 
     return result
+
+
+def extract_status_transitions_with_authors(issue: dict) -> list[dict]:
+    """Like :func:`extract_status_transitions` but preserves transition author.
+
+    Each entry adds ``author_name`` (display name) and ``author_key`` (the
+    stable identifier — Server/DC ``name`` or Cloud ``accountId``).
+    """
+    transitions: list[dict] = []
+    histories = issue.get("changelog", {}).get("histories", [])
+    for h in histories:
+        created_raw = h.get("created")
+        if not created_raw:
+            continue
+        try:
+            created = parse_jira_datetime(created_raw)
+        except ValueError:
+            continue
+        author = h.get("author") or {}
+        author_name = author.get("displayName", "")
+        author_key = author.get("name") or author.get("accountId") or ""
+        for item in h.get("items", []):
+            if item.get("field") != "status":
+                continue
+            transitions.append(
+                {
+                    "created": created,
+                    "from": item.get("fromString") or "",
+                    "to": item.get("toString") or "",
+                    "author_name": author_name,
+                    "author_key": author_key,
+                }
+            )
+    transitions.sort(key=lambda t: t["created"])
+    return transitions
+
+
+def classify_transition(transition: dict, status_sets: dict) -> "TransitionKind":
+    """Classify a status transition against qa/working/resolved sets.
+
+    Returns one of:
+      * ``into_qa``  — moving from a non-QA state into a QA state (handover)
+      * ``reject``   — moving from a QA state back to a working state (fail)
+      * ``forward``  — moving between two distinct QA states (e.g. QA→QA2,
+                       Review→UAT) — a multi-stage QA progression, NOT a fail
+      * ``resolved`` — terminal success (any state → resolved set)
+      * ``out``      — leaving QA into something not classified above
+      * ``other``    — neither side touches QA
+    """
+    qa = status_sets["qa"]
+    working = status_sets["working"]
+    resolved = status_sets["resolved"]
+    src = transition["from"]
+    dst = transition["to"]
+    if dst in resolved:
+        return "resolved"
+    src_in_qa = src in qa
+    dst_in_qa = dst in qa
+    if not src_in_qa and dst_in_qa:
+        return "into_qa"
+    if src_in_qa and dst in working:
+        return "reject"
+    if src_in_qa and dst_in_qa and src != dst:
+        return "forward"
+    if src_in_qa and not dst_in_qa:
+        return "out"
+    return "other"
+
+
+def find_transition_window(transitions: list[dict], target_index: int) -> tuple[datetime | None, datetime | None]:
+    """Return (T_prev, T_next) bracketing ``transitions[target_index]``.
+
+    Both endpoints are *other* status changes, ignoring same-second duplicates.
+    Either may be ``None`` if no bracketing transition exists.
+    """
+    if not (0 <= target_index < len(transitions)):
+        return None, None
+    target_t = transitions[target_index]["created"]
+    t_prev = None
+    for t in reversed(transitions[:target_index]):
+        if t["created"] < target_t:
+            t_prev = t["created"]
+            break
+    t_next = None
+    for t in transitions[target_index + 1 :]:
+        if t["created"] > target_t:
+            t_next = t["created"]
+            break
+    return t_prev, t_next
 
 
 def format_timedelta(delta: timedelta) -> str:

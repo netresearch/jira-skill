@@ -23,12 +23,16 @@ if _lib_path.exists():
 
 import click
 from lib.changelog import (
+    classify_transition,
     compute_time_in_status,
     extract_status_transitions,
+    extract_status_transitions_with_authors,
+    find_transition_window,
     format_timedelta,
     parse_jira_datetime,
 )
 from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee, resolve_status
+from lib.config import load_status_sets
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 
 
@@ -639,6 +643,418 @@ def delete(ctx, issue_key: str, delete_subtasks: bool, dry_run: bool):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to delete {issue_key}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Intent verbs: work / qa / qa-fail / act
+#
+# Each verb is a single-call composition that returns the *minimal* bundle a
+# user actually needs for one specific intent — instead of forcing them to
+# stitch together `get` + `comment list` + `transition list` themselves.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+INTENT_FIELDS = "summary,status,assignee,reporter,priority,issuetype,description,comment,attachment,issuelinks,labels,created,updated"
+
+
+def _author_matches(author: dict, key: str, name: str) -> bool:
+    """True if a comment/transition author matches by Server name or Cloud accountId."""
+    if not author:
+        return False
+    a_key = author.get("name") or author.get("accountId") or ""
+    a_name = author.get("displayName", "")
+    return bool((key and a_key == key) or (name and a_name == name))
+
+
+def _comments_in_range(comments: list, start, end, author_filter: tuple[str, str] | None = None) -> list:
+    """Filter comments by created in [start, end], optionally by author key+name."""
+    out = []
+    for c in comments:
+        try:
+            created = parse_jira_datetime(c.get("created", ""))
+        except (ValueError, TypeError):
+            continue
+        if start is not None and created < start:
+            continue
+        if end is not None and created > end:
+            continue
+        if author_filter is not None:
+            if not _author_matches(c.get("author") or {}, *author_filter):
+                continue
+        out.append(c)
+    return out
+
+
+def _dedupe_comments(comments: list) -> list:
+    """Deduplicate by comment ID, preserving order."""
+    seen: set[str] = set()
+    out: list = []
+    for c in comments:
+        cid = c.get("id", "")
+        if cid in seen:
+            continue
+        seen.add(cid)
+        out.append(c)
+    return sorted(out, key=lambda c: c.get("created", ""))
+
+
+def _collect_handover_bundle(issue: dict, status_sets: dict) -> dict:
+    """Compose the qa (handover) bundle. See PLAN-context-fetch-optimization.md."""
+    comments = (issue.get("fields", {}).get("comment") or {}).get("comments") or []
+    transitions = extract_status_transitions_with_authors(issue)
+
+    # Find the most recent INTO_QA transition
+    into_qa_indices = [i for i, t in enumerate(transitions) if classify_transition(t, status_sets) == "into_qa"]
+    if not into_qa_indices:
+        return {"fallback": True, "comments": list(reversed(comments[-5:])), "transition": None}
+
+    target_idx = into_qa_indices[-1]
+    target = transitions[target_idx]
+    t_transition = target["created"]
+    t_prev, t_next = find_transition_window(transitions, target_idx)
+    one_hour = timedelta(hours=1)
+    end_for_author = t_next or (t_transition + one_hour)
+    if t_next is None:
+        end_for_author = t_transition + one_hour
+    else:
+        end_for_author = min(t_next, t_transition + one_hour)
+
+    handover = _comments_in_range(
+        comments, t_prev, end_for_author, author_filter=(target["author_key"], target["author_name"])
+    )
+    after = _comments_in_range(comments, t_transition, t_next)
+    return {
+        "fallback": False,
+        "comments": _dedupe_comments(handover + after),
+        "transition": target,
+        "transitions": transitions,
+    }
+
+
+def _collect_reject_bundle(issue: dict, status_sets: dict) -> dict:
+    """Compose the qa-fail (reject) bundle. See PLAN-context-fetch-optimization.md."""
+    comments = (issue.get("fields", {}).get("comment") or {}).get("comments") or []
+    transitions = extract_status_transitions_with_authors(issue)
+
+    reject_indices = [i for i, t in enumerate(transitions) if classify_transition(t, status_sets) == "reject"]
+    if not reject_indices:
+        return {"fallback": True, "comments": list(reversed(comments[-5:])), "transition": None}
+
+    target_idx = reject_indices[-1]
+    target = transitions[target_idx]
+    t_transition = target["created"]
+    _, t_next = find_transition_window(transitions, target_idx)
+
+    # Find the most recent INTO_QA before the reject (= QA window start, implementer)
+    implementer = None
+    t_prev_into_qa = None
+    for i in range(target_idx - 1, -1, -1):
+        if classify_transition(transitions[i], status_sets) == "into_qa":
+            t_prev_into_qa = transitions[i]["created"]
+            implementer = (transitions[i]["author_key"], transitions[i]["author_name"])
+            break
+
+    one_hour = timedelta(hours=1)
+    reviewer_filter = (target["author_key"], target["author_name"])
+    reviewer_comments = _comments_in_range(
+        comments, t_prev_into_qa, t_transition + one_hour, author_filter=reviewer_filter
+    )
+    after = _comments_in_range(comments, t_transition, t_next)
+    impl_comments = []
+    if implementer is not None:
+        # Extend backwards by 1h to catch the implementer's handover comment when
+        # written just before the INTO_QA transition (same pre-transition pattern
+        # as the handover bundle — empirically 80% of comments precede the click).
+        impl_start = (t_prev_into_qa - one_hour) if t_prev_into_qa else None
+        impl_comments = _comments_in_range(
+            comments, impl_start, t_transition, author_filter=implementer
+        )
+    return {
+        "fallback": False,
+        "comments": _dedupe_comments(reviewer_comments + after + impl_comments),
+        "transition": target,
+        "implementer": implementer,
+        "transitions": transitions,
+    }
+
+
+def _print_comment(c: dict, *, truncate: int | None = None) -> None:
+    author = (c.get("author") or {}).get("displayName", "Unknown")
+    created = c.get("created", "")[:16].replace("T", " ")
+    body = c.get("body", "") or ""
+    if isinstance(body, dict):
+        body = extract_adf_text(body)
+    if truncate and len(body) > truncate:
+        body = body[: truncate].rsplit(" ", 1)[0] + " …[truncated]"
+    print(f"\n--- [{created}] {author} ---")
+    for line in body.split("\n"):
+        print(line)
+
+
+def _print_intent_header(issue: dict) -> None:
+    fields = issue.get("fields", {})
+    summary = fields.get("summary", "")
+    status = (fields.get("status") or {}).get("name", "")
+    assignee = (fields.get("assignee") or {}).get("displayName", "Unassigned")
+    print(f"\n{issue['key']}: {summary}")
+    print("=" * 60)
+    print(f"Status: {status} | Assignee: {assignee}")
+
+
+def _print_intent_description(issue: dict) -> None:
+    description = issue.get("fields", {}).get("description")
+    if not description:
+        return
+    if isinstance(description, dict):
+        description = extract_adf_text(description)
+    print("\nDescription:")
+    for line in str(description).split("\n"):
+        print(f"  {line}")
+
+
+def _intent_bundle_payload(issue: dict, comments: list, *, extras: dict | None = None) -> dict:
+    """Build the JSON payload for an intent verb."""
+    fields = issue.get("fields", {})
+    payload = {
+        "key": issue.get("key"),
+        "summary": fields.get("summary"),
+        "status": (fields.get("status") or {}).get("name"),
+        "assignee": (fields.get("assignee") or {}).get("displayName"),
+        "description": fields.get("description"),
+        "comments": comments,
+    }
+    if extras:
+        payload.update(extras)
+    return payload
+
+
+def _resolve_status_sets_for_ctx(ctx, issue_key: str) -> dict:
+    """Load status sets, honoring --profile when set."""
+    profile = None
+    client_obj = ctx.obj.get("client")
+    if client_obj is not None:
+        profile = getattr(client_obj, "_profile", None)
+    return load_status_sets(profile=profile)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.option("--truncate", type=int, metavar="N", help="Truncate description and each comment to N chars")
+@click.pass_context
+def work(ctx, issue_key: str, truncate: int | None):
+    """Fetch full working context: description + all comments + attachments + links.
+
+    Use when starting work on a ticket or doing triage. Single call.
+
+    Example:
+
+      jira-issue work NRS-4412
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+    try:
+        issue = client.issue(issue_key, fields=INTENT_FIELDS)
+        web_links = []
+        try:
+            web_links = client.get_issue_remote_links(issue_key)
+        except Exception:
+            if ctx.obj["debug"]:
+                raise
+            warning("Failed to fetch web links")
+        comments = (issue.get("fields", {}).get("comment") or {}).get("comments") or []
+
+        if ctx.obj["json"]:
+            issue["webLinks"] = web_links
+            payload = _intent_bundle_payload(issue, comments, extras={"webLinks": web_links})
+            format_output(payload, as_json=True)
+            return
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        issue["webLinks"] = web_links
+        _print_issue(issue, truncate=truncate, web_links=web_links)
+        if comments:
+            print("=" * 60)
+            print(f"COMMENTS ({len(comments)} total — chronological)")
+            print("=" * 60)
+            for c in comments:
+                _print_comment(c, truncate=truncate)
+            print()
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to fetch work context for {issue_key}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.option("--truncate", type=int, metavar="N", help="Truncate description and each comment to N chars")
+@click.pass_context
+def qa(ctx, issue_key: str, truncate: int | None):
+    """Fetch QA review context: description + handover comments since transition into QA.
+
+    Use when starting a QA review. Returns the implementer's handover comment
+    (regardless of whether written before or after the transition click) plus
+    any subsequent QA discussion.
+
+    Example:
+
+      jira-issue qa NRS-4412
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+    try:
+        issue = client.issue(issue_key, fields=INTENT_FIELDS, expand="changelog")
+        sets = _resolve_status_sets_for_ctx(ctx, issue_key)
+        bundle = _collect_handover_bundle(issue, sets)
+
+        if ctx.obj["json"]:
+            extras = {"handover_fallback": bundle["fallback"]}
+            if bundle["transition"]:
+                extras["handover_transition"] = {
+                    "created": bundle["transition"]["created"].isoformat(),
+                    "from": bundle["transition"]["from"],
+                    "to": bundle["transition"]["to"],
+                    "author": bundle["transition"]["author_name"],
+                }
+            format_output(_intent_bundle_payload(issue, bundle["comments"], extras=extras), as_json=True)
+            return
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        _print_intent_header(issue)
+        _print_intent_description(issue)
+        if bundle["fallback"]:
+            print("\n[no INTO-QA transition found — falling back to last 5 comments]")
+        else:
+            t = bundle["transition"]
+            print(f"\nHandover: {t['created'].isoformat()} by {t['author_name']} ({t['from']} → {t['to']})")
+        print("\n" + "=" * 60)
+        print(f"HANDOVER COMMENTS ({len(bundle['comments'])})")
+        print("=" * 60)
+        for c in bundle["comments"]:
+            _print_comment(c, truncate=truncate)
+        print()
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to fetch QA context for {issue_key}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+@cli.command("qa-fail")
+@click.argument("issue_key")
+@click.option("--truncate", type=int, metavar="N", help="Truncate description and each comment to N chars")
+@click.pass_context
+def qa_fail(ctx, issue_key: str, truncate: int | None):
+    """Fetch QA-fail follow-up context: description + reviewer rejection + implementer scope.
+
+    Use when continuing work after a QA reject. Returns the reviewer's rejection
+    comment (regardless of order vs. transition), the implementer's scope/clarification
+    comments from the same QA window, and any subsequent discussion.
+
+    Example:
+
+      jira-issue qa-fail NRS-4412
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+    try:
+        issue = client.issue(issue_key, fields=INTENT_FIELDS, expand="changelog")
+        sets = _resolve_status_sets_for_ctx(ctx, issue_key)
+        bundle = _collect_reject_bundle(issue, sets)
+
+        if ctx.obj["json"]:
+            extras = {"reject_fallback": bundle["fallback"]}
+            if bundle["transition"]:
+                extras["reject_transition"] = {
+                    "created": bundle["transition"]["created"].isoformat(),
+                    "from": bundle["transition"]["from"],
+                    "to": bundle["transition"]["to"],
+                    "reviewer": bundle["transition"]["author_name"],
+                }
+            if bundle.get("implementer"):
+                extras["implementer"] = bundle["implementer"][1]
+            format_output(_intent_bundle_payload(issue, bundle["comments"], extras=extras), as_json=True)
+            return
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        _print_intent_header(issue)
+        _print_intent_description(issue)
+        if bundle["fallback"]:
+            print("\n[no REJECT transition found — falling back to last 5 comments]")
+        else:
+            t = bundle["transition"]
+            print(f"\nReject: {t['created'].isoformat()} by {t['author_name']} ({t['from']} → {t['to']})")
+            if bundle.get("implementer"):
+                print(f"Implementer (for scope context): {bundle['implementer'][1]}")
+        print("\n" + "=" * 60)
+        print(f"QA-FAIL COMMENTS ({len(bundle['comments'])})")
+        print("=" * 60)
+        for c in bundle["comments"]:
+            _print_comment(c, truncate=truncate)
+        print()
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to fetch QA-fail context for {issue_key}: {_sanitize_error(str(e))}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.pass_context
+def act(ctx, issue_key: str):
+    """Fetch meta + available transitions in one call (use before changing status).
+
+    Example:
+
+      jira-issue act NRS-4412
+      jira-issue act NRS-4412 --json | jq '.transitions[].name'
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+    try:
+        issue = client.issue(issue_key, fields="summary,status,assignee,priority,issuetype")
+        try:
+            transitions = client.get_issue_transitions(issue_key) or []
+        except Exception:
+            if ctx.obj["debug"]:
+                raise
+            warning("Failed to fetch available transitions")
+            transitions = []
+
+        if ctx.obj["json"]:
+            payload = {
+                "key": issue.get("key"),
+                "summary": issue.get("fields", {}).get("summary"),
+                "status": (issue.get("fields", {}).get("status") or {}).get("name"),
+                "assignee": (issue.get("fields", {}).get("assignee") or {}).get("displayName"),
+                "transitions": [{"id": t.get("id"), "name": t.get("name") or t.get("to", {}).get("name")} for t in transitions],
+            }
+            format_output(payload, as_json=True)
+            return
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        _print_intent_header(issue)
+        print("\nAvailable transitions:")
+        if not transitions:
+            print("  (none)")
+        for t in transitions:
+            name = t.get("name") or (t.get("to") or {}).get("name", "?")
+            print(f"  • {name} (id={t.get('id', '?')})")
+        print()
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to fetch act context for {issue_key}: {_sanitize_error(str(e))}")
         sys.exit(1)
 
 

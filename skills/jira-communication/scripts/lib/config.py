@@ -360,4 +360,80 @@ def load_config(
     return load_env()
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Workflow status sets (qa / working / resolved) used by intent verbs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+DEFAULT_QA_STATUSES = (
+    "QA",
+    "Review",
+    "In Review",
+    "Code Review",
+    "Ready for QA",
+    "QA2",
+    "UAT",
+    "Acceptance",
+    "Testing",
+)
+# "QA failed" semantically reads like a QA stage, but functionally it's a
+# reject-target ("review verdict: send back to dev"). Putting it in the working
+# set means `QA → QA failed` correctly classifies as REJECT rather than FORWARD.
+DEFAULT_WORKING_STATUSES = (
+    "In Progress",
+    "Open",
+    "Reopened",
+    "To Do",
+    "In Development",
+    "Backlog",
+    "QA failed",
+)
+DEFAULT_RESOLVED_STATUSES = (
+    "Closed",
+    "Resolved",
+    "Done",
+    "Won't Fix",
+    "Cancelled",
+)
+
+
+def _split_csv(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def load_status_sets(profile: str | None = None) -> dict[str, frozenset[str]]:
+    """Resolve qa / working / resolved status name sets.
+
+    Priority per set: profile field → env var → built-in default.
+
+    Profile fields: ``qa_status_names``, ``working_status_names``,
+    ``resolved_status_names`` (each a JSON list).
+
+    Env vars: ``JIRA_QA_STATUS_NAMES``, ``JIRA_WORKING_STATUS_NAMES``,
+    ``JIRA_RESOLVED_STATUS_NAMES`` (comma-separated).
+    """
+    prof: dict = {}
+    if PROFILES_FILE.exists():
+        try:
+            prof = resolve_profile(profile=profile) if profile else {}
+        except (ValueError, FileNotFoundError):
+            prof = {}
+
+    def _resolve(profile_key: str, env_key: str, defaults: tuple[str, ...]) -> frozenset[str]:
+        from_profile = prof.get(profile_key)
+        if isinstance(from_profile, list) and from_profile:
+            return frozenset(str(s) for s in from_profile)
+        from_env = _split_csv(os.environ.get(env_key))
+        if from_env:
+            return frozenset(from_env)
+        return frozenset(defaults)
+
+    return {
+        "qa": _resolve("qa_status_names", "JIRA_QA_STATUS_NAMES", DEFAULT_QA_STATUSES),
+        "working": _resolve("working_status_names", "JIRA_WORKING_STATUS_NAMES", DEFAULT_WORKING_STATUSES),
+        "resolved": _resolve("resolved_status_names", "JIRA_RESOLVED_STATUS_NAMES", DEFAULT_RESOLVED_STATUSES),
+    }
+
+
 # === INLINE_END: config ===
