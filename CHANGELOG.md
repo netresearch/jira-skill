@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `jira-issue update --description / -d`: typed flag for plain description edits — previously required `--fields-json '{"description": "..."}'` with its JSON-escaping fragility. `--description -` reads the body from stdin so multi-line wiki markup can be piped in without shell-escape gymnastics. `references/issue-editing.md` updated; the long-tail `--fields-json` route remains for custom-field payloads.
 - `jira-issue work / qa / qa-fail / act`: four single-call intent verbs that compose existing API endpoints (issue + comments + changelog + remote_links + transitions) into the right bundle for one specific intent — replacing the common `jira-issue get` + `jira-comment list` 2-call (or worse, with shell-side filtering, 5–6-call) pattern.
   - `work KEY` — description + all comments + attachments + links (use when starting work on a ticket)
   - `qa KEY` — description + handover bundle (comments around the most recent INTO_QA transition, before-or-after agnostic — empirically 80% of handover comments precede the transition click)

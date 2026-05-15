@@ -474,6 +474,7 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 @cli.command()
 @click.argument("issue_key")
 @click.option("--summary", "-s", help="New summary")
+@click.option("--description", "-d", help="New description (Jira wiki markup; '-' reads from stdin)")
 @click.option("--priority", "-p", help="Priority name")
 @click.option("--labels", "-l", help="Comma-separated labels (replaces existing)")
 @click.option(
@@ -494,6 +495,7 @@ def update(
     ctx,
     issue_key: str,
     summary: str | None,
+    description: str | None,
     priority: str | None,
     labels: str | None,
     add_label: tuple[str, ...],
@@ -510,6 +512,10 @@ def update(
 
       jira-issue update PROJ-123 --summary "New title"
 
+      jira-issue update PROJ-123 --description "$(cat body.txt)"
+
+      jira-issue update PROJ-123 --description -            # read from stdin
+
       jira-issue update PROJ-123 --priority High --labels backend,urgent
 
       jira-issue update PROJ-123 --fields-json '{"customfield_10001": "value"}'
@@ -524,6 +530,32 @@ def update(
 
     if summary:
         update_fields["summary"] = summary
+
+    if description is not None:
+        if description == "-":
+            if sys.stdin.isatty():
+                error(
+                    "'-' requires piped input but stdin is a terminal",
+                    suggestion="Usage: cat body.txt | jira-issue update PROJ-123 --description -",
+                )
+                sys.exit(1)
+            max_size = 256 * 1024  # 256KB, above Jira's description limit
+            try:
+                description = sys.stdin.read(max_size + 1)
+            except UnicodeDecodeError:
+                error(
+                    "stdin contains invalid text encoding (expected UTF-8)",
+                    suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
+                )
+                sys.exit(1)
+            if len(description) > max_size:
+                error(
+                    f"description from stdin exceeds {max_size} bytes",
+                    suggestion="Truncate the input or split the description across multiple updates.",
+                )
+                sys.exit(1)
+            description = description.rstrip("\n")
+        update_fields["description"] = description
 
     if priority:
         update_fields["priority"] = {"name": priority}
@@ -556,7 +588,7 @@ def update(
     if not update_fields:
         error("No fields specified for update")
         click.echo(
-            "\nUse one or more of: --summary, --priority, --labels, "
+            "\nUse one or more of: --summary, --description, --priority, --labels, "
             "--add-label, --remove-label, --assignee, --fields-json"
         )
         sys.exit(1)
