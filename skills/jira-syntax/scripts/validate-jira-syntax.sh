@@ -131,7 +131,26 @@ validate_file() {
             continue
         fi
         if [[ "$search_langs" != *" $lang "* ]]; then
-            error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
+            # Suggest the closest-fit valid language for common stumbles before
+            # falling back to the generic "use {code:none} or ..." message.
+            local hint=""
+            case "$lang" in
+                hcl|tf|terraform|tofu)               hint="{code:none} for HCL / Terraform / OpenTofu" ;;
+                dockerfile|Dockerfile|containerfile) hint="{code:bash} (Dockerfile RUN lines lex acceptably as bash) or {code:none}" ;;
+                rust|rs)                             hint="{code:none} for Rust" ;;
+                kotlin|kt)                           hint="{code:java} (Kotlin lexes acceptably as Java) or {code:none}" ;;
+                typescript|ts|tsx)                   hint="{code:javascript}" ;;
+                shell|zsh|fish|console)              hint="{code:bash}" ;;
+                make|makefile|Makefile)              hint="{code:none} for Makefile" ;;
+                ini|toml|conf|properties)            hint="{code:none} for INI / TOML / config" ;;
+                diff|patch)                          hint="{code:none}" ;;
+                go-template|gotmpl|jinja|jinja2)     hint="{code:none}" ;;
+            esac
+            if [ -n "$hint" ]; then
+                error "Unsupported {code:$lang} language. Jira Server rejects this; use $hint"
+            else
+                error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
+            fi
         fi
     done < <(grep -oE '\{code:[^}|]+' <<< "$content" | sed 's/^{code://' | sort -u)
 

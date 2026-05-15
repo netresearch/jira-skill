@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `validate-jira-syntax.sh`: the "Unsupported `{code:<lang>}` language" error now suggests the closest-fit valid language for common stumbles instead of always falling back to the full valid-languages list. Recognised hints: `hcl/tf/terraform/tofu` → `{code:none}`, `dockerfile/Dockerfile` → `{code:bash}` or `{code:none}`, `rust/rs` → `{code:none}`, `kotlin/kt` → `{code:java}`, `typescript/ts/tsx` → `{code:javascript}`, `shell/zsh/fish/console` → `{code:bash}`, `make/Makefile` → `{code:none}`, `ini/toml/conf/properties` → `{code:none}`, `diff/patch` → `{code:none}`, `go-template/jinja` → `{code:none}`. Unknown languages still get the full list.
+
 ### Added
 
 - `jira-issue update --description / -d`: typed flag for plain description edits — previously required `--fields-json '{"description": "..."}'` with its JSON-escaping fragility. `--description -` reads the body from stdin so multi-line wiki markup can be piped in without shell-escape gymnastics. `references/issue-editing.md` updated; the long-tail `--fields-json` route remains for custom-field payloads.
