@@ -10,10 +10,19 @@ _scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
 sys.path.insert(0, str(_scripts_path))
 
 from lib.changelog import (
+    classify_transition,
     compute_time_in_status,
     extract_status_transitions,
+    extract_status_transitions_with_authors,
+    find_transition_window,
     format_timedelta,
 )
+
+# Status sets used by classify_transition tests
+_QA = frozenset({"QA", "Review", "QA2", "UAT"})
+_WORKING = frozenset({"In Progress", "Open", "QA failed"})
+_RESOLVED = frozenset({"Closed", "Resolved", "Done"})
+_SETS = {"qa": _QA, "working": _WORKING, "resolved": _RESOLVED}
 
 UTC = timezone.utc
 
@@ -185,3 +194,139 @@ class TestFormatTimedelta:
     def test_negative_treated_as_zero(self):
         """Clock skew / reordering should never produce negative durations."""
         assert format_timedelta(timedelta(seconds=-1)) == "0m"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: extract_status_transitions_with_authors()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestExtractStatusTransitionsWithAuthors:
+    """Augmented variant must preserve transition author identity."""
+
+    def _issue(self, history):
+        return {"changelog": {"histories": history}}
+
+    def test_extracts_author_name_and_key(self):
+        issue = self._issue(
+            [
+                {
+                    "created": "2026-05-10T08:29:05.000+0000",
+                    "author": {"name": "smendel", "displayName": "Sebastian Mendel"},
+                    "items": [{"field": "status", "fromString": "In Progress", "toString": "QA"}],
+                }
+            ]
+        )
+        ts = extract_status_transitions_with_authors(issue)
+        assert len(ts) == 1
+        assert ts[0]["from"] == "In Progress"
+        assert ts[0]["to"] == "QA"
+        assert ts[0]["author_name"] == "Sebastian Mendel"
+        assert ts[0]["author_key"] == "smendel"
+
+    def test_falls_back_to_account_id_when_no_name(self):
+        issue = self._issue(
+            [
+                {
+                    "created": "2026-05-10T08:29:05.000+0000",
+                    "author": {"accountId": "acc-1", "displayName": "Cloud User"},
+                    "items": [{"field": "status", "fromString": "Open", "toString": "QA"}],
+                }
+            ]
+        )
+        ts = extract_status_transitions_with_authors(issue)
+        assert ts[0]["author_key"] == "acc-1"
+
+    def test_handles_missing_author(self):
+        issue = self._issue(
+            [
+                {
+                    "created": "2026-05-10T08:29:05.000+0000",
+                    "items": [{"field": "status", "fromString": "Open", "toString": "QA"}],
+                }
+            ]
+        )
+        ts = extract_status_transitions_with_authors(issue)
+        assert ts[0]["author_key"] == ""
+        assert ts[0]["author_name"] == ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: classify_transition()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestClassifyTransition:
+    """Transitions classify by set membership, not by name."""
+
+    def test_into_qa(self):
+        t = {"from": "In Progress", "to": "QA"}
+        assert classify_transition(t, _SETS) == "into_qa"
+
+    def test_reject_to_working(self):
+        t = {"from": "QA", "to": "In Progress"}
+        assert classify_transition(t, _SETS) == "reject"
+
+    def test_reject_to_qa_failed(self):
+        """`QA → QA failed` must be reject (QA failed is in working set, not qa)."""
+        t = {"from": "QA", "to": "QA failed"}
+        assert classify_transition(t, _SETS) == "reject"
+
+    def test_forward_qa_to_qa2(self):
+        """Multi-stage QA progression is forward, NOT reject."""
+        t = {"from": "QA", "to": "QA2"}
+        assert classify_transition(t, _SETS) == "forward"
+
+    def test_forward_review_to_uat(self):
+        """Different two-stage naming (Review → UAT) classifies same as QA → QA2."""
+        t = {"from": "Review", "to": "UAT"}
+        assert classify_transition(t, _SETS) == "forward"
+
+    def test_resolved_takes_precedence_over_qa(self):
+        """`QA → Closed` is resolved, even though source is QA."""
+        t = {"from": "QA", "to": "Closed"}
+        assert classify_transition(t, _SETS) == "resolved"
+
+    def test_out_when_qa_to_unknown(self):
+        """`QA → SomethingUnknown` (not in any set) is `out`."""
+        t = {"from": "QA", "to": "SomethingNew"}
+        assert classify_transition(t, _SETS) == "out"
+
+    def test_other_when_neither_side_qa(self):
+        t = {"from": "Open", "to": "In Progress"}
+        assert classify_transition(t, _SETS) == "other"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: find_transition_window()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestFindTransitionWindow:
+    """find_transition_window returns previous and next adjacent timestamps."""
+
+    def _ts(self, *dts):
+        return [{"created": d, "from": "x", "to": "y", "author_name": "", "author_key": ""} for d in dts]
+
+    def test_returns_neighbors(self):
+        ts = self._ts(_dt(2026, 5, 1), _dt(2026, 5, 5), _dt(2026, 5, 10))
+        prev, nxt = find_transition_window(ts, 1)
+        assert prev == _dt(2026, 5, 1)
+        assert nxt == _dt(2026, 5, 10)
+
+    def test_first_transition_has_no_prev(self):
+        ts = self._ts(_dt(2026, 5, 1), _dt(2026, 5, 5))
+        prev, nxt = find_transition_window(ts, 0)
+        assert prev is None
+        assert nxt == _dt(2026, 5, 5)
+
+    def test_last_transition_has_no_next(self):
+        ts = self._ts(_dt(2026, 5, 1), _dt(2026, 5, 5))
+        prev, nxt = find_transition_window(ts, 1)
+        assert prev == _dt(2026, 5, 1)
+        assert nxt is None
+
+    def test_out_of_bounds_returns_none(self):
+        ts = self._ts(_dt(2026, 5, 1))
+        assert find_transition_window(ts, 5) == (None, None)
+        assert find_transition_window(ts, -1) == (None, None)

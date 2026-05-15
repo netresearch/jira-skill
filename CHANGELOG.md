@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `jira-link create`: success message and `--dry-run` preview now print the link in natural language using the link type's *outward* verb fetched from `get_issue_link_types()`. `create FROM TO --type X` POSTs `{outwardIssue: FROM, inwardIssue: TO}` — per Atlassian's convention `TO` is the source/active actor, so the new output is `Created: <to> <outward verb> <from> (link-type: <name>)` (e.g. `Created: ROOT-2 causes EFFECT-1`). The previous `Created link: FROM --[type]--> TO` arrow read in the opposite direction and led at least one agent to create ~30 backwards Jira links. Dry-run now errors out if the link type cannot be resolved instead of degrading to the misleading arrow form. Technically a behavior change but no known parser depended on the arrow format.
-- `references/links.md`: the link-direction table and prose were rewritten — the previous `Outward (PROJ-A → PROJ-B)` header implied `FROM` was the active party. The doc now leads with a clear DIRECTION RULE callout, agent/patient mnemonic, three worked examples (Blockade, Cause, Side effect) showing both endpoints' Jira-UI display, and a cross-link to the `netresearch-jira` skill's `linking-conventions.md` as a real-world reference.
-
 ### Added
 
+- `jira-issue work / qa / qa-fail / act`: four single-call intent verbs that compose existing API endpoints (issue + comments + changelog + remote_links + transitions) into the right bundle for one specific intent — replacing the common `jira-issue get` + `jira-comment list` 2-call (or worse, with shell-side filtering, 5–6-call) pattern.
+  - `work KEY` — description + all comments + attachments + links (use when starting work on a ticket)
+  - `qa KEY` — description + handover bundle (comments around the most recent INTO_QA transition, before-or-after agnostic — empirically 80% of handover comments precede the transition click)
+  - `qa-fail KEY` — description + reviewer rejection comment + implementer scope/clarification context from the same QA window
+  - `act KEY` — meta + available transitions (one call before transitioning, replaces meta-fetch + transition-list)
+  - All verbs support `--json`, `--quiet` and the standard global flags; `work`, `qa`, `qa-fail` also support `--truncate N` (act has no body to truncate)
+  - Status-set classification configurable per profile via `qa_status_names` / `working_status_names` / `resolved_status_names` (or env vars). Defaults cover common single-stage and multi-stage QA workflows. Multi-stage progressions (`QA→QA2`, `Review→UAT`, `QA→Acceptance`) are correctly classified as forward, not as fail.
+  - SKILL.md `## Auto-Trigger` rewritten as an intent-routing table; `references/intent-verbs.md` documents the heuristics, status sets, and configuration.
+- `lib/changelog.py`: `extract_status_transitions_with_authors()`, `classify_transition()`, `find_transition_window()` helpers used by the intent verbs.
+- `lib/config.py`: `load_status_sets(profile=...)` resolves the three status sets from profile fields, env vars, or built-in defaults.
 - `jira-link create`: `--source` / `--target` named aliases for `FROM_KEY` / `TO_KEY`. `--source S --target T --type X` is equivalent to `create T S --type X`. Mixing positional with named forms is rejected. The named form is recommended when the direction matters (it always does) so the call-site reads as English instead of relying on positional convention.
 - `jira-link bulk-create`: read a CSV (`--from-csv PATH`, or `-` for stdin) with header `from,to,type` and create one link per row, mirroring the same direction convention as `create` ("TO does X to FROM"). `--dry-run` previews each resolved sentence without POSTing. `--skip-existing` checks the FROM ticket's `issuelinks` and skips rows where a link of the same type already connects FROM and TO (either direction) — useful because Jira Server is not idempotent on link creation. `--abort-on-error` (default) halts on the first failed row; `--continue-on-error` logs and keeps going. Per-row output uses `[N/M]` indices, ends with a `created: K, skipped: S, failed: F` summary, and the `--json` mode emits one JSON object per line plus a final `summary: true` object (JSONL). Link types are resolved once via a single `get_issue_link_types()` call regardless of how many rows reference them.
 - `jira-link bulk-delete`: delete many issue links by ID, either from a comma-separated `--ids` list or a file (`--ids-file PATH`, `-` for stdin). Each ID is fetched first so per-row output shows the affected issues (`[101] TEST-2 ↔ TEST-1 (Blocks)`). Same `--dry-run`, `--abort-on-error / --continue-on-error`, and JSONL summary semantics as `bulk-create`.

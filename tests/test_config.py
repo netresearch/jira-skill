@@ -418,3 +418,116 @@ class TestLoadEnvExportPrefix:
         config = load_env(str(env_file))
         assert config["JIRA_URL"] == "https://jira.example.com"
         assert config["JIRA_PERSONAL_TOKEN"] == "my-token"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: load_status_sets() — qa / working / resolved status name resolution
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLoadStatusSets:
+    """Three status sets resolve in order: profile field → env var → built-in default."""
+
+    def _import(self):
+        from lib.config import (
+            DEFAULT_QA_STATUSES,
+            DEFAULT_RESOLVED_STATUSES,
+            DEFAULT_WORKING_STATUSES,
+            load_status_sets,
+        )
+
+        return load_status_sets, DEFAULT_QA_STATUSES, DEFAULT_WORKING_STATUSES, DEFAULT_RESOLVED_STATUSES
+
+    def test_defaults_when_no_profile_no_env(self, monkeypatch):
+        """No profiles.json + no env vars → returns built-in defaults."""
+        load_status_sets, qa_def, work_def, res_def = self._import()
+        monkeypatch.setattr("lib.config.PROFILES_FILE", Path("/nonexistent"))
+        for var in ("JIRA_QA_STATUS_NAMES", "JIRA_WORKING_STATUS_NAMES", "JIRA_RESOLVED_STATUS_NAMES"):
+            monkeypatch.delenv(var, raising=False)
+        sets = load_status_sets()
+        assert sets["qa"] == frozenset(qa_def)
+        assert sets["working"] == frozenset(work_def)
+        assert sets["resolved"] == frozenset(res_def)
+
+    def test_qa_failed_in_working_set_default(self, monkeypatch):
+        """`QA failed` defaults to working set so `QA → QA failed` classifies as REJECT."""
+        load_status_sets, _, _, _ = self._import()
+        monkeypatch.setattr("lib.config.PROFILES_FILE", Path("/nonexistent"))
+        for var in ("JIRA_QA_STATUS_NAMES", "JIRA_WORKING_STATUS_NAMES", "JIRA_RESOLVED_STATUS_NAMES"):
+            monkeypatch.delenv(var, raising=False)
+        sets = load_status_sets()
+        assert "QA failed" in sets["working"]
+        assert "QA failed" not in sets["qa"]
+
+    def test_env_var_overrides_default(self, monkeypatch):
+        """JIRA_QA_STATUS_NAMES env var replaces the qa set entirely."""
+        load_status_sets, _, _, _ = self._import()
+        monkeypatch.setattr("lib.config.PROFILES_FILE", Path("/nonexistent"))
+        monkeypatch.setenv("JIRA_QA_STATUS_NAMES", "Review,UAT,Acceptance")
+        for var in ("JIRA_WORKING_STATUS_NAMES", "JIRA_RESOLVED_STATUS_NAMES"):
+            monkeypatch.delenv(var, raising=False)
+        sets = load_status_sets()
+        assert sets["qa"] == frozenset({"Review", "UAT", "Acceptance"})
+        assert "QA" not in sets["qa"]
+
+    def test_profile_field_overrides_env(self, tmp_path, monkeypatch):
+        """Profile field wins over env var."""
+        load_status_sets, _, _, _ = self._import()
+        profiles_file = tmp_path / "profiles.json"
+        profiles_file.write_text(
+            json.dumps(
+                {
+                    "default": "p1",
+                    "profiles": {
+                        "p1": {
+                            "url": "https://jira.example.com",
+                            "auth": "pat",
+                            "token": "t",
+                            "qa_status_names": ["ProfileQA"],
+                        }
+                    },
+                }
+            )
+        )
+        monkeypatch.setattr("lib.config.PROFILES_FILE", profiles_file)
+        monkeypatch.setenv("JIRA_QA_STATUS_NAMES", "EnvQA")
+        sets = load_status_sets(profile="p1")
+        assert sets["qa"] == frozenset({"ProfileQA"})
+
+    def test_auto_resolves_via_issue_key(self, tmp_path, monkeypatch):
+        """Issue-key project prefix matches a profile's projects list (no explicit --profile)."""
+        load_status_sets, _, _, _ = self._import()
+        profiles_file = tmp_path / "profiles.json"
+        profiles_file.write_text(
+            json.dumps(
+                {
+                    "default": "other",
+                    "profiles": {
+                        "other": {"url": "https://x", "auth": "pat", "token": "t"},
+                        "match": {
+                            "url": "https://jira.example.com",
+                            "auth": "pat",
+                            "token": "t",
+                            "projects": ["NRS"],
+                            "qa_status_names": ["MatchedQA"],
+                        },
+                    },
+                }
+            )
+        )
+        monkeypatch.setattr("lib.config.PROFILES_FILE", profiles_file)
+        for var in ("JIRA_QA_STATUS_NAMES", "JIRA_WORKING_STATUS_NAMES", "JIRA_RESOLVED_STATUS_NAMES"):
+            monkeypatch.delenv(var, raising=False)
+        sets = load_status_sets(issue_key="NRS-4412")
+        assert sets["qa"] == frozenset({"MatchedQA"})
+
+    def test_invalid_profile_falls_back_to_defaults(self, tmp_path, monkeypatch):
+        """Profile resolution failure must not crash — fall back to env / defaults."""
+        load_status_sets, qa_def, _, _ = self._import()
+        profiles_file = tmp_path / "profiles.json"
+        profiles_file.write_text(json.dumps({"profiles": {"p1": {"url": "https://x", "auth": "pat", "token": "t"}}}))
+        monkeypatch.setattr("lib.config.PROFILES_FILE", profiles_file)
+        for var in ("JIRA_QA_STATUS_NAMES", "JIRA_WORKING_STATUS_NAMES", "JIRA_RESOLVED_STATUS_NAMES"):
+            monkeypatch.delenv(var, raising=False)
+        sets = load_status_sets(profile="nonexistent")
+        assert sets["qa"] == frozenset(qa_def)

@@ -66,6 +66,42 @@ def resolve_assignee(client, identifier: str) -> dict:
     return {"name": identifier}
 
 
+def fetch_comments_paginated(client, issue_key: str, page_size: int = 100) -> tuple[list[dict], int | None]:
+    """Fetch all comments for an issue, paginating through Jira's REST endpoint.
+
+    The embedded ``fields.comment.comments`` block on an issue payload is
+    truncated by Jira (default 50 entries on Server/DC). For long-running
+    tickets that truncation silently drops comments. This helper hits
+    ``/rest/api/2/issue/{key}/comment`` with explicit ``startAt`` /
+    ``maxResults`` until the server signals it has returned everything.
+
+    Returns ``(comments, total)`` where ``total`` is the Jira-reported total
+    if available, or ``None`` if the server omits it.
+    """
+    comments: list[dict] = []
+    start_at = 0
+    total: int | None = None
+    while True:
+        payload = (
+            client.get(
+                f"rest/api/2/issue/{issue_key}/comment",
+                params={"startAt": start_at, "maxResults": page_size},
+            )
+            or {}
+        )
+        values = payload.get("comments", []) or []
+        if total is None:
+            raw_total = payload.get("total")
+            total = raw_total if isinstance(raw_total, int) else None
+        comments.extend(values)
+        if not values:
+            break
+        if total is not None and (start_at + len(values)) >= total:
+            break
+        start_at += len(values)
+    return comments, total
+
+
 def get_project_issue_types(client, project_key: str, subtask_only: bool | None = None) -> list[dict]:
     """Get available issue types for a project.
 

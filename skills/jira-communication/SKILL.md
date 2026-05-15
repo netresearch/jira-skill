@@ -16,7 +16,18 @@ CLI scripts via `uv run`. All support `--help`, `--json`, `--quiet`, `--debug`.
 
 ## Auto-Trigger
 
-On Jira URL or issue key (PROJ-123) → run `jira-issue.py get`. Auth issues → `jira-setup.py`.
+On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
+
+| Intent | Tool |
+|---|---|
+| triage / work on ticket | `jira-issue.py work KEY` |
+| start QA review | `jira-issue.py qa KEY` |
+| QA-fail follow-up | `jira-issue.py qa-fail KEY` |
+| field-only lookup | `jira-issue.py get KEY --fields ...` |
+| change status | `jira-issue.py act KEY` → `jira-transition.py do` |
+| audit / sibling discovery | `jira-qa-gather.py KEY` |
+
+Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` for the same key — use the matching verb. See `references/intent-verbs.md`.
 
 ## Scripts
 
@@ -49,21 +60,21 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 
 ## References
 
-- `references/jql-quick-reference.md` — when JQL goes beyond simple filters
-- `references/jql-cookbook.md` — when translating natural-language requests into JQL
-- `references/multi-profile.md` — when using multiple Jira instances or `--profile`
-- `references/troubleshooting.md` — when hitting auth, SSL, 401, 403, or connection failures
-- `references/issue-editing.md` — when using `--fields-json`, reporter changes, deletes, or moves
-- `references/creation.md` — when creating with `--parent`, reporter, components, or custom fields
-- `references/comments.md` — when editing, deleting, or listing comments
-- `references/worklog.md` — when using `--started`, date ranges, or `jira-worklog-query.py`
-- `references/attachments.md` — when uploading, downloading, or inspecting attachments
-- `references/links.md` — when working with issue or web links
-- `references/agile.md` — when working with sprints, boards, or `board --name`
-- `references/fields-and-users.md` — when looking up custom field IDs, users, or issue types
-- `references/watchers.md` — when the user asks to watch, subscribe, notify on, or list watchers of an issue
-- `references/versions.md` — when the user asks about fix/affects versions, releases, or version CRUD
-- `references/qa-gather.md` — when reviewing tickets in QA / "ready for review", or when a peer-review style runbook needs single-call context discovery
+- `references/jql-quick-reference.md`, `references/jql-cookbook.md` — JQL beyond simple filters
+- `references/multi-profile.md` — multiple Jira instances, `--profile`
+- `references/troubleshooting.md` — auth, SSL, 401, 403, connection
+- `references/issue-editing.md` — `--fields-json`, reporter, deletes, moves
+- `references/creation.md` — `--parent`, components, custom fields
+- `references/comments.md` — edit, delete, list comments
+- `references/worklog.md` — `--started`, date ranges, `jira-worklog-query.py`
+- `references/attachments.md` — upload, download, inspect attachments
+- `references/links.md` — issue and web links
+- `references/agile.md` — sprints, boards, `board --name`
+- `references/fields-and-users.md` — custom field IDs, users, issue types
+- `references/watchers.md` — watch, subscribe, list watchers
+- `references/versions.md` — fix/affects versions, releases, version CRUD
+- `references/qa-gather.md` — comprehensive audit bundle (siblings, prose URLs)
+- `references/intent-verbs.md` — `work / qa / qa-fail / act`: heuristic + status-set config
 
 ## Authentication
 
