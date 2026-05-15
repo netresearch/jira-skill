@@ -532,7 +532,30 @@ def update(
         update_fields["summary"] = summary
 
     if description is not None:
-        update_fields["description"] = sys.stdin.read() if description == "-" else description
+        if description == "-":
+            if sys.stdin.isatty():
+                error(
+                    "'-' requires piped input but stdin is a terminal",
+                    suggestion="Usage: cat body.txt | jira-issue update PROJ-123 --description -",
+                )
+                sys.exit(1)
+            max_size = 256 * 1024  # 256KB, above Jira's description limit
+            try:
+                description = sys.stdin.read(max_size + 1)
+            except UnicodeDecodeError:
+                error(
+                    "stdin contains invalid text encoding (expected UTF-8)",
+                    suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
+                )
+                sys.exit(1)
+            if len(description) > max_size:
+                error(
+                    f"description from stdin exceeds {max_size} bytes",
+                    suggestion="Truncate the input or split the description across multiple updates.",
+                )
+                sys.exit(1)
+            description = description.rstrip("\n")
+        update_fields["description"] = description
 
     if priority:
         update_fields["priority"] = {"name": priority}

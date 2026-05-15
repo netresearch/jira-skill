@@ -745,6 +745,61 @@ class TestMockedCommands:
         mock_client.issue.assert_not_called()
         mock_client.update_issue_field.assert_not_called()
 
+    def test_issue_update_description_typed_flag(self):
+        """--description should set the description field on update."""
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--description", "New body"],
+            )
+        assert result.exit_code == 0, result.output
+        mock_client.update_issue_field.assert_called_once()
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[0] == "TEST-1"
+        assert args[1] == {"description": "New body"}
+
+    def test_issue_update_description_from_stdin_strips_trailing_newline(self):
+        """--description - should read from stdin and rstrip trailing newlines."""
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--description", "-"],
+                input="Body from heredoc\n",
+            )
+        assert result.exit_code == 0, result.output
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[1] == {"description": "Body from heredoc"}
+
+    def test_issue_update_description_empty_string_is_set(self):
+        """Empty --description still issues an update (clears the field)."""
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--description", ""],
+            )
+        assert result.exit_code == 0, result.output
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[1] == {"description": ""}
+
+    def test_issue_update_description_combines_with_other_flags(self):
+        """--description should compose with other typed flags."""
+        mock_client = self._make_mock_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _issue_mod.cli,
+                ["update", "TEST-1", "--description", "x", "--priority", "High"],
+            )
+        assert result.exit_code == 0, result.output
+        args, _kwargs = mock_client.update_issue_field.call_args
+        assert args[1] == {"description": "x", "priority": {"name": "High"}}
+
     def test_move_issue_cross_project_refused_even_for_dry_run(self):
         mock_client = self._make_mock_client()
         mock_client.issue.return_value = {
