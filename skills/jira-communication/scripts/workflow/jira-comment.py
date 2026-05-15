@@ -20,7 +20,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, _sanitize_error
+from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.output import error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -28,30 +28,8 @@ from lib.output import error, extract_adf_text, format_output, success, warning
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _fetch_comments_paginated(client, issue_key: str) -> tuple[list[dict], int | None]:
-    comments: list[dict] = []
-    start_at = 0
-    page_size = 100
-    total: int | None = None
-    while True:
-        payload = (
-            client.get(
-                f"rest/api/2/issue/{issue_key}/comment",
-                params={"startAt": start_at, "maxResults": page_size},
-            )
-            or {}
-        )
-        values = payload.get("comments", []) or []
-        if total is None:
-            raw_total = payload.get("total")
-            total = raw_total if isinstance(raw_total, int) else None
-        comments.extend(values)
-        if not values:
-            break
-        if total is not None and (start_at + len(values)) >= total:
-            break
-        start_at += len(values)
-    return comments, total
+# Backwards-compat alias for any external imports — implementation moved to lib.client.
+_fetch_comments_paginated = fetch_comments_paginated
 
 
 @click.group()

@@ -15,7 +15,7 @@ jira-issue.py qa-fail KEY   # description + reviewer rejection + implementer sco
 jira-issue.py act     KEY   # meta + available transitions
 ```
 
-`jira-issue.py get KEY` stays minimal (meta only) — backwards compatible.
+`jira-issue.py get KEY` is unchanged — it still prints the full issue (description, attachments, links) by default. Use `--fields summary,status,assignee,…` for a meta-only lookup.
 
 ## QA-handover heuristic (`qa` verb)
 
@@ -94,7 +94,7 @@ All verbs support the standard global flags:
 - `--json` Structured payload (`comments` is always a list of comment dicts; verb-specific keys like `reject_transition`, `handover_transition`, `implementer` for context)
 - `--quiet` Issue key only (after successful fetch — validates connectivity)
 
-Each verb also has `--truncate N` to cap description and per-comment body length.
+`work`, `qa`, `qa-fail` also accept `--truncate N` to cap description and per-comment body length. `act` has no body content so the flag is omitted there.
 
 ## Example: NRS-4412-style QA-fail follow-up
 

@@ -31,9 +31,9 @@ from lib.changelog import (
     format_timedelta,
     parse_jira_datetime,
 )
-from lib.client import LazyJiraClient, _sanitize_error, resolve_assignee, resolve_status
+from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated, resolve_assignee, resolve_status
 from lib.config import load_status_sets
-from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
+from lib.output import comment_to_text, compact_json, error, extract_adf_text, format_output, success, warning
 
 
 def _expand_label_args(raw: tuple[str, ...]) -> list[str]:
@@ -654,7 +654,11 @@ def delete(ctx, issue_key: str, delete_subtasks: bool, dry_run: bool):
 # stitch together `get` + `comment list` + `transition list` themselves.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-INTENT_FIELDS = "summary,status,assignee,reporter,priority,issuetype,description,comment,attachment,issuelinks,labels,created,updated"
+# Note: ``comment`` is intentionally NOT in INTENT_FIELDS — Jira returns only
+# the first 50 comments in the embedded payload. The intent verbs fetch
+# comments separately via fetch_comments_paginated() to avoid silently
+# truncating long-running tickets.
+INTENT_FIELDS = "summary,status,assignee,reporter,priority,issuetype,description,attachment,issuelinks,labels,created,updated"
 
 
 def _author_matches(author: dict, key: str, name: str) -> bool:
@@ -667,7 +671,11 @@ def _author_matches(author: dict, key: str, name: str) -> bool:
 
 
 def _comments_in_range(comments: list, start, end, author_filter: tuple[str, str] | None = None) -> list:
-    """Filter comments by created in [start, end], optionally by author key+name."""
+    """Filter comments by ``start <= created < end`` (half-open), optionally by author key+name.
+
+    The end bound is exclusive so a comment created exactly at the next status
+    transition is attributed to the next QA window, not the current one.
+    """
     out = []
     for c in comments:
         try:
@@ -676,7 +684,7 @@ def _comments_in_range(comments: list, start, end, author_filter: tuple[str, str
             continue
         if start is not None and created < start:
             continue
-        if end is not None and created > end:
+        if end is not None and created >= end:
             continue
         if author_filter is not None:
             if not _author_matches(c.get("author") or {}, *author_filter):
@@ -686,7 +694,7 @@ def _comments_in_range(comments: list, start, end, author_filter: tuple[str, str
 
 
 def _dedupe_comments(comments: list) -> list:
-    """Deduplicate by comment ID, preserving order."""
+    """Deduplicate by comment ID, returning chronological order."""
     seen: set[str] = set()
     out: list = []
     for c in comments:
@@ -698,26 +706,20 @@ def _dedupe_comments(comments: list) -> list:
     return sorted(out, key=lambda c: c.get("created", ""))
 
 
-def _collect_handover_bundle(issue: dict, status_sets: dict) -> dict:
+def _collect_handover_bundle(issue: dict, comments: list, status_sets: dict) -> dict:
     """Compose the qa (handover) bundle. See PLAN-context-fetch-optimization.md."""
-    comments = (issue.get("fields", {}).get("comment") or {}).get("comments") or []
     transitions = extract_status_transitions_with_authors(issue)
 
-    # Find the most recent INTO_QA transition
     into_qa_indices = [i for i, t in enumerate(transitions) if classify_transition(t, status_sets) == "into_qa"]
     if not into_qa_indices:
-        return {"fallback": True, "comments": list(reversed(comments[-5:])), "transition": None}
+        return {"fallback": True, "comments": comments[-5:], "transition": None}
 
     target_idx = into_qa_indices[-1]
     target = transitions[target_idx]
     t_transition = target["created"]
     t_prev, t_next = find_transition_window(transitions, target_idx)
     one_hour = timedelta(hours=1)
-    end_for_author = t_next or (t_transition + one_hour)
-    if t_next is None:
-        end_for_author = t_transition + one_hour
-    else:
-        end_for_author = min(t_next, t_transition + one_hour)
+    end_for_author = (t_transition + one_hour) if t_next is None else min(t_next, t_transition + one_hour)
 
     handover = _comments_in_range(
         comments, t_prev, end_for_author, author_filter=(target["author_key"], target["author_name"])
@@ -727,25 +729,23 @@ def _collect_handover_bundle(issue: dict, status_sets: dict) -> dict:
         "fallback": False,
         "comments": _dedupe_comments(handover + after),
         "transition": target,
-        "transitions": transitions,
     }
 
 
-def _collect_reject_bundle(issue: dict, status_sets: dict) -> dict:
+def _collect_reject_bundle(issue: dict, comments: list, status_sets: dict) -> dict:
     """Compose the qa-fail (reject) bundle. See PLAN-context-fetch-optimization.md."""
-    comments = (issue.get("fields", {}).get("comment") or {}).get("comments") or []
     transitions = extract_status_transitions_with_authors(issue)
 
     reject_indices = [i for i, t in enumerate(transitions) if classify_transition(t, status_sets) == "reject"]
     if not reject_indices:
-        return {"fallback": True, "comments": list(reversed(comments[-5:])), "transition": None}
+        return {"fallback": True, "comments": comments[-5:], "transition": None}
 
     target_idx = reject_indices[-1]
     target = transitions[target_idx]
     t_transition = target["created"]
     _, t_next = find_transition_window(transitions, target_idx)
 
-    # Find the most recent INTO_QA before the reject (= QA window start, implementer)
+    # Most recent INTO_QA before the reject = QA window start + implementer identity.
     implementer = None
     t_prev_into_qa = None
     for i in range(target_idx - 1, -1, -1):
@@ -762,30 +762,30 @@ def _collect_reject_bundle(issue: dict, status_sets: dict) -> dict:
     after = _comments_in_range(comments, t_transition, t_next)
     impl_comments = []
     if implementer is not None:
-        # Extend backwards by 1h to catch the implementer's handover comment when
-        # written just before the INTO_QA transition (same pre-transition pattern
-        # as the handover bundle — empirically 80% of comments precede the click).
+        # Extend back -1h to catch handover comments written just before the
+        # INTO_QA click (empirically 80% of handover comments precede the click).
         impl_start = (t_prev_into_qa - one_hour) if t_prev_into_qa else None
-        impl_comments = _comments_in_range(
-            comments, impl_start, t_transition, author_filter=implementer
-        )
+        impl_comments = _comments_in_range(comments, impl_start, t_transition, author_filter=implementer)
     return {
         "fallback": False,
         "comments": _dedupe_comments(reviewer_comments + after + impl_comments),
         "transition": target,
         "implementer": implementer,
-        "transitions": transitions,
     }
+
+
+def _truncate_text(text: str, n: int) -> str:
+    if not n or len(text) <= n:
+        return text
+    return text[:n].rsplit(" ", 1)[0] + " …[truncated]"
 
 
 def _print_comment(c: dict, *, truncate: int | None = None) -> None:
     author = (c.get("author") or {}).get("displayName", "Unknown")
     created = c.get("created", "")[:16].replace("T", " ")
-    body = c.get("body", "") or ""
-    if isinstance(body, dict):
-        body = extract_adf_text(body)
-    if truncate and len(body) > truncate:
-        body = body[: truncate].rsplit(" ", 1)[0] + " …[truncated]"
+    body = comment_to_text(c.get("body"))
+    if truncate:
+        body = _truncate_text(body, truncate)
     print(f"\n--- [{created}] {author} ---")
     for line in body.split("\n"):
         print(line)
@@ -801,14 +801,17 @@ def _print_intent_header(issue: dict) -> None:
     print(f"Status: {status} | Assignee: {assignee}")
 
 
-def _print_intent_description(issue: dict) -> None:
+def _print_intent_description(issue: dict, *, truncate: int | None = None) -> None:
     description = issue.get("fields", {}).get("description")
     if not description:
         return
     if isinstance(description, dict):
         description = extract_adf_text(description)
+    text = str(description)
+    if truncate:
+        text = _truncate_text(text, truncate)
     print("\nDescription:")
-    for line in str(description).split("\n"):
+    for line in text.split("\n"):
         print(f"  {line}")
 
 
@@ -828,13 +831,18 @@ def _intent_bundle_payload(issue: dict, comments: list, *, extras: dict | None =
     return payload
 
 
-def _resolve_status_sets_for_ctx(ctx, issue_key: str) -> dict:
-    """Load status sets, honoring --profile when set."""
+def _resolve_status_sets_for_ctx(ctx, issue_key: str | None = None) -> dict:
+    """Load status sets, mirroring load_config's auto-resolution.
+
+    Honors --profile if explicit; otherwise auto-resolves by issue-key project
+    prefix or default profile. Falls back to env / built-in defaults if no
+    profiles.json is configured.
+    """
     profile = None
     client_obj = ctx.obj.get("client")
     if client_obj is not None:
         profile = getattr(client_obj, "_profile", None)
-    return load_status_sets(profile=profile)
+    return load_status_sets(profile=profile, issue_key=issue_key)
 
 
 @cli.command()
@@ -854,6 +862,13 @@ def work(ctx, issue_key: str, truncate: int | None):
     client = ctx.obj["client"]
     try:
         issue = client.issue(issue_key, fields=INTENT_FIELDS)
+
+        # --quiet only validates the fetch — skip optional side calls (mirrors `get --quiet`)
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        comments, _ = fetch_comments_paginated(client, issue_key)
         web_links = []
         try:
             web_links = client.get_issue_remote_links(issue_key)
@@ -861,15 +876,15 @@ def work(ctx, issue_key: str, truncate: int | None):
             if ctx.obj["debug"]:
                 raise
             warning("Failed to fetch web links")
-        comments = (issue.get("fields", {}).get("comment") or {}).get("comments") or []
 
         if ctx.obj["json"]:
-            issue["webLinks"] = web_links
-            payload = _intent_bundle_payload(issue, comments, extras={"webLinks": web_links})
-            format_output(payload, as_json=True)
-            return
-        if ctx.obj["quiet"]:
-            print(issue["key"])
+            fields = issue.get("fields", {})
+            extras = {
+                "attachments": fields.get("attachment") or [],
+                "issueLinks": fields.get("issuelinks") or [],
+                "webLinks": web_links,
+            }
+            format_output(_intent_bundle_payload(issue, comments, extras=extras), as_json=True)
             return
 
         issue["webLinks"] = web_links
@@ -907,8 +922,13 @@ def qa(ctx, issue_key: str, truncate: int | None):
     client = ctx.obj["client"]
     try:
         issue = client.issue(issue_key, fields=INTENT_FIELDS, expand="changelog")
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        comments, _ = fetch_comments_paginated(client, issue_key)
         sets = _resolve_status_sets_for_ctx(ctx, issue_key)
-        bundle = _collect_handover_bundle(issue, sets)
+        bundle = _collect_handover_bundle(issue, comments, sets)
 
         if ctx.obj["json"]:
             extras = {"handover_fallback": bundle["fallback"]}
@@ -921,12 +941,9 @@ def qa(ctx, issue_key: str, truncate: int | None):
                 }
             format_output(_intent_bundle_payload(issue, bundle["comments"], extras=extras), as_json=True)
             return
-        if ctx.obj["quiet"]:
-            print(issue["key"])
-            return
 
         _print_intent_header(issue)
-        _print_intent_description(issue)
+        _print_intent_description(issue, truncate=truncate)
         if bundle["fallback"]:
             print("\n[no INTO-QA transition found — falling back to last 5 comments]")
         else:
@@ -964,8 +981,13 @@ def qa_fail(ctx, issue_key: str, truncate: int | None):
     client = ctx.obj["client"]
     try:
         issue = client.issue(issue_key, fields=INTENT_FIELDS, expand="changelog")
+        if ctx.obj["quiet"]:
+            print(issue["key"])
+            return
+
+        comments, _ = fetch_comments_paginated(client, issue_key)
         sets = _resolve_status_sets_for_ctx(ctx, issue_key)
-        bundle = _collect_reject_bundle(issue, sets)
+        bundle = _collect_reject_bundle(issue, comments, sets)
 
         if ctx.obj["json"]:
             extras = {"reject_fallback": bundle["fallback"]}
@@ -980,12 +1002,9 @@ def qa_fail(ctx, issue_key: str, truncate: int | None):
                 extras["implementer"] = bundle["implementer"][1]
             format_output(_intent_bundle_payload(issue, bundle["comments"], extras=extras), as_json=True)
             return
-        if ctx.obj["quiet"]:
-            print(issue["key"])
-            return
 
         _print_intent_header(issue)
-        _print_intent_description(issue)
+        _print_intent_description(issue, truncate=truncate)
         if bundle["fallback"]:
             print("\n[no REJECT transition found — falling back to last 5 comments]")
         else:
@@ -1015,19 +1034,16 @@ def act(ctx, issue_key: str):
     Example:
 
       jira-issue act NRS-4412
-      jira-issue act NRS-4412 --json | jq '.transitions[].name'
+      jira-issue --json act NRS-4412 | jq '.transitions[].name'
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
     try:
         issue = client.issue(issue_key, fields="summary,status,assignee,priority,issuetype")
-        try:
-            transitions = client.get_issue_transitions(issue_key) or []
-        except Exception:
-            if ctx.obj["debug"]:
-                raise
-            warning("Failed to fetch available transitions")
-            transitions = []
+        # Fetching transitions IS the core purpose of `act` — surface failures
+        # rather than silently returning an empty list (which a caller might
+        # interpret as "no transitions are available").
+        transitions = client.get_issue_transitions(issue_key) or []
 
         if ctx.obj["json"]:
             payload = {

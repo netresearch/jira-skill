@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `qa KEY` — description + handover bundle (comments around the most recent INTO_QA transition, before-or-after agnostic — empirically 80% of handover comments precede the transition click)
   - `qa-fail KEY` — description + reviewer rejection comment + implementer scope/clarification context from the same QA window
   - `act KEY` — meta + available transitions (one call before transitioning, replaces meta-fetch + transition-list)
-  - All verbs support `--json`, `--quiet`, `--truncate N` and the standard global flags
+  - All verbs support `--json`, `--quiet` and the standard global flags; `work`, `qa`, `qa-fail` also support `--truncate N` (act has no body to truncate)
   - Status-set classification configurable per profile via `qa_status_names` / `working_status_names` / `resolved_status_names` (or env vars). Defaults cover common single-stage and multi-stage QA workflows. Multi-stage progressions (`QA→QA2`, `Review→UAT`, `QA→Acceptance`) are correctly classified as forward, not as fail.
   - SKILL.md `## Auto-Trigger` rewritten as an intent-routing table; `references/intent-verbs.md` documents the heuristics, status sets, and configuration.
 - `lib/changelog.py`: `extract_status_transitions_with_authors()`, `classify_transition()`, `find_transition_window()` helpers used by the intent verbs.

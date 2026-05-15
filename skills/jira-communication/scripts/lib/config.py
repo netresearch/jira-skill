@@ -402,8 +402,18 @@ def _split_csv(value: str | None) -> list[str] | None:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def load_status_sets(profile: str | None = None) -> dict[str, frozenset[str]]:
+def load_status_sets(
+    profile: str | None = None,
+    issue_key: str | None = None,
+    url: str | None = None,
+) -> dict[str, frozenset[str]]:
     """Resolve qa / working / resolved status name sets.
+
+    Profile resolution mirrors :func:`load_config` — explicit profile name
+    wins, otherwise falls back to issue-key project prefix, URL host, the
+    project-directory ``.jira-profile`` marker, or the default profile from
+    ``profiles.json``. This keeps CLI behaviour consistent: the same profile
+    that authenticates also supplies the workflow status sets.
 
     Priority per set: profile field → env var → built-in default.
 
@@ -416,7 +426,16 @@ def load_status_sets(profile: str | None = None) -> dict[str, frozenset[str]]:
     prof: dict = {}
     if PROFILES_FILE.exists():
         try:
-            prof = resolve_profile(profile=profile) if profile else {}
+            cwd = os.getcwd()
+        except OSError:
+            cwd = None
+        try:
+            prof = resolve_profile(
+                profile=profile,
+                issue_key=issue_key,
+                url=url,
+                project_dir=cwd,
+            )
         except (ValueError, FileNotFoundError):
             prof = {}
 

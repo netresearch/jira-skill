@@ -953,3 +953,124 @@ class TestMockedCommands:
         # Pre-fix this raised TypeError ("unhashable type: 'slice'"-style on dict slicing).
         assert result.exit_code == 0, result.output
         assert "..." in result.output
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: jira-issue intent verbs (work / qa / qa-fail / act)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestIntentVerbs:
+    """Smoke tests for the four single-call intent verbs added in this PR."""
+
+    def _mock_client_for_intents(self, comments=None, transitions=None, status_name="QA", changelog=None):
+        client = mock.Mock()
+        client.issue.return_value = {
+            "key": "TEST-1",
+            "fields": {
+                "summary": "Test ticket",
+                "status": {"name": status_name},
+                "assignee": {"displayName": "Test User"},
+                "description": "Body",
+                "attachment": [],
+                "issuelinks": [],
+            },
+            "changelog": {"histories": changelog or []},
+        }
+        client.get.return_value = {"comments": comments or [], "total": len(comments or [])}
+        client.get_issue_remote_links.return_value = []
+        client.get_issue_transitions.return_value = transitions or []
+        return client
+
+    def test_work_help_lists_truncate(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_issue_mod.cli, ["work", "--help"])
+        assert result.exit_code == 0
+        assert "--truncate" in result.output
+
+    def test_qa_help_lists_truncate(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_issue_mod.cli, ["qa", "--help"])
+        assert result.exit_code == 0
+        assert "--truncate" in result.output
+
+    def test_act_help_has_no_truncate(self):
+        """`act` has no body content — `--truncate` should NOT be exposed."""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_issue_mod.cli, ["act", "--help"])
+        assert result.exit_code == 0
+        assert "--truncate" not in result.output
+
+    def test_work_json_includes_attachments_and_links(self):
+        """`work --json` must include attachments, issueLinks, webLinks in payload."""
+        client = self._mock_client_for_intents(comments=[])
+        client.issue.return_value["fields"]["attachment"] = [{"filename": "x.log"}]
+        client.issue.return_value["fields"]["issuelinks"] = [{"type": {"name": "Blocks"}}]
+        client.get_issue_remote_links.return_value = [{"object": {"url": "https://x"}}]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=client):
+            result = runner.invoke(_issue_mod.cli, ["--json", "work", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        import json as _json
+
+        data = _json.loads(result.output)
+        assert data["attachments"] == [{"filename": "x.log"}]
+        assert data["issueLinks"] == [{"type": {"name": "Blocks"}}]
+        assert data["webLinks"] == [{"object": {"url": "https://x"}}]
+
+    def test_work_quiet_skips_remote_link_fetch(self):
+        """`work --quiet` must not hit the remote-link endpoint."""
+        client = self._mock_client_for_intents()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=client):
+            result = runner.invoke(_issue_mod.cli, ["--quiet", "work", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert "TEST-1" in result.output
+        client.get_issue_remote_links.assert_not_called()
+
+    def test_work_paginates_comments(self):
+        """`work` must call the paginated comment endpoint (not the embedded payload)."""
+        comments = [
+            {"id": str(i), "created": f"2026-05-10T08:00:0{i}.000+0000", "author": {"displayName": "U"}, "body": "x"}
+            for i in range(3)
+        ]
+        client = self._mock_client_for_intents(comments=comments)
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=client):
+            result = runner.invoke(_issue_mod.cli, ["--json", "work", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        client.get.assert_any_call("rest/api/2/issue/TEST-1/comment", params={"startAt": 0, "maxResults": 100})
+
+    def test_qa_fallback_when_no_into_qa_transition(self):
+        """`qa` falls back to last 5 comments when no INTO_QA transition is in the changelog."""
+        comments = [
+            {"id": str(i), "created": f"2026-05-10T08:00:0{i}.000+0000", "author": {"displayName": "U"}, "body": "x"}
+            for i in range(3)
+        ]
+        client = self._mock_client_for_intents(comments=comments, changelog=[])
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=client):
+            result = runner.invoke(_issue_mod.cli, ["qa", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert "falling back to last 5 comments" in result.output
+
+    def test_act_surfaces_transition_fetch_failure(self):
+        """`act` must exit non-zero (outside debug) if the transitions endpoint fails."""
+        client = self._mock_client_for_intents()
+        client.get_issue_transitions.side_effect = RuntimeError("boom")
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=client):
+            result = runner.invoke(_issue_mod.cli, ["act", "TEST-1"])
+        assert result.exit_code != 0
+        assert "boom" in result.output or "act context" in result.output
+
+    def test_act_lists_transitions_in_text_mode(self):
+        client = self._mock_client_for_intents(
+            transitions=[{"id": "11", "name": "Start work"}, {"id": "31", "name": "Resolve"}]
+        )
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=client):
+            result = runner.invoke(_issue_mod.cli, ["act", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert "Start work" in result.output
+        assert "Resolve" in result.output
