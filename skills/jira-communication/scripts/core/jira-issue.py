@@ -658,7 +658,9 @@ def delete(ctx, issue_key: str, delete_subtasks: bool, dry_run: bool):
 # the first 50 comments in the embedded payload. The intent verbs fetch
 # comments separately via fetch_comments_paginated() to avoid silently
 # truncating long-running tickets.
-INTENT_FIELDS = "summary,status,assignee,reporter,priority,issuetype,description,attachment,issuelinks,labels,created,updated"
+INTENT_FIELDS = (
+    "summary,status,assignee,reporter,priority,issuetype,description,attachment,issuelinks,labels,created,updated"
+)
 
 
 def _author_matches(author: dict, key: str, name: str) -> bool:
@@ -1051,7 +1053,9 @@ def act(ctx, issue_key: str):
                 "summary": issue.get("fields", {}).get("summary"),
                 "status": (issue.get("fields", {}).get("status") or {}).get("name"),
                 "assignee": (issue.get("fields", {}).get("assignee") or {}).get("displayName"),
-                "transitions": [{"id": t.get("id"), "name": t.get("name") or t.get("to", {}).get("name")} for t in transitions],
+                "transitions": [
+                    {"id": t.get("id"), "name": t.get("name") or t.get("to", {}).get("name")} for t in transitions
+                ],
             }
             format_output(payload, as_json=True)
             return
