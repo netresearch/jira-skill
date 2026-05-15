@@ -63,7 +63,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 - `references/jql-quick-reference.md`, `references/jql-cookbook.md` — JQL beyond simple filters
 - `references/multi-profile.md` — multiple Jira instances, `--profile`
 - `references/troubleshooting.md` — auth, SSL, 401, 403, connection
-- `references/issue-editing.md` — `--fields-json`, reporter, deletes, moves
+- `references/issue-editing.md` — `--description`, `--fields-json`, reporter, deletes, moves
 - `references/creation.md` — `--parent`, components, custom fields
 - `references/comments.md` — edit, delete, list comments
 - `references/worklog.md` — `--started`, date ranges, `jira-worklog-query.py`

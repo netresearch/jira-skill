@@ -4,15 +4,25 @@
 
 Load this reference whenever the user wants to set `--fields-json`, set a custom `--reporter`, delete an issue (especially with sub-tasks), attempt an unsupported cross-project move via CLI (see below), or change any field that is not assignee, priority, or labels.
 
-## `--fields-json` for description and custom fields
+## `--description` for plain description edits
 
-`jira-issue.py update` accepts a raw JSON object to set any field the Jira REST API exposes:
+For a plain description rewrite, use the typed flag — it avoids JSON-escaping the body:
 
 ```bash
-# Plain description edit
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
-    --fields-json '{"description": "Rewritten description"}'
+    --description "Rewritten description"
 
+# Pipe a longer body from a file
+cat body.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --description -
+```
+
+The body is Jira wiki markup (see the `jira-syntax` skill).
+
+## `--fields-json` for custom fields and structured payloads
+
+`jira-issue.py update` accepts a raw JSON object to set any field the Jira REST API exposes — reach for it when the typed flags don't cover the field:
+
+```bash
 # Custom fields (Sprint ID as integer, Epic Link as issue key)
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
     --fields-json '{"customfield_SPRINT": 916, "customfield_EPIC": "PROJ-1940"}'
