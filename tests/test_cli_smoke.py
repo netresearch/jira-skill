@@ -248,7 +248,12 @@ class TestMockedCommands:
     """CLI commands with mocked Jira client must produce correct output."""
 
     def _make_mock_client(self):
-        return mock.Mock()
+        client = mock.Mock()
+        # Default to Server/DC: LazyJiraClient.jql() override delegates to client.jql()
+        # only when client.cloud is falsy. Without this, a bare Mock makes 'cloud'
+        # auto-truthy and the override takes the Cloud /search/jql branch.
+        client.cloud = False
+        return client
 
     def test_issue_get_json(self):
         """jira-issue --json get KEY must output JSON."""

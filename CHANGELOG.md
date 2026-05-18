@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-search query`, `jira-qa-gather`, `jira-worklog-query`: JQL search now works on Atlassian Cloud instances. Atlassian removed `/rest/api/2/search` and `/rest/api/3/search` from Cloud ([CHANGE-2046](https://developer.atlassian.com/changelog/#CHANGE-2046)); `atlassian-python-api` hardcodes `api_version=2` so its `jql()` method failed with "The requested API has been removed" on every `*.atlassian.net` instance. `LazyJiraClient.jql()` now overrides the library and calls the new `/rest/api/3/search/jql` endpoint directly on Cloud while Server/DC still goes through the library unchanged. Surgical override rather than a `atlassian-python-api` 4.x bump because the 4.x line still has open Cloud-pathway bugs and the project cannot verify against a Cloud tenant. Original fix by [@rschmied](https://github.com/rschmied) in [#107](https://github.com/netresearch/jira-skill/pull/107).
+
 ### Changed
 
 - `validate-jira-syntax.sh`: the "Unsupported `{code:<lang>}` language" error now suggests the closest-fit valid language for common stumbles instead of always falling back to the full valid-languages list. Identifiers are matched case-insensitively (`Dockerfile`, `Makefile`, `HCL`, `TypeScript` etc. all resolve). Recognised hints: `hcl/tf/terraform/tofu` → `{code:none}`, `dockerfile/containerfile` → `{code:bash}` or `{code:none}`, `rust/rs` → `{code:none}`, `kotlin/kt` → `{code:java}` or `{code:none}`, `typescript/ts/tsx` → `{code:javascript}` or `{code:none}`, `shell/zsh/fish/console` → `{code:bash}` or `{code:none}`, `make/makefile` → `{code:none}`, `ini/toml/conf/properties` → `{code:none}`, `diff/patch` → `{code:none}`, `go-template/gotmpl/jinja/jinja2` → `{code:none}`. Unknown languages still get the full valid-languages list.

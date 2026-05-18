@@ -161,6 +161,106 @@ class TestLazyJiraClient:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Tests: LazyJiraClient.jql() override for Cloud (CHANGE-2046)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLazyJiraClientJqlOverride:
+    """jql() must route Cloud calls to /rest/api/3/search/jql and delegate on Server/DC."""
+
+    def _make_lazy(self, *, cloud: bool):
+        """Build a LazyJiraClient backed by a mock client with given cloud flag."""
+        mock_client = mock.Mock()
+        mock_client.cloud = cloud
+        mock_client.get.return_value = {"issues": []}
+        mock_client.jql.return_value = {"issues": []}
+        patcher = mock.patch("lib.client.get_jira_client", return_value=mock_client)
+        patcher.start()
+        return LazyJiraClient(), mock_client, patcher
+
+    def test_server_path_delegates_to_library_jql(self):
+        """On Server/DC the library's jql() is called with the same arguments."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=False)
+        try:
+            lazy.jql("project = FOO", limit=25, start=10, fields="summary,status")
+            mock_client.jql.assert_called_once_with("project = FOO", fields="summary,status", start=10, limit=25)
+            mock_client.get.assert_not_called()
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_calls_new_search_jql_endpoint(self):
+        """On Cloud the new /rest/api/3/search/jql endpoint is called directly."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("project = FOO", limit=25, start=10, fields="summary")
+            mock_client.get.assert_called_once_with(
+                "rest/api/3/search/jql",
+                params={"jql": "project = FOO", "startAt": 10, "maxResults": 25, "fields": "summary"},
+            )
+            mock_client.jql.assert_not_called()
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_defaults_fields_to_all(self):
+        """fields=None on Cloud defaults to '*all'."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("KEY = X-1")
+            params = mock_client.get.call_args.kwargs["params"]
+            assert params["fields"] == "*all"
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_joins_list_fields(self):
+        """fields as a list/tuple/set is joined with commas."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("KEY = X-1", fields=["key", "summary"])
+            params = mock_client.get.call_args.kwargs["params"]
+            assert params["fields"] == "key,summary"
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_forwards_expand(self):
+        """expand kwarg is forwarded to the new endpoint when non-None."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("KEY = X-1", expand="changelog")
+            params = mock_client.get.call_args.kwargs["params"]
+            assert params["expand"] == "changelog"
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_returns_empty_dict_when_get_returns_none(self):
+        """Defensive: client.get() returning None becomes an empty dict."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            mock_client.get.return_value = None
+            assert lazy.jql("KEY = X-1") == {}
+        finally:
+            patcher.stop()
+
+    def test_jql_triggers_lazy_creation(self):
+        """Calling jql() before any other attribute still initialises the client."""
+        mock_client = mock.Mock()
+        mock_client.cloud = False
+        mock_client.jql.return_value = {"issues": []}
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client) as mock_get:
+            lazy = LazyJiraClient(env_file="x.env", profile="p")
+            lazy.jql("project = FOO")
+            mock_get.assert_called_once_with(env_file="x.env", profile="p", issue_key=None, url=None)
+
+    def test_missing_cloud_attr_treated_as_server(self):
+        """A client without a 'cloud' attribute is treated as Server/DC (safe default)."""
+        mock_client = mock.Mock(spec=["jql"])  # no 'cloud' attribute
+        mock_client.jql.return_value = {"issues": []}
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            lazy = LazyJiraClient()
+            lazy.jql("project = FOO")
+            mock_client.jql.assert_called_once()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Tests: Timeout is set on Jira client (F2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
