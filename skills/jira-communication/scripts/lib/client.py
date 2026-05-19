@@ -399,52 +399,81 @@ class LazyJiraClient:
         # supports Cloud /rest/api/3/search/jql natively (tracked upstream as
         # https://github.com/atlassian-api/atlassian-python-api/issues/1631).
         client = self._ensure_client()
-
-        # URL-based Cloud detection is more robust than the library's
-        # ``cloud`` attribute which has shifted across major versions and is
-        # easy to omit in mocks. ``is_cloud_url()`` does strict ``atlassian.net``
-        # domain matching (see lib/config.py).
+        # URL-based Cloud detection is more robust than the library's ``cloud``
+        # attribute, which has shifted across versions and is easy to omit in mocks.
         if not is_cloud_url(getattr(client, "url", "") or ""):
             return client.jql(jql, fields=fields, start=start, limit=limit, **kwargs)
+        return self._jql_cloud(client, jql, start, limit, fields, expand=kwargs.get("expand"))
 
+    @staticmethod
+    def _normalize_jql_fields(fields) -> str:
+        """Coerce a fields argument to the comma-separated string the endpoint expects."""
         if fields is None:
-            fields = "*all"
+            return "*all"
         if isinstance(fields, (list, tuple, set)):
-            fields = ",".join(fields)
+            return ",".join(fields)
+        return fields
 
+    def _jql_cloud(
+        self,
+        client,
+        jql: str,
+        start: int,
+        limit: int,
+        fields,
+        *,
+        expand=None,
+    ) -> dict:
+        """Cloud path: drain cursor-paginated pages until the window is filled."""
+        fields_str = self._normalize_jql_fields(fields)
         target = start + limit
         hardcap = type(self)._CLOUD_DRAIN_HARDCAP
         collected: list = []
         next_token: str | None = None
-        is_last = True  # last seen response flag; defaults True so empty result → total=0
+        is_last = True  # defaults True so an empty initial response yields total=0
 
         while len(collected) < target and len(collected) < hardcap:
-            params = {
-                "jql": jql,
-                "maxResults": min(100, max(1, target - len(collected))),
-                "fields": fields,
-            }
-            if next_token is not None:
-                params["nextPageToken"] = next_token
-            if kwargs.get("expand") is not None:
-                params["expand"] = kwargs["expand"]
-
-            try:
-                page = client.get(type(self)._CLOUD_SEARCH_ENDPOINT, params=params) or {}
-            except Exception as exc:
-                if hasattr(exc, "add_note"):  # Python 3.11+
-                    exc.add_note(f"Cloud override: {type(self)._CLOUD_SEARCH_ENDPOINT} (CHANGE-2046)")
-                raise
-
+            page = self._fetch_jql_page(client, jql, fields_str, expand, target - len(collected), next_token)
             page_issues = page.get("issues", []) or []
             collected.extend(page_issues)
             is_last = bool(page.get("isLast", True))
             next_token = page.get("nextPageToken")
-
             if is_last or not next_token or not page_issues:
                 break
 
-        sliced = collected[start : start + limit]
+        return self._synthesize_offset_response(collected, start, limit, is_last)
+
+    def _fetch_jql_page(
+        self,
+        client,
+        jql: str,
+        fields: str,
+        expand,
+        remaining: int,
+        next_token: str | None,
+    ) -> dict:
+        """Fetch a single page from /rest/api/3/search/jql, annotating errors with context."""
+        params: dict = {
+            "jql": jql,
+            "maxResults": min(100, max(1, remaining)),
+            "fields": fields,
+        }
+        if next_token is not None:
+            params["nextPageToken"] = next_token
+        if expand is not None:
+            params["expand"] = expand
+        try:
+            return client.get(type(self)._CLOUD_SEARCH_ENDPOINT, params=params) or {}
+        except Exception as exc:
+            if hasattr(exc, "add_note"):  # Python 3.11+
+                exc.add_note(f"Cloud override: {type(self)._CLOUD_SEARCH_ENDPOINT} (CHANGE-2046)")
+            raise
+
+    @staticmethod
+    def _synthesize_offset_response(collected: list, start: int, limit: int, is_last: bool) -> dict:
+        """Translate cursor-drained issues into the offset/total response shape callers expect."""
+        target = start + limit
+        sliced = collected[start:target]
         total = len(collected) if is_last else start + len(sliced) + 1
         return {
             "issues": sliced,

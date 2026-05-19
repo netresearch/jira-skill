@@ -280,7 +280,7 @@ class TestLazyJiraClientJqlOverride:
 
     def test_cloud_synthesizes_sentinel_total_when_more_pages_exist(self):
         """When the drain stops at the window with isLast=False, total signals 'more exist'."""
-        lazy, mock_client, patcher = self._make_lazy(
+        lazy, _, patcher = self._make_lazy(
             cloud=True,
             pages=[
                 {
