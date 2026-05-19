@@ -161,6 +161,228 @@ class TestLazyJiraClient:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Tests: LazyJiraClient.jql() override for Cloud (CHANGE-2046)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLazyJiraClientJqlOverride:
+    """jql() must route Cloud calls to /rest/api/3/search/jql and delegate on Server/DC."""
+
+    SERVER_URL = "https://jira.example.com"
+    CLOUD_URL = "https://acme.atlassian.net"
+
+    def _make_lazy(self, *, cloud: bool, pages: list[dict] | None = None):
+        """Build a LazyJiraClient backed by a mock client.
+
+        Cloud detection in the override uses ``is_cloud_url(client.url)``,
+        so we set ``client.url`` rather than ``client.cloud``.
+
+        If *pages* is provided it becomes the ``client.get`` side-effect, one
+        response per cursor request. Otherwise ``client.get`` returns a single
+        empty page (``isLast=True``).
+        """
+        mock_client = mock.Mock()
+        mock_client.url = self.CLOUD_URL if cloud else self.SERVER_URL
+        if pages is None:
+            mock_client.get.return_value = {"issues": [], "isLast": True}
+        else:
+            mock_client.get.side_effect = pages
+        mock_client.jql.return_value = {"issues": [], "total": 0}
+        patcher = mock.patch("lib.client.get_jira_client", return_value=mock_client)
+        patcher.start()
+        return LazyJiraClient(), mock_client, patcher
+
+    def test_server_path_delegates_to_library_jql(self):
+        """On Server/DC the library's jql() is called with the same arguments."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=False)
+        try:
+            lazy.jql("project = FOO", limit=25, start=10, fields="summary,status")
+            mock_client.jql.assert_called_once_with("project = FOO", fields="summary,status", start=10, limit=25)
+            mock_client.get.assert_not_called()
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_calls_new_search_jql_endpoint(self):
+        """On Cloud the new /rest/api/3/search/jql endpoint is called with cursor-style params."""
+        lazy, mock_client, patcher = self._make_lazy(
+            cloud=True,
+            pages=[{"issues": [{"key": "X-1"}], "isLast": True}],
+        )
+        try:
+            lazy.jql("project = FOO", limit=25, start=0, fields="summary")
+            mock_client.get.assert_called_once_with(
+                "rest/api/3/search/jql",
+                params={"jql": "project = FOO", "maxResults": 25, "fields": "summary"},
+            )
+            mock_client.jql.assert_not_called()
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_defaults_fields_to_all(self):
+        """fields=None on Cloud defaults to '*all'."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("KEY = X-1")
+            params = mock_client.get.call_args.kwargs["params"]
+            assert params["fields"] == "*all"
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_joins_list_fields(self):
+        """fields as a list/tuple/set is joined with commas."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("KEY = X-1", fields=["key", "summary"])
+            params = mock_client.get.call_args.kwargs["params"]
+            assert params["fields"] == "key,summary"
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_forwards_expand(self):
+        """expand kwarg is forwarded to the new endpoint when non-None."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            lazy.jql("KEY = X-1", expand="changelog")
+            params = mock_client.get.call_args.kwargs["params"]
+            assert params["expand"] == "changelog"
+        finally:
+            patcher.stop()
+
+    def test_cloud_path_returns_synthesized_shape_when_get_returns_none(self):
+        """Defensive: client.get() returning None yields an empty offset-style result."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            mock_client.get.return_value = None
+            result = lazy.jql("KEY = X-1", limit=10, start=0)
+            assert result == {"issues": [], "startAt": 0, "maxResults": 10, "total": 0, "isLast": True}
+        finally:
+            patcher.stop()
+
+    def test_cloud_drains_multiple_pages_via_next_page_token(self):
+        """When isLast=False the override fetches further pages until the window is filled."""
+        lazy, mock_client, patcher = self._make_lazy(
+            cloud=True,
+            pages=[
+                {"issues": [{"key": f"X-{i}"} for i in range(50)], "isLast": False, "nextPageToken": "tok-1"},
+                {"issues": [{"key": f"X-{i}"} for i in range(50, 100)], "isLast": True},
+            ],
+        )
+        try:
+            result = lazy.jql("project = FOO", limit=100, start=0)
+            assert mock_client.get.call_count == 2
+            second_call_params = mock_client.get.call_args_list[1].kwargs["params"]
+            assert second_call_params["nextPageToken"] == "tok-1"
+            assert len(result["issues"]) == 100
+            assert result["total"] == 100  # accurate when isLast=True
+            assert result["isLast"] is True
+        finally:
+            patcher.stop()
+
+    def test_cloud_synthesizes_sentinel_total_when_more_pages_exist(self):
+        """When the drain stops at the window with isLast=False, total signals 'more exist'."""
+        lazy, _, patcher = self._make_lazy(
+            cloud=True,
+            pages=[
+                {
+                    "issues": [{"key": f"X-{i}"} for i in range(50)],
+                    "isLast": False,
+                    "nextPageToken": "tok-1",
+                },
+            ],
+        )
+        try:
+            result = lazy.jql("project = FOO", limit=50, start=0)
+            assert len(result["issues"]) == 50
+            # Sentinel: start + len(sliced) + 1 → 0 + 50 + 1 = 51
+            assert result["total"] == 51
+            assert result["isLast"] is False
+        finally:
+            patcher.stop()
+
+    def test_cloud_slices_window_with_start_offset(self):
+        """start>0 returns the [start:start+limit] slice from the drained pages."""
+        lazy, mock_client, patcher = self._make_lazy(
+            cloud=True,
+            pages=[
+                {"issues": [{"key": f"X-{i}"} for i in range(50)], "isLast": False, "nextPageToken": "tok-1"},
+                {"issues": [{"key": f"X-{i}"} for i in range(50, 100)], "isLast": True},
+            ],
+        )
+        try:
+            result = lazy.jql("project = FOO", limit=25, start=50)
+            assert mock_client.get.call_count == 2
+            keys = [i["key"] for i in result["issues"]]
+            assert keys == [f"X-{i}" for i in range(50, 75)]
+            assert result["startAt"] == 50
+            assert result["total"] == 100
+        finally:
+            patcher.stop()
+
+    def test_cloud_pagination_loop_terminates_on_caller_total_check(self):
+        """The synthesized total lets a startAt/total paginating caller terminate cleanly."""
+        # Simulates jira-worklog-query.py's loop against a 75-issue result set.
+        # Iter 1 (start=0, limit=50) drains 1 page to fill the window. Iter 2
+        # (start=50, limit=50) replays from cursor start — needs page 1 + page 2.
+        page1 = {"issues": [{"key": f"X-{i}"} for i in range(50)], "isLast": False, "nextPageToken": "p1"}
+        page2 = {"issues": [{"key": f"X-{i}"} for i in range(50, 75)], "isLast": True}
+        lazy, mock_client, patcher = self._make_lazy(cloud=True, pages=[page1, page1, page2])
+        try:
+            collected, start_at = [], 0
+            for _ in range(5):  # safety bound; real loop terminates earlier
+                result = lazy.jql("project = FOO", limit=50, start=start_at)
+                issues = result["issues"]
+                if not issues:
+                    break
+                collected.extend(issues)
+                start_at += len(issues)
+                if start_at >= result["total"]:
+                    break
+            assert len(collected) == 75
+            # Iter 1: 1 cursor call. Iter 2: 2 cursor calls (replays from cursor=None).
+            assert mock_client.get.call_count == 3
+        finally:
+            patcher.stop()
+
+    def test_cloud_error_carries_endpoint_hint_on_modern_python(self):
+        """On Python 3.11+ a failing client.get() gets an add_note with the Cloud endpoint hint."""
+        from requests.exceptions import HTTPError
+
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        try:
+            mock_client.get.side_effect = HTTPError("410 Gone")
+            try:
+                lazy.jql("project = FOO")
+            except HTTPError as exc:
+                if hasattr(exc, "__notes__"):  # Python 3.11+
+                    assert any("rest/api/3/search/jql" in n for n in exc.__notes__)
+                    assert any("CHANGE-2046" in n for n in exc.__notes__)
+            else:
+                raise AssertionError("expected HTTPError to propagate")
+        finally:
+            patcher.stop()
+
+    def test_jql_triggers_lazy_creation(self):
+        """Calling jql() before any other attribute still initialises the client."""
+        mock_client = mock.Mock()
+        mock_client.url = "https://jira.example.com"  # Server/DC
+        mock_client.jql.return_value = {"issues": []}
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client) as mock_get:
+            lazy = LazyJiraClient(env_file="x.env", profile="p")
+            lazy.jql("project = FOO")
+            mock_get.assert_called_once_with(env_file="x.env", profile="p", issue_key=None, url=None)
+
+    def test_missing_url_attr_treated_as_server(self):
+        """A client without a parseable URL falls back to Server/DC (library jql()) — fail-closed."""
+        mock_client = mock.Mock()
+        mock_client.url = None  # is_cloud_url("") → False
+        mock_client.jql.return_value = {"issues": []}
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            lazy = LazyJiraClient()
+            lazy.jql("project = FOO")
+            mock_client.jql.assert_called_once()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Tests: Timeout is set on Jira client (F2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
