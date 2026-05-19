@@ -33,6 +33,7 @@ from lib.changelog import (
 )
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated, resolve_assignee, resolve_status
 from lib.config import load_status_sets
+from lib.input import read_stdin_utf8
 from lib.output import comment_to_text, compact_json, error, extract_adf_text, format_output, success, warning
 
 
@@ -541,7 +542,7 @@ def update(
                 sys.exit(1)
             max_size = 256 * 1024  # 256KB, above Jira's description limit
             try:
-                description = sys.stdin.read(max_size + 1)
+                description = read_stdin_utf8(max_size + 1)
             except UnicodeDecodeError:
                 error(
                     "stdin contains invalid text encoding (expected UTF-8)",

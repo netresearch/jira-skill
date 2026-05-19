@@ -21,6 +21,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
+from lib.input import read_stdin_utf8
 from lib.output import error, extract_adf_text, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -92,7 +93,7 @@ def add(ctx, issue_key: str, comment_text: str):
 
         max_size = 256 * 1024  # 256KB, above Jira's comment limit
         try:
-            comment_text = sys.stdin.read(max_size + 1)
+            comment_text = read_stdin_utf8(max_size + 1)
         except UnicodeDecodeError:
             error(
                 "stdin contains invalid text encoding (expected UTF-8)",
@@ -171,7 +172,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
 
         max_size = 256 * 1024  # 256KB, above Jira's comment limit
         try:
-            comment_text = sys.stdin.read(max_size + 1)
+            comment_text = read_stdin_utf8(max_size + 1)
         except UnicodeDecodeError:
             error(
                 "stdin contains invalid text encoding (expected UTF-8)",

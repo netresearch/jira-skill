@@ -561,16 +561,17 @@ class TestMockedCommands:
 
         Click's CliRunner replaces sys.stdin during invoke(), making it impossible
         to test the isatty guard through the CLI. We verify at the source level
-        that the guard exists and is correctly placed before sys.stdin.read().
+        that the guard exists and is correctly placed before the stdin read
+        (read_stdin_utf8 — see lib/input.py).
         """
         import inspect
 
         source = inspect.getsource(_comment_mod.add.callback)
         isatty_pos = source.find("isatty()")
-        read_pos = source.find("stdin.read(")
+        read_pos = source.find("read_stdin_utf8(")
         assert isatty_pos != -1, "isatty() guard missing from add command"
-        assert read_pos != -1, "stdin.read() missing from add command"
-        assert isatty_pos < read_pos, "isatty() guard must come before stdin.read()"
+        assert read_pos != -1, "read_stdin_utf8() missing from add command"
+        assert isatty_pos < read_pos, "isatty() guard must come before read_stdin_utf8()"
 
     def test_comment_list_rejects_negative_limit(self):
         """jira-comment list --limit -1 must be rejected by Click before API calls."""
