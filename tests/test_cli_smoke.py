@@ -249,10 +249,12 @@ class TestMockedCommands:
 
     def _make_mock_client(self):
         client = mock.Mock()
-        # Default to Server/DC: LazyJiraClient.jql() override delegates to client.jql()
-        # only when client.cloud is falsy. Without this, a bare Mock makes 'cloud'
-        # auto-truthy and the override takes the Cloud /search/jql branch.
-        client.cloud = False
+        # Default to Server/DC: LazyJiraClient.jql() override uses is_cloud_url(client.url)
+        # to choose between delegating to client.jql() (Server/DC) and calling the new
+        # /rest/api/3/search/jql endpoint (Cloud). A bare Mock makes 'url' a Mock object,
+        # which would crash urlparse(); pin it to a Server URL so the smokes exercise
+        # the delegation path the existing test assertions expect.
+        client.url = "https://jira.example.com"
         return client
 
     def test_issue_get_json(self):

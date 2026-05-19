@@ -303,6 +303,11 @@ class LazyJiraClient:
     first attribute access. CLI subcommands can call with_context() to provide
     issue_key/url for automatic profile resolution before the first API call.
 
+    Also overrides ``jql()`` to route Atlassian Cloud calls to the
+    ``/rest/api/3/search/jql`` endpoint introduced by CHANGE-2046 — the library
+    is pinned to api/2 which Atlassian removed from Cloud. Server/DC paths
+    delegate to the library unchanged.
+
     Usage in CLI scripts::
 
         # Group callback — no connection made yet
@@ -313,6 +318,12 @@ class LazyJiraClient:
         client = ctx.obj['client']
         client.issue(issue_key)  # Client created here on first access
     """
+
+    # Maximum issues to drain inside a single jql() call on Cloud before
+    # bailing out, regardless of caller's start+limit. Prevents accidental
+    # runaway pagination when a caller passes a very large start offset.
+    _CLOUD_DRAIN_HARDCAP = 1000
+    _CLOUD_SEARCH_ENDPOINT = "rest/api/3/search/jql"
 
     def __init__(self, env_file: str | None = None, profile: str | None = None):
         object.__setattr__(self, "_env_file", env_file)
@@ -340,7 +351,8 @@ class LazyJiraClient:
                 object.__setattr__(self, "_url", url)
         return self
 
-    def __getattr__(self, name):
+    def _ensure_client(self) -> Jira:
+        """Lazy-create the underlying Jira client on first use."""
         client = object.__getattribute__(self, "_client")
         if client is None:
             client = get_jira_client(
@@ -350,45 +362,97 @@ class LazyJiraClient:
                 url=object.__getattribute__(self, "_url"),
             )
             object.__setattr__(self, "_client", client)
-        return getattr(client, name)
+        return client
+
+    def __getattr__(self, name):
+        return getattr(self._ensure_client(), name)
 
     def jql(self, jql: str, limit: int = 50, start: int = 0, fields=None, **kwargs) -> dict:
-        """Execute a JQL search, using /rest/api/3/search/jql on Cloud.
+        """Execute a JQL search, routing Cloud to /rest/api/3/search/jql.
 
-        Atlassian removed /rest/api/2/search and /rest/api/3/search from Cloud
-        instances (see CHANGE-2046). The new endpoint is /rest/api/3/search/jql.
-        atlassian-python-api hardcodes api_version=2, so we bypass it for Cloud.
+        On Atlassian Cloud the library's ``jql()`` hits ``/rest/api/2/search``
+        which Atlassian removed (CHANGE-2046). This override calls the new
+        cursor-paginated ``/rest/api/3/search/jql`` endpoint directly and
+        translates the cursor-based response back to the offset/total shape
+        the callers expect (``issues``, ``startAt``, ``maxResults``, ``total``,
+        ``isLast``), so ``jira-search``, ``jira-qa-gather`` and
+        ``jira-worklog-query`` keep working without changes.
 
-        On Server/DC the library's jql() method still works fine via api/2.
+        Synthesized ``total`` semantics:
+
+        * On the final page (``isLast=True``): ``total == len(collected)`` —
+          accurate count of the matching result set up to the drained window.
+        * Otherwise: ``total == start + len(sliced) + 1`` — a sentinel that
+          tells callers paginating via ``start_at`` that more pages exist.
+
+        Inefficiency note: each call drains pages from index 0 up to
+        ``start + limit`` because the new endpoint is cursor-based and we
+        cannot resume from an offset. Callers that paginate over many pages
+        incur quadratic total request cost. Acceptable as a workaround until
+        ``atlassian-python-api`` ships Cloud-aware ``jql()``; see
+        ``TODO(CHANGE-2046)`` below for the migration path.
+
+        On Server/DC the library's ``jql()`` remains functional via api/2 and
+        is called unchanged.
         """
-        client = object.__getattribute__(self, "_client")
-        if client is None:
-            client = get_jira_client(
-                env_file=object.__getattribute__(self, "_env_file"),
-                profile=object.__getattribute__(self, "_profile"),
-                issue_key=object.__getattribute__(self, "_issue_key"),
-                url=object.__getattribute__(self, "_url"),
-            )
-            object.__setattr__(self, "_client", client)
+        # TODO(CHANGE-2046): Remove this override once atlassian-python-api
+        # supports Cloud /rest/api/3/search/jql natively (tracked upstream as
+        # https://github.com/atlassian-api/atlassian-python-api/issues/1631).
+        client = self._ensure_client()
 
-        if not getattr(client, "cloud", False):
-            # Server/DC: delegate to the library as normal
+        # URL-based Cloud detection is more robust than the library's
+        # ``cloud`` attribute which has shifted across major versions and is
+        # easy to omit in mocks. ``is_cloud_url()`` does strict ``atlassian.net``
+        # domain matching (see lib/config.py).
+        if not is_cloud_url(getattr(client, "url", "") or ""):
             return client.jql(jql, fields=fields, start=start, limit=limit, **kwargs)
 
-        # Cloud: use the new /rest/api/3/search/jql endpoint directly
         if fields is None:
             fields = "*all"
         if isinstance(fields, (list, tuple, set)):
             fields = ",".join(fields)
-        params = {
-            "jql": jql,
+
+        target = start + limit
+        hardcap = type(self)._CLOUD_DRAIN_HARDCAP
+        collected: list = []
+        next_token: str | None = None
+        is_last = True  # last seen response flag; defaults True so empty result → total=0
+
+        while len(collected) < target and len(collected) < hardcap:
+            params = {
+                "jql": jql,
+                "maxResults": min(100, max(1, target - len(collected))),
+                "fields": fields,
+            }
+            if next_token is not None:
+                params["nextPageToken"] = next_token
+            if kwargs.get("expand") is not None:
+                params["expand"] = kwargs["expand"]
+
+            try:
+                page = client.get(type(self)._CLOUD_SEARCH_ENDPOINT, params=params) or {}
+            except Exception as exc:
+                if hasattr(exc, "add_note"):  # Python 3.11+
+                    exc.add_note(f"Cloud override: {type(self)._CLOUD_SEARCH_ENDPOINT} (CHANGE-2046)")
+                raise
+
+            page_issues = page.get("issues", []) or []
+            collected.extend(page_issues)
+            is_last = bool(page.get("isLast", True))
+            next_token = page.get("nextPageToken")
+
+            if is_last or not next_token or not page_issues:
+                break
+
+        sliced = collected[start : start + limit]
+        total = len(collected) if is_last else start + len(sliced) + 1
+        return {
+            "issues": sliced,
             "startAt": start,
             "maxResults": limit,
-            "fields": fields,
+            "total": total,
+            "isLast": is_last and len(collected) <= target,
         }
-        if "expand" in kwargs and kwargs["expand"] is not None:
-            params["expand"] = kwargs["expand"]
-        return client.get("rest/api/3/search/jql", params=params) or {}
 
 
 def get_jira_client(
