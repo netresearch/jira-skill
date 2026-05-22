@@ -185,6 +185,16 @@ validate_file() {
         warning "Potential unclosed {color} tag (odd number of occurrences)"
     fi
 
+    # Check for unclosed {noformat}, {quote}, {anchor} blocks
+    # Same single-token open/close rule as {code}, {panel}, {color}: an odd
+    # occurrence count signals an unescaped literal in prose or a missing close.
+    for macro in noformat quote anchor; do
+        local mcount=$(grep -oE "\{${macro}[}:]" <<< "$content" | wc -l)
+        if [ $((mcount % 2)) -ne 0 ]; then
+            warning "Potential unclosed {${macro}} tag (odd number of occurrences)"
+        fi
+    done
+
     # Check for Markdown-style lists (- item instead of * item)
     if echo "$content" | grep -qE "^- [^-]"; then
         warning "Found Markdown-style bullets (- item). Jira prefers: * item"

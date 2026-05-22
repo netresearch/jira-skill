@@ -259,6 +259,22 @@ Horizontal rule (4 dashes)
 
 To escape special characters, use backslash: `\*`, `\{`, `\[`
 
+### Common gotcha: macro names in prose
+
+Writing a macro name literally in prose (e.g. *"commands wrapped in \{code\} blocks"*) without escaping breaks rendering — Jira parses the literal as the *start* of a code-block macro and either consumes the rest of the comment or pairs with the next unrelated occurrence it finds. The same trap applies to any macro that opens and closes with the same token: `{noformat}…{noformat}`, `{quote}…{quote}`, `{color}…{color}`, `{panel}…{panel}`, `{anchor}…{anchor}`, and so on.
+
+Three ways to write the literal token safely, in order of preference:
+
+| Approach | Example | When to use |
+|----------|---------|-------------|
+| Rephrase to avoid the token | `commands shown as code blocks` | First choice — readers don't need the macro name to understand the prose |
+| Backslash-escape | `\{code\}` | When you genuinely need to show the macro name |
+| Wrap in a code span | `` `{{code}}` `` | Last resort — some style guides ban inline `{{monospace}}` in favour of bold `*term*` for technical terms |
+
+The backslash escape is the official Jira mechanism; the rephrase is editorial; the `{{monospace}}` wrap renders fine but is disliked by teams that reserve monospace for actual code spans rather than inline references.
+
+A quick sanity check before posting: run `skills/jira-syntax/scripts/validate-jira-syntax.sh <file>` on your draft (from the repo root). The script verifies that the six paired macros (`code`, `panel`, `color`, `noformat`, `quote`, `anchor`) are balanced — every opener matches a closer, even with a language tag like `{code:bash}` — and catches Markdown leakage (` ``` ` fences, `[text](url)` links, `` `code` `` spans), language declarations Jira Server does not recognise, and malformed table headers.
+
 ## Emoticons
 
 | Code | Emoji | Meaning |
