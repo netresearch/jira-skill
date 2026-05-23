@@ -36,5 +36,8 @@
   ],
   "peerDependencies": {
     "@netresearch/agent-skill-coordinator": "^0.1"
+  },
+  "scripts": {
+    "prepare": "command -v pre-commit >/dev/null && pre-commit install --install-hooks 2>/dev/null || true"
   }
 }
