@@ -1,0 +1,61 @@
+# Pre-commit hooks — embodies the CI/Hook Parity Principle for this repo.
+#
+# Every hook below ALSO runs in CI (via the reusable validate.yml workflow
+# from netresearch/skill-repo-skill). CI is the authoritative backstop;
+# local hooks are pinned by `rev:` and Renovate bumps them automatically.
+#
+# See netresearch/agent-harness-skill references/enforcement-mechanisms.md
+# for the CI/Hook Parity Principle in full.
+#
+# Install once after clone: `pre-commit install --install-hooks`.
+# Bypass (use sparingly): `git commit --no-verify`. If you need this often,
+# the hook is wrong — fix it; don't tolerate the bypass.
+
+default_install_hook_types: [pre-commit]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+
+  - repo: https://github.com/netresearch/skill-repo-skill
+    rev: v1.22.0
+    hooks:
+      - id: validate-skill
+      - id: check-version-parity
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        files: '\.md$'
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint.yml]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
