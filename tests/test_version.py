@@ -510,6 +510,39 @@ class TestSafeUpdate:
         # description retained from GET, not cleared
         assert body["description"] == "orig"
 
+    def test_strips_user_date_mirrors_from_put_body(self):
+        """Regression for #103.
+
+        Jira Server/DC returns display-only ``userReleaseDate`` /
+        ``userStartDate`` mirrors alongside the ISO dates. Echoing them back
+        in the PUT trips the API's mutually-exclusive validation:
+        "Only one of 'releaseDate' and 'userReleaseDate' can be specified".
+        They must be stripped from the merged body.
+        """
+        mc = _make_mock_client()
+        current = _make_version(
+            "10042",
+            "1.4.0",
+            released=False,
+            start_date="2026-05-01",
+            release_date="2026-05-06",
+        )
+        # Server/DC GET response also carries the locale-formatted mirrors.
+        current["userReleaseDate"] = "06/Mai/26"
+        current["userStartDate"] = "01/Mai/26"
+        mc.get.return_value = current
+        mc.put.return_value = {}
+
+        _mod._safe_update_version(mc, "10042", released=True)
+
+        body = mc.put.call_args.kwargs.get("data") or mc.put.call_args.kwargs.get("json")
+        assert "userReleaseDate" not in body
+        assert "userStartDate" not in body
+        # The ISO dates the server derives them from are preserved.
+        assert body["releaseDate"] == "2026-05-06"
+        assert body["startDate"] == "2026-05-01"
+        assert body["released"] is True
+
 
 class TestUpdate:
     def test_update_description(self):
