@@ -6,11 +6,14 @@ from pathlib import Path
 from unittest import mock
 
 import click.testing
+import pytest
 
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
 _scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
 sys.path.insert(0, str(_scripts_path))
+
+import lib.client as _lib_client
 
 # Import jira-attachment.py (hyphenated filename requires importlib)
 _core_path = _scripts_path / "core"
@@ -180,3 +183,159 @@ class TestAttachmentUploadMimeType:
         _, kwargs = mc._session.post.call_args
         _name, _fh, mime = kwargs["files"]["file"]
         assert mime == "application/octet-stream"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Shared helpers for response-level tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+_FAKE_CONFIG = {
+    "JIRA_URL": "https://jira.example.com",
+    "JIRA_USERNAME": "user@example.com",
+    "JIRA_API_TOKEN": "fake-token",
+}
+
+_JIRA_URL = "https://jira.example.com"
+
+
+def _make_mock_response(
+    content_type: str,
+    body: bytes = b"data",
+    status_code: int = 200,
+    content_disposition: str = "",
+):
+    resp = mock.Mock()
+    resp.status_code = status_code
+    resp.url = "https://jira.example.com/rest/api/2/attachment/content/1"
+    headers = {"Content-Type": content_type}
+    if content_disposition:
+        headers["Content-Disposition"] = content_disposition
+    resp.headers = headers
+    resp.raise_for_status = mock.Mock()
+    resp.iter_content = mock.Mock(return_value=iter([body]))
+    return resp
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: _handle_response helper - pure function, no CliRunner needed
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestHandleResponse:
+    """_handle_response must raise typed exceptions for session-expiry and CAPTCHA."""
+
+    def test_html_without_attachment_disposition_raises(self):
+        """200 text/html with no Content-Disposition must raise SessionExpiredError."""
+        resp = _make_mock_response("text/html; charset=utf-8")
+        with pytest.raises(_lib_client.SessionExpiredError):
+            _lib_client._handle_response(resp, _JIRA_URL)
+
+    def test_html_with_attachment_disposition_allowed(self):
+        """200 text/html with Content-Disposition: attachment must pass (real HTML file)."""
+        resp = _make_mock_response(
+            "text/html; charset=utf-8",
+            content_disposition='attachment; filename="page.html"',
+        )
+        _lib_client._handle_response(resp, _JIRA_URL)  # must not raise
+
+    def test_non_html_allowed(self):
+        """200 application/pdf must pass without raising."""
+        resp = _make_mock_response("application/pdf")
+        _lib_client._handle_response(resp, _JIRA_URL)  # must not raise
+
+    def test_captcha_header_still_raises(self):
+        """X-Authentication-Denied-Reason: CAPTCHA_CHALLENGE must raise CaptchaError."""
+        resp = _make_mock_response("application/json")
+        resp.headers["X-Authentication-Denied-Reason"] = "CAPTCHA_CHALLENGE"
+        with pytest.raises(_lib_client.CaptchaError):
+            _lib_client._handle_response(resp, _JIRA_URL)
+
+    def test_non_200_html_not_session_expiry(self):
+        """401 text/html must raise AuthenticationError, not SessionExpiredError.
+
+        Directly proves authentication handling runs before the 200-only session-expiry guard.
+        """
+        resp = _make_mock_response("text/html; charset=utf-8", status_code=401)
+        with pytest.raises(_lib_client.AuthenticationError):
+            _lib_client._handle_response(resp, _JIRA_URL)
+
+    def test_401_raises_authentication_error(self):
+        """401 response without CAPTCHA header must raise AuthenticationError."""
+        resp = _make_mock_response("application/json", status_code=401)
+        with pytest.raises(_lib_client.AuthenticationError):
+            _lib_client._handle_response(resp, _JIRA_URL)
+
+    def test_403_raises_authentication_error(self):
+        """403 response must raise AuthenticationError."""
+        resp = _make_mock_response("application/json", status_code=403)
+        with pytest.raises(_lib_client.AuthenticationError):
+            _lib_client._handle_response(resp, _JIRA_URL)
+
+    def test_captcha_on_401_raises_captcha_not_auth_error(self):
+        """401 with CAPTCHA header must raise CaptchaError, not AuthenticationError.
+
+        Validates that _check_captcha_challenge runs before _check_authentication
+        so CAPTCHA-flavoured 401s are attributed to the more specific exception.
+        """
+        resp = _make_mock_response("text/html", status_code=401)
+        resp.headers["X-Authentication-Denied-Reason"] = "CAPTCHA_CHALLENGE"
+        with pytest.raises(_lib_client.CaptchaError):
+            _lib_client._handle_response(resp, _JIRA_URL)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: CLI-level regression - HTML responses rejected before writing to disk
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestDownloadContentTypeGuard:
+    """End-to-end CLI regression: HTML session-expiry pages must not be written to disk."""
+
+    def _run_download(self, tmp_path, content_type, content_disposition=""):
+        out_file = str(tmp_path / "out.bin")
+        runner = click.testing.CliRunner()
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(
+                jira_attachment.requests,
+                "get",
+                return_value=_make_mock_response(content_type, b"fake", content_disposition=content_disposition),
+            ),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(
+                jira_attachment.cli,
+                ["download", "https://jira.example.com/rest/api/2/attachment/content/1", out_file],
+            )
+        return result, tmp_path / "out.bin"
+
+    def test_html_content_type_rejected(self, tmp_path):
+        """text/html with no Content-Disposition must be rejected; file must not be written."""
+        result, out = self._run_download(tmp_path, "text/html; charset=utf-8")
+        assert result.exit_code != 0
+        assert "HTML" in result.output
+        assert not out.exists()
+
+    def test_html_content_type_case_insensitive(self, tmp_path):
+        """Content-Type header matching must be case-insensitive (Text/Html, TEXT/HTML)."""
+        result, out = self._run_download(tmp_path, "Text/Html")
+        assert result.exit_code != 0
+        assert "HTML" in result.output
+        assert not out.exists()
+
+    def test_html_attachment_disposition_accepted(self, tmp_path):
+        """text/html with Content-Disposition: attachment must be accepted (real HTML file)."""
+        result, out = self._run_download(
+            tmp_path, "text/html; charset=utf-8", content_disposition='attachment; filename="report.html"'
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+        assert out.read_bytes() == b"fake"
+
+    def test_valid_content_type_accepted(self, tmp_path):
+        """application/pdf response must be accepted and the file written."""
+        result, out = self._run_download(tmp_path, "application/pdf")
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+        assert out.read_bytes() == b"fake"

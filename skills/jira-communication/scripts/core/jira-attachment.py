@@ -25,7 +25,14 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.client import CaptchaError, LazyJiraClient, _sanitize_error
+from lib.client import (
+    AuthenticationError,
+    CaptchaError,
+    LazyJiraClient,
+    SessionExpiredError,
+    _handle_response,
+    _sanitize_error,
+)
 from lib.config import load_config, normalize_netloc
 from lib.output import error, success, warning
 
@@ -212,6 +219,9 @@ def download(ctx, attachment_url: str, output_file: str):
             error(f"Download failed: unexpected redirect (status {response.status_code})")
             sys.exit(1)
 
+        # _handle_response() raises typed errors for 401/403/session-expiry;
+        # raise_for_status() handles the remaining 4xx/5xx.
+        _handle_response(response, jira_url, url=getattr(response, "url", url))
         response.raise_for_status()
 
         # Write to file
@@ -230,6 +240,16 @@ def download(ctx, attachment_url: str, output_file: str):
         if ctx.obj["debug"]:
             raise
         error(f"Missing required configuration: {e}")
+        sys.exit(1)
+    except SessionExpiredError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
+        sys.exit(1)
+    except AuthenticationError as e:
+        if ctx.obj["debug"]:
+            raise
+        error(str(e))
         sys.exit(1)
     except requests.exceptions.RequestException as e:
         if ctx.obj["debug"]:

@@ -26,7 +26,7 @@ import json as json_module
 
 import click
 import requests
-from lib.client import LazyJiraClient, _sanitize_error
+from lib.client import AuthenticationError, LazyJiraClient, SessionExpiredError, _sanitize_error
 from lib.config import (
     DEFAULT_ENV_FILE,
     PROFILES_FILE,
@@ -172,6 +172,12 @@ def check_connectivity(
         if verbose:
             success(f"Authenticated as: {display_name} ({email})")
 
+    except SessionExpiredError as e:
+        error("Authentication failed", str(e))
+        return False, info
+    except AuthenticationError as e:
+        error("Authentication failed", str(e))
+        return False, info
     except Exception as e:
         error(
             "Authentication failed",

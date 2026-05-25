@@ -26,7 +26,13 @@ import json
 import click
 import requests
 from atlassian import Jira
-from lib.client import JIRA_TIMEOUT, _sanitize_error
+from lib.client import (
+    JIRA_TIMEOUT,
+    AuthenticationError,
+    SessionExpiredError,
+    _patch_session_for_response_validation,
+    _sanitize_error,
+)
 from lib.config import DEFAULT_ENV_FILE, PROFILES_FILE, is_cloud_url, load_env
 from lib.output import error, success, warning
 
@@ -110,30 +116,37 @@ def validate_credentials(url: str, auth_type: str, **kwargs) -> tuple[bool, str]
                 timeout=JIRA_TIMEOUT,
             )
 
+        _patch_session_for_response_validation(client, url)
+
         user = client.myself()
         if isinstance(user, dict):
             display_name = user.get("displayName", user.get("name", "Unknown"))
             email = user.get("emailAddress", "")
         else:
             user_str = str(user) if user else ""
-            # Detect HTML response (2FA/Secure Login intercept)
+            # Defensive fallback for mocked/unpatched clients where an HTML
+            # 2FA/Secure Login page reaches this point instead of raising
+            # SessionExpiredError from the response-validation hook.
             if user_str.lstrip().startswith(("<!DOCTYPE", "<html", "<HTML")):
                 return False, (
-                    "Two-factor authentication (2FA/Secure Login) intercepted the API call. "
-                    "Your PAT may not bypass 2FA on this instance. "
+                    "Two-factor authentication (2FA/Secure Login) intercepted the API call "
+                    "or the session expired. Your PAT may not bypass 2FA on this instance. "
                     "Check Jira admin settings or create a new PAT with API access."
                 )
             display_name = user_str or "Unknown"
             email = ""
         return True, f"{display_name}" + (f" ({email})" if email else "")
 
+    except SessionExpiredError:
+        return False, (
+            "Two-factor authentication (2FA/Secure Login) intercepted the API call "
+            "or the session expired. Your PAT may not bypass 2FA on this instance. "
+            "Check Jira admin settings or create a new PAT with API access."
+        )
+    except AuthenticationError:
+        return False, "Authentication failed - invalid credentials or insufficient permissions"
     except Exception as e:
-        error_msg = _sanitize_error(str(e))
-        if "401" in error_msg or "Unauthorized" in error_msg:
-            return False, "Authentication failed - invalid credentials"
-        if "403" in error_msg or "Forbidden" in error_msg:
-            return False, "Access denied - check permissions"
-        return False, f"Connection error: {error_msg}"
+        return False, f"Connection error: {_sanitize_error(str(e))}"
 
 
 def write_env_file(path: Path, config: dict) -> None:
