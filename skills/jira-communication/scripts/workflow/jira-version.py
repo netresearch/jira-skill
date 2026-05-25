@@ -304,8 +304,16 @@ def _safe_update_version(client, vid: str, **patch) -> dict:
         if value is _UNSET:
             continue
         merged[key] = value
-    # Strip server-managed fields we shouldn't echo back
-    for ro in ("self", "operations", "projectId"):
+    # Strip server-managed fields we shouldn't echo back.
+    #
+    # userReleaseDate / userStartDate are display-only, locale-formatted
+    # mirrors of releaseDate / startDate that Jira Server/DC includes in the
+    # GET response (e.g. "06/Mai/26"). Echoing them back alongside the ISO
+    # releaseDate / startDate trips the API's mutually-exclusive validation:
+    #   "Only one of 'releaseDate' and 'userReleaseDate' can be specified
+    #    when editing a version."
+    # Jira regenerates them from the ISO dates on read, so dropping them is safe.
+    for ro in ("self", "operations", "projectId", "userReleaseDate", "userStartDate"):
         merged.pop(ro, None)
     return client.put(f"rest/api/2/version/{vid}", data=merged)
 
