@@ -1,48 +1,21 @@
 """Tests for jira-watchers.py — list/add/remove issue watchers."""
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
-from unittest import mock
 
 import click.testing
 import requests
+from conftest import load_script, make_mock_client, run_cli
 
-# Add scripts to path for lib imports
-_test_dir = Path(__file__).parent
-_scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
-sys.path.insert(0, str(_scripts_path))
-
-
-def _load_script(name: str, subdir: str = "utility"):
-    """Load a hyphenated CLI script via importlib."""
-    path = _scripts_path / subdir / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name.replace("-", "_"), path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_watchers_mod = _load_script("jira-watchers", "utility")
+_watchers_mod = load_script("jira-watchers", "utility")
 
 
 def _make_mock_client(cloud: bool = False):
-    mc = mock.Mock()
-    mc.with_context = mock.Mock()
-    # Explicit attribute — LazyJiraClient exposes .cloud via atlassian.Jira
-    object.__setattr__(mc, "cloud", cloud)
-    return mc
+    # LazyJiraClient exposes .cloud via atlassian.Jira
+    return make_mock_client(cloud=cloud)
 
 
 def _run(args, mock_client=None):
-    """Run jira-watchers CLI with a mocked LazyJiraClient."""
-    if mock_client is None:
-        mock_client = _make_mock_client()
-    runner = click.testing.CliRunner()
-    with mock.patch.object(_watchers_mod, "LazyJiraClient", return_value=mock_client):
-        result = runner.invoke(_watchers_mod.cli, args)
-    return result, mock_client
+    return run_cli(_watchers_mod, args, mock_client)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

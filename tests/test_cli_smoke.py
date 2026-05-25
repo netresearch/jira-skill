@@ -4,49 +4,32 @@ These tests use click.testing.CliRunner with mocked Jira clients to verify
 that CLI scripts load correctly, parse options, and handle errors gracefully.
 """
 
-import importlib.util
-import sys
-from pathlib import Path
 from unittest import mock
 
 import click.testing
-
-# Add scripts to path for lib imports
-_test_dir = Path(__file__).parent
-_scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
-sys.path.insert(0, str(_scripts_path))
-
-
-def _load_script(name: str, subdir: str = "core"):
-    """Load a hyphenated CLI script via importlib."""
-    path = _scripts_path / subdir / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name.replace("-", "_"), path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
+from conftest import load_script
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Load all CLI modules once
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_issue_mod = _load_script("jira-issue", "core")
-_search_mod = _load_script("jira-search", "core")
-_worklog_mod = _load_script("jira-worklog", "core")
-_create_mod = _load_script("jira-create", "workflow")
-_transition_mod = _load_script("jira-transition", "workflow")
-_comment_mod = _load_script("jira-comment", "workflow")
-_sprint_mod = _load_script("jira-sprint", "workflow")
-_board_mod = _load_script("jira-board", "workflow")
-_fields_mod = _load_script("jira-fields", "utility")
-_user_mod = _load_script("jira-user", "utility")
-_link_mod = _load_script("jira-link", "utility")
-_worklog_query_mod = _load_script("jira-worklog-query", "utility")
-_weblink_mod = _load_script("jira-weblink", "utility")
-_watchers_mod = _load_script("jira-watchers", "utility")
-_version_mod = _load_script("jira-version", "workflow")
-_qa_gather_mod = _load_script("jira-qa-gather", "utility")
-_move_mod = _load_script("jira-move", "workflow")
+_issue_mod = load_script("jira-issue", "core")
+_search_mod = load_script("jira-search", "core")
+_worklog_mod = load_script("jira-worklog", "core")
+_create_mod = load_script("jira-create", "workflow")
+_transition_mod = load_script("jira-transition", "workflow")
+_comment_mod = load_script("jira-comment", "workflow")
+_sprint_mod = load_script("jira-sprint", "workflow")
+_board_mod = load_script("jira-board", "workflow")
+_fields_mod = load_script("jira-fields", "utility")
+_user_mod = load_script("jira-user", "utility")
+_link_mod = load_script("jira-link", "utility")
+_worklog_query_mod = load_script("jira-worklog-query", "utility")
+_weblink_mod = load_script("jira-weblink", "utility")
+_watchers_mod = load_script("jira-watchers", "utility")
+_version_mod = load_script("jira-version", "workflow")
+_qa_gather_mod = load_script("jira-qa-gather", "utility")
+_move_mod = load_script("jira-move", "workflow")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
