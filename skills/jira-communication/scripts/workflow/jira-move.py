@@ -146,7 +146,16 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                 )
                 sys.exit(1)
             if refreshed_type and refreshed_type != target_type:
-                error(f"Type verification failed: issue is type {refreshed_type} (expected {target_type})")
+                error(
+                    f"Type change {current_type} → {target_type} was rejected by Jira's REST "
+                    f"edit endpoint: {issue_key} is still type {refreshed_type}.",
+                    suggestion=(
+                        "Jira's edit endpoint silently refuses some issue-type conversions — "
+                        "notably between Sub-Task types (e.g. Sub: Task → Sub: Bug) and between "
+                        "Sub-Task and standard types. No payload variation makes it work via "
+                        "REST. Use the Jira UI's 'Move' action on the issue instead."
+                    ),
+                )
                 sys.exit(1)
             # Type change within same project — key stays the same
             if ctx.obj["quiet"]:
