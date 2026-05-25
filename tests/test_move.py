@@ -6,43 +6,19 @@ read-after-write check; this verifies the error message explains the REST
 limitation and points the user at the UI Move action.
 """
 
-import importlib.util
-import sys
-from pathlib import Path
 from unittest import mock
 
-import click.testing
+from conftest import load_script, make_mock_client, run_cli
 
-_test_dir = Path(__file__).parent
-_scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
-sys.path.insert(0, str(_scripts_path))
-
-
-def _load_script(name: str = "jira-move", subdir: str = "workflow"):
-    path = _scripts_path / subdir / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name.replace("-", "_"), path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_mod = _load_script()
+_mod = load_script("jira-move", "workflow")
 
 
 def _make_mock_client(url: str = "https://jira.example.com"):
-    mc = mock.Mock()
-    mc.with_context = mock.Mock()
-    mc.url = url
-    return mc
+    return make_mock_client(url)
 
 
 def _run(args, mock_client=None):
-    if mock_client is None:
-        mock_client = _make_mock_client()
-    runner = click.testing.CliRunner()
-    with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
-        result = runner.invoke(_mod.cli, args)
-    return result, mock_client
+    return run_cli(_mod, args, mock_client)
 
 
 def _issue(issue_type: str, *, project: str = "FX", status: str = "Open", summary: str = "S"):
