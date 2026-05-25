@@ -79,6 +79,18 @@ class TestReferenceMismatch:
         # requested by id, but the refreshed value only exposes name → no comparison
         assert _mod._reference_mismatch({"id": "7"}, {"name": "Sub: Bug"}) is None
 
+    def test_project_key_matches_case_insensitively(self):
+        # Jira canonicalizes project keys to uppercase; a lowercase request that
+        # was applied correctly must not be reported as a mismatch.
+        assert _mod._reference_mismatch({"key": "fx"}, {"id": "10000", "key": "FX"}) is None
+
+    def test_issue_type_name_matches_case_insensitively(self):
+        assert _mod._reference_mismatch({"name": "bug"}, {"id": "1", "name": "Bug"}) is None
+
+    def test_id_is_compared_exactly(self):
+        # ids are opaque — different ids are a genuine mismatch even if numeric-ish.
+        assert _mod._reference_mismatch({"id": "7"}, {"id": "70", "name": "X"}) == ("7", "X")
+
 
 class TestUpdateVerification:
     def test_silently_ignored_issuetype_change_fails(self):

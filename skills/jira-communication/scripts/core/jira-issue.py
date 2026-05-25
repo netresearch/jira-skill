@@ -102,7 +102,14 @@ def _reference_mismatch(requested, actual) -> tuple[str, str] | None:
         got = actual.get(attr)
         if got is None:
             continue  # this identifier isn't exposed in the refreshed value
-        if str(got) != str(requested[attr]):
+        want = str(requested[attr])
+        got = str(got)
+        # Jira canonicalizes project keys to uppercase and resolves issue-type
+        # names case-insensitively, so a caller-supplied lowercase value can be
+        # applied correctly yet come back in different casing. Compare key/name
+        # case-insensitively; only the opaque numeric id is matched exactly.
+        applied = got == want if attr == "id" else got.casefold() == want.casefold()
+        if not applied:
             return (_reference_label(requested), _reference_label(actual))
         return None  # matched on the supplied identifier — change applied
     return None  # nothing comparable
