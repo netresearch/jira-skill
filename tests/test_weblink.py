@@ -1,57 +1,25 @@
 """Tests for jira-weblink.py CRUD subcommands and jira-issue.py link output."""
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
-from unittest import mock
 
 import click.testing
 import pytest
+from conftest import load_script, make_mock_client, run_cli
 
-# Add scripts to path for lib imports
-_test_dir = Path(__file__).parent
-_scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
-sys.path.insert(0, str(_scripts_path))
-
-
-def _load_script(name: str, subdir: str = "core"):
-    """Load a hyphenated CLI script via importlib."""
-    path = _scripts_path / subdir / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name.replace("-", "_"), path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_weblink_mod = _load_script("jira-weblink", "utility")
-_issue_mod = _load_script("jira-issue", "core")
+_weblink_mod = load_script("jira-weblink", "utility")
+_issue_mod = load_script("jira-issue", "core")
 
 
 def _make_mock_client():
-    mc = mock.Mock()
-    mc.with_context = mock.Mock()
-    return mc
+    return make_mock_client()
 
 
 def _run_weblink(args, mock_client=None):
-    """Run jira-weblink CLI with a mocked LazyJiraClient."""
-    if mock_client is None:
-        mock_client = _make_mock_client()
-    runner = click.testing.CliRunner()
-    with mock.patch.object(_weblink_mod, "LazyJiraClient", return_value=mock_client):
-        result = runner.invoke(_weblink_mod.cli, args)
-    return result, mock_client
+    return run_cli(_weblink_mod, args, mock_client)
 
 
 def _run_issue(args, mock_client=None):
-    """Run jira-issue CLI with a mocked LazyJiraClient."""
-    if mock_client is None:
-        mock_client = _make_mock_client()
-    runner = click.testing.CliRunner()
-    with mock.patch.object(_issue_mod, "LazyJiraClient", return_value=mock_client):
-        result = runner.invoke(_issue_mod.cli, args)
-    return result, mock_client
+    return run_cli(_issue_mod, args, mock_client)
 
 
 def _link(link_id=42, url="https://example.com", title="Example"):
