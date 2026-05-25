@@ -23,6 +23,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient, _sanitize_error
+from lib.input import read_stdin_utf8
 from lib.output import error, format_output, format_table, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -791,7 +792,7 @@ def _emit_bulk_summary(ctx, *, created: int, skipped: int, failed: int) -> None:
 def _read_ids_from_file(path: str) -> list[str]:
     """Read one ID per line from a file (or stdin if path == '-'). Blank lines ignored."""
     if path == "-":
-        text = sys.stdin.read()
+        text = read_stdin_utf8()
     else:
         text = Path(path).read_text(encoding="utf-8")
     return [ln.strip() for ln in text.splitlines() if ln.strip()]
