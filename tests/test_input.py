@@ -61,13 +61,34 @@ class TestReadStdinUtf8:
         with patch.object(sys, "stdin", _fake_stdin(payload.encode("utf-8"))):
             assert read_stdin_utf8() == payload
 
-    def test_max_bytes_caps_read(self):
+    def test_max_chars_caps_read(self):
         with patch.object(sys, "stdin", _fake_stdin(b"abcdef")):
-            assert read_stdin_utf8(max_bytes=3) == "abc"
+            assert read_stdin_utf8(max_chars=3) == "abc"
 
-    def test_max_bytes_none_reads_everything(self):
+    def test_max_chars_none_reads_everything(self):
         with patch.object(sys, "stdin", _fake_stdin(b"abcdef")):
-            assert read_stdin_utf8(max_bytes=None) == "abcdef"
+            assert read_stdin_utf8(max_chars=None) == "abcdef"
+
+    def test_max_chars_counts_characters_not_bytes(self):
+        """The cap is a *character* count, so a multi-byte char crossing the
+        boundary must not split mid-sequence and raise a spurious
+        UnicodeDecodeError (regression for the byte-cap implementation).
+
+        ``ä`` is two UTF-8 bytes (C3 A4); 200 of them is 400 bytes. Capping
+        at 150 characters must return 150 ``ä`` characters cleanly.
+        """
+        payload = ("ä" * 200).encode("utf-8")  # 400 bytes, 200 chars
+        with patch.object(sys, "stdin", _fake_stdin(payload)):
+            result = read_stdin_utf8(max_chars=150)
+        assert result == "ä" * 150
+        assert len(result) == 150
+
+    def test_translates_windows_newlines(self):
+        """Universal newline translation matches the original text-mode read:
+        \\r\\n collapses to \\n so Windows line endings don't leak into Jira.
+        """
+        with patch.object(sys, "stdin", _fake_stdin(b"line1\r\nline2\r\nline3")):
+            assert read_stdin_utf8() == "line1\nline2\nline3"
 
     def test_invalid_utf8_raises_unicode_decode_error(self):
         # Lone 0xff is invalid as a UTF-8 start byte.
