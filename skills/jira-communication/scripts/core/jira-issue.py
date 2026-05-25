@@ -72,6 +72,49 @@ def _labels_after_add_remove(existing: list[str], add: list[str], remove: list[s
     return sorted(by_lower.values(), key=str.casefold)
 
 
+def _reference_label(ref) -> str:
+    """Human-readable label for an issuetype/project reference dict."""
+    if not isinstance(ref, dict):
+        return str(ref)
+    return str(ref.get("name") or ref.get("key") or ref.get("id") or ref)
+
+
+def _reference_mismatch(requested, actual) -> tuple[str, str] | None:
+    """Compare a requested issuetype/project reference against the re-fetched value.
+
+    ``requested`` is whatever the caller put in the update payload — e.g.
+    ``{"id": "7"}``, ``{"name": "Sub: Bug"}`` or ``{"key": "ABC"}``.
+    ``actual`` is the field as returned by a fresh ``client.issue(...)`` read.
+
+    Returns ``None`` when the change is verified (or cannot be meaningfully
+    checked), or an ``(requested_label, actual_label)`` tuple on mismatch.
+
+    Why: Jira's ``PUT /issue/{key}`` silently ignores some issuetype/project
+    changes on Server/DC, returning success while leaving the field untouched
+    (#115). We compare on whichever identifier the caller supplied (id / key /
+    name) so the check works regardless of how the reference was expressed.
+    """
+    if not isinstance(requested, dict) or not isinstance(actual, dict):
+        return None  # unrecognized shape — don't raise a false alarm
+    for attr in ("id", "key", "name"):
+        if attr not in requested:
+            continue
+        got = actual.get(attr)
+        if got is None:
+            continue  # this identifier isn't exposed in the refreshed value
+        want = str(requested[attr])
+        got = str(got)
+        # Jira canonicalizes project keys to uppercase and resolves issue-type
+        # names case-insensitively, so a caller-supplied lowercase value can be
+        # applied correctly yet come back in different casing. Compare key/name
+        # case-insensitively; only the opaque numeric id is matched exactly.
+        applied = got == want if attr == "id" else got.casefold() == want.casefold()
+        if not applied:
+            return (_reference_label(requested), _reference_label(actual))
+        return None  # matched on the supplied identifier — change applied
+    return None  # nothing comparable
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -603,6 +646,42 @@ def update(
 
     try:
         client.update_issue_field(issue_key, update_fields)
+
+        # Read-after-write verification (#115). update_issue_field returns
+        # without error even when Jira's PUT /issue/{key} endpoint silently
+        # ignores the change — which it does for issuetype and project on
+        # Server/DC. Re-fetch those fields and compare against what we asked
+        # for, mirroring the defensive check in jira-move.py, so we never
+        # report a false-positive success.
+        verify_fields = [f for f in ("issuetype", "project") if f in update_fields]
+        if verify_fields:
+            refreshed = client.issue(issue_key, fields=",".join(verify_fields))
+            refreshed_fields = refreshed.get("fields") or {}
+            for field in verify_fields:
+                mismatch = _reference_mismatch(update_fields[field], refreshed_fields.get(field))
+                if not mismatch:
+                    continue
+                requested_label, actual_label = mismatch
+                if field == "issuetype":
+                    error(
+                        f"issuetype change was not applied: issue is still '{actual_label}' "
+                        f"(requested '{requested_label}')",
+                        suggestion=(
+                            "Jira's edit endpoint silently ignores some issue-type changes "
+                            "(notably between Sub-Task types). Use 'jira-move issue' for type "
+                            "changes, or change it via the Jira UI's Move action."
+                        ),
+                    )
+                else:
+                    error(
+                        f"project change was not applied: issue is still in '{actual_label}' "
+                        f"(requested '{requested_label}')",
+                        suggestion=(
+                            "Moving an issue between projects is not supported via the edit "
+                            "endpoint. Use the Jira UI's Move action."
+                        ),
+                    )
+                sys.exit(1)
 
         if ctx.obj["quiet"]:
             print(issue_key)
