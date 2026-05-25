@@ -1,0 +1,21 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '27 3 * * 1'
+
+permissions: {}
+
+jobs:
+  codeql:
+    uses: netresearch/.github/.github/workflows/codeql.yml@main
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    with:
+      languages: actions,python
