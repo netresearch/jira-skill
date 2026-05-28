@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.15.0] - 2026-05-28
+
 ### Fixed
 
 - `jira-search query`, `jira-qa-gather`, `jira-worklog-query`: JQL search now works on Atlassian Cloud. Atlassian's CHANGE-2046 removed `/rest/api/2/search` and `/rest/api/3/search` from Cloud; `atlassian-python-api` hardcodes `api_version=2` so its `jql()` method failed with "The requested API has been removed" on every `*.atlassian.net` instance. `LazyJiraClient.jql()` now overrides the library and calls the new cursor-paginated `/rest/api/3/search/jql` endpoint directly on Cloud while Server/DC still goes through the library unchanged. The override translates cursor pagination (`nextPageToken`/`isLast`) back to the `startAt`/`total` shape the callers expect, so paginating loops keep terminating correctly on Cloud — no caller changes needed. Cloud detection uses `is_cloud_url(client.url)` (strict `.atlassian.net` match) rather than the library's `cloud` flag for cross-version robustness. Surgical override rather than bumping `atlassian-python-api` to 4.x — the 4.x line still has open Cloud-pathway bugs and the project cannot verify against a Cloud tenant. Inefficiency caveat: each call drains pages from index 0 up to `start + limit` because the new endpoint is cursor-based and we cannot resume from an offset, so deep pagination is O(N²) until upstream Cloud-aware `jql()` lands. Original fix by [@rschmied](https://github.com/rschmied) in [#107](https://github.com/netresearch/jira-skill/pull/107); pagination + Cloud-detection hardening in [#112](https://github.com/netresearch/jira-skill/pull/112).
