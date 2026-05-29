@@ -54,6 +54,9 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" 
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 ```
 
+> **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
+> resolution field stays empty and the ticket appears unresolved in the UI. See `references/intent-verbs.md`.
+
 ## Related Skills
 
 **jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.
