@@ -54,11 +54,38 @@ A transition is classified as:
 - `into_qa` — `from ∉ qa AND to ∈ qa` (handover)
 - `reject` — `from ∈ qa AND to ∈ working` (fail)
 - `forward` — `from ∈ qa AND to ∈ qa AND from ≠ to` (multi-stage progression: `QA→QA2`, `Review→UAT`, `QA→Acceptance` — **NOT** a fail)
-- `resolved` — `to ∈ resolved`
+- `resolved` — `to ∈ resolved` — **always pass `--resolution <value>`** when executing this transition (see below)
 - `out` — `from ∈ qa AND to ∉ qa` (uncategorised QA exit)
 - `other` — neither side touches QA
 
 Forward-progression detection is what lets a multi-stage QA workflow (Review → UAT → Acceptance → Closed) work identically to a single-stage one without code changes.
+
+### Resolution field on terminal transitions
+
+When a transition lands in a resolved status, Jira stores two separate things: the **status** (visible in the badge) and the **resolution** (the green checkmark, JQL `resolution is not EMPTY`). The transition API sets the status but leaves the resolution field empty unless you pass it explicitly. An empty resolution means the ticket appears unresolved in filters and dashboards even though the status reads "Resolved".
+
+Always pass `--resolution` with the value that matches the outcome:
+
+| Outcome | `--resolution` value |
+|---|---|
+| Work completed as planned | `Done` |
+| Decided not to do | `Won't do` |
+| Same issue already exists | `Duplicate` |
+| Bug could not be reproduced | `Cannot Reproduce` |
+| Request rejected / out of scope | `Declined` |
+| No longer relevant | `Obsolete` |
+
+```bash
+jira-transition.py do PROJ-123 "Resolved" --resolution Done
+jira-transition.py do PROJ-123 "Resolved" --resolution "Won't do"
+jira-transition.py do PROJ-123 "Resolved" --resolution Duplicate
+```
+
+Available resolution names vary by Jira instance. Query yours with:
+```bash
+curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" "$JIRA_URL/rest/api/2/resolution" \
+  | python3 -c "import sys,json; [print(r['name']) for r in json.load(sys.stdin)]"
+```
 
 ## Configuring status sets per Jira instance
 
