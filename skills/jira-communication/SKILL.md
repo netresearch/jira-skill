@@ -24,7 +24,7 @@ On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
 | start QA review | `jira-issue.py qa KEY` |
 | QA-fail follow-up | `jira-issue.py qa-fail KEY` |
 | field-only lookup | `jira-issue.py get KEY --fields ...` |
-| change status | `jira-issue.py act KEY` → `jira-transition.py do`/`path` |
+| change status | `jira-issue.py act KEY` → `jira-transition.py do` |
 | audit / sibling discovery | `jira-qa-gather.py KEY` |
 
 Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` for the same key — use the matching verb. See `references/intent-verbs.md`.

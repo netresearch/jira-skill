@@ -220,7 +220,7 @@ _BACKWARD_PATTERN = ("reopen", "cancel", "reject", "decline", "abort", "back")
 def _is_backward(transition: dict, visited: set[str]) -> bool:
     """True if a transition leads backward: its name matches a backward verb,
     or its target status was already visited (would loop)."""
-    name = transition.get("name", "").lower()
+    name = (transition.get("name") or "").lower()
     if any(word in name for word in _BACKWARD_PATTERN):
         return True
     return _get_to_status(transition).lower() in visited
@@ -291,13 +291,13 @@ def path_transition(
             if chosen is None:
                 forward = [t for t in transitions if not _is_backward(t, visited)]
                 if len(forward) != 1:
-                    options = ", ".join(f"{t.get('name', '')} -> {_get_to_status(t)}" for t in transitions) or "none"
+                    options = ", ".join(f"{t.get('name') or ''} -> {_get_to_status(t)}" for t in transitions) or "none"
+                    reason = "no forward transition available" if not forward else "ambiguous next step"
                     error(
-                        f"Cannot auto-advance {issue_key} from '{current}' toward '{target_status}': "
-                        + ("no forward transition available" if not forward else "ambiguous next step")
+                        f"Cannot auto-advance {issue_key} from '{current}' toward '{target_status}': {reason}",
+                        suggestion=f"Available transitions: {options}. "
+                        f"Pick one explicitly with: jira-transition do {issue_key} <STATUS>",
                     )
-                    print(f"\nAvailable transitions: {options}")
-                    print("Pick one explicitly with: jira-transition do <KEY> <STATUS>")
                     sys.exit(1)
                 chosen = forward[0]
 

@@ -106,8 +106,9 @@ jira-transition.py path PROJ-123 Closed --dry-run           # preview the first 
 It is a **greedy** walk, not a graph search: the Jira API only exposes the
 transitions available from the issue's *current* status, so `path` cannot see the
 whole workflow ahead of time. At each step it takes the target if directly reachable,
-otherwise the single non-backward transition (transitions named `reopen/cancel/reject/
-decline/abort/back`, or leading to an already-visited status, are treated as backward).
+otherwise the single non-backward transition (transitions whose name matches
+`reopen/cancel/reject/decline/abort/back`, or which lead to an already-visited status,
+are treated as backward).
 If a step offers several forward options it **stops and lists them** rather than guess —
 pick one with `do` and re-run. `--resolution`/`--comment` apply only to the final step;
 `--max-steps` (default 10) caps the walk. Because it cannot look ahead, `--dry-run`
