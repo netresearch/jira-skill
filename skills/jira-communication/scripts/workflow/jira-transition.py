@@ -211,5 +211,137 @@ def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, re
         sys.exit(1)
 
 
+# Transition names/targets that move an issue *backwards* (or out of the
+# forward flow). Skipped when the walker auto-picks the next step so a linear
+# workflow doesn't bounce back toward where it came from.
+_BACKWARD_PATTERN = ("reopen", "cancel", "reject", "decline", "abort", "back")
+
+
+def _is_backward(transition: dict, visited: set[str]) -> bool:
+    """True if a transition leads backward: its name matches a backward verb,
+    or its target status was already visited (would loop)."""
+    name = (transition.get("name") or "").lower()
+    if any(word in name for word in _BACKWARD_PATTERN):
+        return True
+    return _get_to_status(transition).lower() in visited
+
+
+@cli.command("path")
+@click.argument("issue_key")
+@click.argument("target_status")
+@click.option("--resolution", "-r", help="Resolution applied on the final transition")
+@click.option("--comment", "-c", help="Comment added on the final transition")
+@click.option("--max-steps", type=int, default=10, show_default=True, help="Safety cap on transitions walked")
+@click.option("--dry-run", is_flag=True, help="Show the first planned step without transitioning")
+@click.pass_context
+def path_transition(
+    ctx,
+    issue_key: str,
+    target_status: str,
+    resolution: str | None,
+    comment: str | None,
+    max_steps: int,
+    dry_run: bool,
+):
+    """Walk the workflow from the current status to TARGET_STATUS.
+
+    Runs the list -> pick -> do loop internally, collapsing a multi-stage
+    transition chain (e.g. QA -> UAT -> Resolved -> Closed) into one command.
+
+    The Jira API only exposes the transitions available from the issue's
+    *current* status, so the walk is greedy, not a full graph search: at each
+    step it takes TARGET_STATUS if directly reachable, otherwise the single
+    non-backward transition. If a step is ambiguous (several forward options)
+    it stops and lists them so you can pick with `do`. --resolution/--comment
+    apply only to the final transition.
+
+    Examples:
+
+      jira-transition path PROJ-123 Closed --resolution Done
+
+      jira-transition path PROJ-123 "Ready for deployment" --dry-run
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+    quiet, as_json = ctx.obj["quiet"], ctx.obj["json"]
+
+    try:
+        issue = client.issue(issue_key, fields="status")
+        current = issue["fields"]["status"]["name"]
+        target_l = target_status.lower()
+        visited = {current.lower()}
+        chain: list[str] = []
+
+        if current.lower() == target_l:
+            if as_json:
+                format_output({"key": issue_key, "status": current, "steps": []}, as_json=True)
+            elif quiet:
+                print(issue_key)
+            else:
+                success(f"{issue_key} is already in status '{current}' - nothing to do")
+            return
+
+        for _ in range(max_steps):
+            transitions = client.get_issue_transitions(issue_key)
+
+            # Prefer a transition landing directly on the target.
+            chosen = next((t for t in transitions if _get_to_status(t).lower() == target_l), None)
+            is_final = chosen is not None
+
+            if chosen is None:
+                forward = [t for t in transitions if not _is_backward(t, visited)]
+                if len(forward) != 1:
+                    options = ", ".join(f"{t.get('name') or ''} -> {_get_to_status(t)}" for t in transitions) or "none"
+                    reason = "no forward transition available" if not forward else "ambiguous next step"
+                    error(
+                        f"Cannot auto-advance {issue_key} from '{current}' toward '{target_status}': {reason}",
+                        suggestion=f"Available transitions: {options}. "
+                        f"Pick one explicitly with: jira-transition do {issue_key} <STATUS>",
+                    )
+                    sys.exit(1)
+                chosen = forward[0]
+
+            to_status = _get_to_status(chosen)
+
+            if dry_run:
+                warning("DRY RUN - No transition will be performed")
+                print(f"\nNext step for {issue_key}: {chosen.get('name', '')} -> {to_status}")
+                print(f"Current: {current} | Target: {target_status}")
+                if not is_final:
+                    print("(walk continues greedily from there; re-run without --dry-run to execute)")
+                return
+
+            fields = {"resolution": {"name": resolution}} if (resolution and is_final) else {}
+            update = {"comment": [{"add": {"body": comment}}]} if (comment and is_final) else None
+            client.set_issue_status(issue_key, to_status, fields=fields or None, update=update)
+
+            chain.append(to_status)
+            visited.add(to_status.lower())
+            current = to_status
+            if is_final:
+                break
+        else:
+            error(f"Reached --max-steps ({max_steps}) before arriving at '{target_status}' (now at '{current}')")
+            sys.exit(1)
+
+        if as_json:
+            format_output({"key": issue_key, "status": current, "steps": chain}, as_json=True)
+        elif quiet:
+            print(issue_key)
+        else:
+            success(f"Transitioned {issue_key} to '{current}'")
+            print(f"  Path: {' -> '.join(chain)}")
+            if resolution:
+                print(f"  Resolution: {resolution}")
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to walk {issue_key} to '{target_status}': {e}")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     cli()
