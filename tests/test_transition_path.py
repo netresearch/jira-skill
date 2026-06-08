@@ -81,3 +81,41 @@ class TestGreedyWalk:
         assert mc.set_issue_status.call_count == 0
         assert "DRY RUN" in result.output
         assert "QA passed -> UAT Stage" in result.output
+
+
+class TestBackwardDetection:
+    """`back` must match as a whole word only, not as a substring (#125 review)."""
+
+    def test_inflected_backward_verbs_match_as_substrings(self):
+        for name in ("Reopen", "Reopened", "Cancelled", "Rejected", "Decline", "Abort"):
+            assert _mod._is_backward(_t(name, "Whatever"), set()) is True, name
+
+    def test_back_matches_only_as_whole_word(self):
+        assert _mod._is_backward(_t("Move back", "Start"), set()) is True
+        # Names that merely *contain* "back" are forward, not backward.
+        for name in ("Backlog", "Rollback", "Feedback received", "Send to Backlog"):
+            assert _mod._is_backward(_t(name, name), set()) is False, name
+
+    def test_walker_does_not_treat_backlog_as_backward(self):
+        # Single forward transition to Backlog must be taken, not filtered out.
+        mc = _client_at("Open")
+        mc.get_issue_transitions.side_effect = [
+            [_t("Send to Backlog", "Backlog"), _t("Reopen", "Reopened")],
+            [_t("Pick up", "In Progress"), _t("Reopen", "Reopened")],
+        ]
+        result, _ = _run(["path", "ABC-1", "In Progress"], mc)
+        assert result.exit_code == 0, result.output
+        assert [c.args[1] for c in mc.set_issue_status.call_args_list] == ["Backlog", "In Progress"]
+
+
+class TestMaxStepsValidation:
+    """--max-steps must reject 0/negative via Click (#125 review)."""
+
+    def test_zero_is_rejected(self):
+        result, _ = _run(["path", "ABC-1", "Closed", "--max-steps", "0"], _client_at("Open"))
+        assert result.exit_code == 2, result.output  # Click usage error
+        assert "max-steps" in result.output.lower()
+
+    def test_negative_is_rejected(self):
+        result, _ = _run(["path", "ABC-1", "Closed", "--max-steps", "-3"], _client_at("Open"))
+        assert result.exit_code == 2, result.output

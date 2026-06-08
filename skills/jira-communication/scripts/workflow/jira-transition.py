@@ -8,6 +8,7 @@
 # ///
 """Jira issue transitions - list available transitions and change issue status."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -214,14 +215,19 @@ def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, re
 # Transition names/targets that move an issue *backwards* (or out of the
 # forward flow). Skipped when the walker auto-picks the next step so a linear
 # workflow doesn't bounce back toward where it came from.
-_BACKWARD_PATTERN = ("reopen", "cancel", "reject", "decline", "abort", "back")
+# Matched as substrings so inflected forms are caught ("reopen" -> "Reopened",
+# "cancel" -> "Cancelled", "reject" -> "Rejected").
+_BACKWARD_SUBSTRINGS = ("reopen", "cancel", "reject", "decline", "abort")
+# "back" is matched as a whole word only: "Move back" counts, but "Backlog",
+# "Rollback" and "Feedback" must not be mistaken for backward transitions.
+_BACKWARD_WORD_RE = re.compile(r"\bback\b")
 
 
 def _is_backward(transition: dict, visited: set[str]) -> bool:
     """True if a transition leads backward: its name matches a backward verb,
     or its target status was already visited (would loop)."""
     name = (transition.get("name") or "").lower()
-    if any(word in name for word in _BACKWARD_PATTERN):
+    if any(word in name for word in _BACKWARD_SUBSTRINGS) or _BACKWARD_WORD_RE.search(name):
         return True
     return _get_to_status(transition).lower() in visited
 
@@ -231,7 +237,9 @@ def _is_backward(transition: dict, visited: set[str]) -> bool:
 @click.argument("target_status")
 @click.option("--resolution", "-r", help="Resolution applied on the final transition")
 @click.option("--comment", "-c", help="Comment added on the final transition")
-@click.option("--max-steps", type=int, default=10, show_default=True, help="Safety cap on transitions walked")
+@click.option(
+    "--max-steps", type=click.IntRange(min=1), default=10, show_default=True, help="Safety cap on transitions walked"
+)
 @click.option("--dry-run", is_flag=True, help="Show the first planned step without transitioning")
 @click.pass_context
 def path_transition(
