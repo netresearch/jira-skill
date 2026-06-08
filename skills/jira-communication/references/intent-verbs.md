@@ -87,6 +87,32 @@ curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" "$JIRA_URL/rest/api/2/re
   | python3 -c "import sys,json; [print(r['name']) for r in json.load(sys.stdin)]"
 ```
 
+### Walking a multi-stage workflow (`path`)
+
+`jira-transition.py do` performs **one** transition. Workflows with intermediate
+gates (e.g. `QA → UAT Stage → Ready for deployment → Resolved → Closed`) otherwise
+need one `list` + one `do` per stage — closing a ticket deep in such a workflow is
+4+ round-trips of discovering the next status by hand.
+
+`path` collapses that into one call: it runs the `list → pick → do` loop internally,
+walking from the current status to a target.
+
+```bash
+jira-transition.py path PROJ-123 Closed --resolution Done   # walk all the way to Closed
+jira-transition.py path PROJ-123 "Ready for deployment"     # walk to an intermediate gate
+jira-transition.py path PROJ-123 Closed --dry-run           # preview the first step
+```
+
+It is a **greedy** walk, not a graph search: the Jira API only exposes the
+transitions available from the issue's *current* status, so `path` cannot see the
+whole workflow ahead of time. At each step it takes the target if directly reachable,
+otherwise the single non-backward transition (transitions named `reopen/cancel/reject/
+decline/abort/back`, or leading to an already-visited status, are treated as backward).
+If a step offers several forward options it **stops and lists them** rather than guess —
+pick one with `do` and re-run. `--resolution`/`--comment` apply only to the final step;
+`--max-steps` (default 10) caps the walk. Because it cannot look ahead, `--dry-run`
+shows only the *first* planned step.
+
 ## Configuring status sets per Jira instance
 
 Per profile in `~/.jira/profiles.json`:
