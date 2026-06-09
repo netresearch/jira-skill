@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.16.0] - 2026-06-09
+
 ### Added
 
 - `jira-transition path KEY TARGET_STATUS`: walk a multi-stage workflow to a target status in one call, instead of repeating `list` + `do` per stage. Runs the `list → pick → do` loop internally. Because the Jira API only exposes transitions from the issue's *current* status, the walk is greedy rather than a full graph search: at each step it takes the target if directly reachable, else the single non-backward transition (names matching `reopen/cancel/reject/decline/abort/back`, or targets already visited, count as backward); an ambiguous step stops and lists the options for an explicit `do`. `--resolution`/`--comment` apply to the final transition only, `--max-steps` (default 10) caps the walk, and `--dry-run` previews the first step. Motivated by closing a ticket sitting deep in a `QA → UAT → Ready for deployment → Resolved → Closed` workflow, which previously cost 8 round-trips. Documented in `references/intent-verbs.md`.
