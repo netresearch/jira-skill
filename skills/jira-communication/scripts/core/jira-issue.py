@@ -393,6 +393,69 @@ def _print_issue(
             link_url = obj.get("url", "")
             print(f"  [{link_id}] {title} \u2014 {link_url}")
 
+    # Comments \u2014 always surface the count when the comment field is present, so a
+    # populated discussion is never invisible (the original silent `-f comment` trap).
+    # Full bodies stay in the `work` command / `jira-comment.py list`.
+    if field_available("comment"):
+        comment_field = fields.get("comment") or {}
+        # Jira may send total/comments as explicit null, so guard against None
+        # rather than relying on dict.get defaults (a present-but-null key skips them).
+        comment_total = comment_field.get("total")
+        if comment_total is None:
+            comment_total = len(comment_field.get("comments") or [])
+        if comment_total:
+            print(
+                f"\nComments: {comment_total} "
+                f"(run `jira-issue.py work {issue['key']}` or `jira-comment.py list {issue['key']}` to read them)"
+            )
+        else:
+            print("\nComments: 0")
+
+    # Parent \u2014 cheap, high-value metadata; same silent-omission gap as comments.
+    if field_available("parent"):
+        parent = fields.get("parent") or {}
+        parent_key = parent.get("key")
+        if parent_key:
+            parent_summary = (parent.get("fields") or {}).get("summary", "")
+            print(f"\nParent: {parent_key}" + (f": {parent_summary}" if parent_summary else ""))
+
+    # Subtasks \u2014 list compactly (keys are short); closes the silent `-f subtasks` gap.
+    if field_available("subtasks"):
+        subtasks = fields.get("subtasks") or []
+        if subtasks:
+            print(f"\nSubtasks ({len(subtasks)}):")
+            for subtask in subtasks:
+                subtask_fields = subtask.get("fields") or {}
+                subtask_status = (subtask_fields.get("status") or {}).get("name", "")
+                suffix = f" [{subtask_status}]" if subtask_status else ""
+                print(f"  \u2022 {subtask.get('key', '?')}: {subtask_fields.get('summary') or ''}{suffix}")
+
+    # Safety net: never let an explicitly requested field render nothing silently.
+    # Any -f field that reached the payload but has no renderer above gets a
+    # one-line pointer instead of vanishing (the core correctness fix).
+    if requested is not None:
+        rendered_fields = {
+            "summary",
+            "issuetype",
+            "status",
+            "priority",
+            "assignee",
+            "reporter",
+            "labels",
+            "description",
+            "created",
+            "updated",
+            "attachment",
+            "issuelinks",
+            "weblinks",
+            "comment",
+            "parent",
+            "subtasks",
+        }
+        for field_name in sorted(requested):
+            if field_name not in rendered_fields and field_available(field_name):
+                print(f"\n{field_name}: present in the response but not rendered here, use `--json` to view it")
+
     print()
 
 
