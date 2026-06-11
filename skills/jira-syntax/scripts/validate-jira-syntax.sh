@@ -217,16 +217,23 @@ validate_file() {
     # An unescaped tag with other text on the same line opens the block
     # mid-prose and swallows the rest of the line (classic case: writing
     # *about* {code} in a sentence). Escape literal mentions as \{code\}.
-    # Excluded: escaped tags (\{code\}) and {{monospace}} content such as
-    # {{code}} (tag preceded by another brace or a backslash).
+    # Escaped tags (\{code\}) and {{monospace}} lookalikes ({{code}}) are
+    # stripped per line BEFORE testing — a line-level exclusion would hide a
+    # genuine unescaped tag sharing a line with an escaped/monospace mention.
     local inline_hits
-    inline_hits=$(grep -nE '\{(code|noformat|quote|panel)(:[^}]*)?\}' <<< "$content" \
-        | grep -vE '^[0-9]+:[[:space:]]*\{(code|noformat|quote|panel)(:[^}]*)?\}[[:space:]]*$' \
-        | grep -vE '(\\|\{)\{(code|noformat|quote|panel)' || true)
+    inline_hits=$(awk '
+        {
+            line = $0
+            gsub(/\\\{(code|noformat|quote|panel)[^}]*\\\}/, "", line)
+            gsub(/\{\{(code|noformat|quote|panel)(:[^}]*)?\}\}/, "", line)
+            if (line ~ /\{(code|noformat|quote|panel)(:[^}]*)?\}/ &&
+                line !~ /^[[:space:]]*\{(code|noformat|quote|panel)(:[^}]*)?\}[[:space:]]*$/)
+                printf "%d:%s\n", NR, $0
+        }' <<< "$content" | head -3)
     if [ -n "$inline_hits" ]; then
         error "Block tag used inline — {code}/{noformat}/{quote}/{panel} must stand alone on their own line; escape literal mentions as \\{code\\}"
         echo "   Lines with issue:"
-        head -3 <<< "$inline_hits"
+        echo "$inline_hits"
     fi
 
     # Check for Markdown-style lists (- item instead of * item)
