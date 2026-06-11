@@ -90,7 +90,7 @@ validate_file() {
     #      or {{a{b}c}}.
     #   2. A {{ block with an extra raw } before the closing }} — e.g. {{a}b}}.
     # `([^...\\]|\\.)*` skips escaped characters so \{ and \} don't false-positive.
-    local brace_re='\{\{([^{}\\]|\\.)*\{|\{\{([^{}\\]|\\.)*\}([^{}]|\\.)*\}\}'
+    local brace_re='\{\{([^{}\\]|\\.)*\{|\{\{([^{}\\]|\\.)*\}([^{}\\]|\\.)*\}\}'
     if grep -qE "$brace_re" <<< "$content"; then
         error "Found unescaped { or } inside {{...}} monospace block — Jira parser will render it as raw text. Escape as \\{ \\} or split the reference."
         echo "   Lines with issue:"
