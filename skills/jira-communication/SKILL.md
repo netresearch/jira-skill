@@ -57,6 +57,13 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 > **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
 > resolution field stays empty and the ticket appears unresolved in the UI. See `references/intent-verbs.md`.
 
+## Gotchas
+
+- **Transition names are exact strings** and may carry emoji prefixes (e.g. `✅ Resolve`). On mismatch the error lists the available names — copy verbatim.
+- **Link types are instance-specific** (e.g. `Relation`, not `Relates`). Discover with `jira-link.py list-types` before `jira-link.py create A B --type <name>`.
+- **`jira-attachment.py download URL FILE`** refuses output paths outside the current working directory — `cd` to the target dir first. Don't fetch attachment URLs with raw `curl`; you get the login page.
+- **Comments are wiki-markup-linted** before posting (inline block tags, unbalanced `\{code\}`/`\{noformat\}` pairs). Fix the markup or override with `--force`.
+
 ## Related Skills
 
 **jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.

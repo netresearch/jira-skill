@@ -154,7 +154,7 @@ validate_file() {
                 error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
             fi
         fi
-    done < <(grep -oE '\{code:[^}|]+' <<< "$content" | sed 's/^{code://' | sort -u)
+    done < <(grep -oE '(^|[^\\])\{code:[^}|\\]+' <<< "$content" | sed 's/.*{code://' | sort -u)
 
     # Check for tables with incorrect header syntax (|Header| instead of ||Header||)
     if echo "$content" | grep -qE "^\|[^|]+\|$" && ! echo "$content" | grep -qE "^\|\|"; then
@@ -167,14 +167,17 @@ validate_file() {
     # Use `grep -o ... | wc -l` to count each occurrence (not just matching
     # lines), matching the {color} check below for consistency and to catch
     # multiple tags on the same line.
-    local code_count=$(grep -oE "\{code[}:]" <<< "$content" | wc -l)
+    # `(^|[^\\])` skips escaped literals (\{code\}), which are prose, not markup.
+    local code_count
+    code_count=$(grep -oE '(^|[^\\])\{code[}:]' <<< "$content" | wc -l)
     if [ $((code_count % 2)) -ne 0 ]; then
         error "Mismatched {code} tags: odd number ($code_count) of occurrences (expected pairs)"
     fi
 
     # Check for unclosed {panel} blocks
     # Same rule applies: {panel} opens and closes the block.
-    local panel_count=$(grep -oE "\{panel[}:]" <<< "$content" | wc -l)
+    local panel_count
+    panel_count=$(grep -oE '(^|[^\\])\{panel[}:]' <<< "$content" | wc -l)
     if [ $((panel_count % 2)) -ne 0 ]; then
         error "Mismatched {panel} tags: odd number ($panel_count) of occurrences (expected pairs)"
     fi
@@ -189,11 +192,29 @@ validate_file() {
     # Same single-token open/close rule as {code}, {panel}, {color}: an odd
     # occurrence count signals an unescaped literal in prose or a missing close.
     for macro in noformat quote anchor; do
-        local mcount=$(grep -oE "\{${macro}[}:]" <<< "$content" | wc -l)
+        local mcount
+        mcount=$(grep -oE "(^|[^\\\\])\{${macro}[}:]" <<< "$content" | wc -l)
         if [ $((mcount % 2)) -ne 0 ]; then
             warning "Potential unclosed {${macro}} tag (odd number of occurrences)"
         fi
     done
+
+    # Check for block-markup tags used inline. {code}, {noformat}, {quote} and
+    # {panel} are block-level macros: the tag must stand alone on its own line.
+    # An unescaped tag with other text on the same line opens the block
+    # mid-prose and swallows the rest of the line (classic case: writing
+    # *about* {code} in a sentence). Escape literal mentions as \{code\}.
+    # Excluded: escaped tags (\{code\}) and {{monospace}} content such as
+    # {{code}} (tag preceded by another brace or a backslash).
+    local inline_hits
+    inline_hits=$(grep -nE '\{(code|noformat|quote|panel)(:[^}]*)?\}' <<< "$content" \
+        | grep -vE '^[0-9]+:[[:space:]]*\{(code|noformat|quote|panel)(:[^}]*)?\}[[:space:]]*$' \
+        | grep -vE '(\\|\{)\{(code|noformat|quote|panel)' || true)
+    if [ -n "$inline_hits" ]; then
+        error "Block tag used inline — {code}/{noformat}/{quote}/{panel} must stand alone on their own line; escape literal mentions as \\{code\\}"
+        echo "   Lines with issue:"
+        head -3 <<< "$inline_hits"
+    fi
 
     # Check for Markdown-style lists (- item instead of * item)
     if echo "$content" | grep -qE "^- [^-]"; then

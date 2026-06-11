@@ -144,6 +144,22 @@ Preserves whitespace and formatting
 {noformat}
 ```
 
+### Block Tags Are Never Inline
+
+`{code}`, `{noformat}`, `{quote}` and `{panel}` are **block-level** macros: the tag must stand alone on its own line. An unescaped tag inside a prose sentence opens a real block mid-line and swallows the rest of the line — the classic failure is writing *about* code blocks:
+
+```
+BROKEN:  All commands are documented in {code} blocks with output.
+         → renders everything after "in" as an opened code block
+
+CORRECT: All commands are documented in \{code\} blocks with output.
+         → renders the literal text {code}
+```
+
+Escape literal mentions of any block tag with backslashes: `\{code\}`, `\{noformat\}`, `\{quote\}`, `\{panel\}`. For inline monospace use `{{...}}`, never an inline `{code}` pair — even `{code}one-liner{code}` renders as a block, not inline.
+
+`scripts/validate-jira-syntax.sh` flags inline block tags and unbalanced tag counts; run it on composed text before submitting to Jira.
+
 ## Tables
 
 ### Basic Table
