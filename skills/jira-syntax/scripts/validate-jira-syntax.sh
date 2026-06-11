@@ -81,19 +81,30 @@ validate_file() {
         warning "Found Markdown inline code (\`code\`). Consider Jira format: {{code}}"
     fi
 
-    # Check for literal { or } inside {{...}} monospace blocks. The Jira parser
-    # is greedy and breaks on inner braces, rendering the block as raw text
+    # Check for unescaped { or } inside {{...}} monospace blocks. The Jira parser
+    # is greedy and breaks on raw inner braces, rendering the block as raw text
     # (e.g. {{compose.example.{yml,override.pga.yml}}} renders verbatim).
+    # Backslash-escaped braces (\{ \}) render literally and are fine.
     # Two failure modes:
-    #   1. {{ followed by another { before any } — e.g. {{path/{a,b}.txt}}
+    #   1. {{ followed by another raw { before any } — e.g. {{path/{a,b}.txt}}
     #      or {{a{b}c}}.
-    #   2. A {{ block with an extra } before the closing }} — e.g. {{a}b}}.
-    # ERE alternation: the first branch catches mode 1 robustly without needing
-    # to span the closing }}; the second branch catches mode 2.
-    if grep -qE '\{\{[^}]*\{|\{\{[^{]*\}[^{]*\}\}' <<< "$content"; then
-        error "Found literal { or } inside {{...}} monospace block — Jira parser will render it as raw text. Split the reference or escape the braces."
+    #   2. A {{ block with an extra raw } before the closing }} — e.g. {{a}b}}.
+    # `([^...\\]|\\.)*` skips escaped characters so \{ and \} don't false-positive.
+    local brace_re='\{\{([^{}\\]|\\.)*\{|\{\{([^{}\\]|\\.)*\}([^{}]|\\.)*\}\}'
+    if grep -qE "$brace_re" <<< "$content"; then
+        error "Found unescaped { or } inside {{...}} monospace block — Jira parser will render it as raw text. Escape as \\{ \\} or split the reference."
         echo "   Lines with issue:"
-        grep -nE '\{\{[^}]*\{|\{\{[^{]*\}[^{]*\}\}' <<< "$content" | head -3
+        grep -nE "$brace_re" <<< "$content" | head -3
+    fi
+
+    # Check for unescaped * inside {{...}} monospace blocks. Jira still parses
+    # inline markup inside {{...}}: a * pair turns bold mid-token
+    # (e.g. {{jira-*backup-*}} renders "backup-" bold). Escape as \*.
+    local star_re='\{\{([^{}*\\]|\\.)*\*'
+    if grep -qE "$star_re" <<< "$content"; then
+        warning "Found unescaped * inside {{...}} monospace block — renders as bold mid-token. Escape as \\* (e.g. {{jira-\\*backup-\\*}})."
+        echo "   Lines with issue:"
+        grep -nE "$star_re" <<< "$content" | head -3
     fi
 
     # Check for Markdown-style links ([text](url) instead of [text|url])
