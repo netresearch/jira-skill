@@ -122,7 +122,8 @@ validate_file() {
     fi
 
     # Check for code blocks without language specification
-    if echo "$content" | grep -qE "{code}[^{]"; then
+    # (skip escaped \{code\} literals and inline-monospace {{code}})
+    if grep -qE '(^|[^\\{])\{code\}[^{]' <<< "$content"; then
         warning "Found {code} blocks without language. Consider: {code:java} for syntax highlighting"
     fi
 
@@ -165,7 +166,7 @@ validate_file() {
                 error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
             fi
         fi
-    done < <(grep -oE '(^|[^\\])\{code:[^}|\\]+' <<< "$content" | sed 's/.*{code://' | sort -u)
+    done < <(grep -oE '(^|[^\\{])\{code:[^}|\\]+' <<< "$content" | sed 's/.*{code://' | sort -u)
 
     # Check for tables with incorrect header syntax (|Header| instead of ||Header||)
     if echo "$content" | grep -qE "^\|[^|]+\|$" && ! echo "$content" | grep -qE "^\|\|"; then
@@ -178,9 +179,10 @@ validate_file() {
     # Use `grep -o ... | wc -l` to count each occurrence (not just matching
     # lines), matching the {color} check below for consistency and to catch
     # multiple tags on the same line.
-    # `(^|[^\\])` skips escaped literals (\{code\}), which are prose, not markup.
+    # `(^|[^\\{])` skips escaped literals (\{code\}) and inline-monospace
+    # lookalikes ({{code}}) — both are prose, not block markup.
     local code_count
-    code_count=$(grep -oE '(^|[^\\])\{code[}:]' <<< "$content" | wc -l)
+    code_count=$(grep -oE '(^|[^\\{])\{code[}:]' <<< "$content" | wc -l)
     if [ $((code_count % 2)) -ne 0 ]; then
         error "Mismatched {code} tags: odd number ($code_count) of occurrences (expected pairs)"
     fi
@@ -188,7 +190,7 @@ validate_file() {
     # Check for unclosed {panel} blocks
     # Same rule applies: {panel} opens and closes the block.
     local panel_count
-    panel_count=$(grep -oE '(^|[^\\])\{panel[}:]' <<< "$content" | wc -l)
+    panel_count=$(grep -oE '(^|[^\\{])\{panel[}:]' <<< "$content" | wc -l)
     if [ $((panel_count % 2)) -ne 0 ]; then
         error "Mismatched {panel} tags: odd number ($panel_count) of occurrences (expected pairs)"
     fi
@@ -204,7 +206,7 @@ validate_file() {
     # occurrence count signals an unescaped literal in prose or a missing close.
     for macro in noformat quote anchor; do
         local mcount
-        mcount=$(grep -oE "(^|[^\\\\])\{${macro}[}:]" <<< "$content" | wc -l)
+        mcount=$(grep -oE "(^|[^\\\\{])\{${macro}[}:]" <<< "$content" | wc -l)
         if [ $((mcount % 2)) -ne 0 ]; then
             warning "Potential unclosed {${macro}} tag (odd number of occurrences)"
         fi

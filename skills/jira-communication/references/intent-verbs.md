@@ -163,3 +163,7 @@ jira-issue.py qa-fail NRS-4412
 ```
 
 Returns: description + Sebastian's scope-setting handover comment + Björn's full AC review with rejection + Sebastian's response + subsequent resolution. Chronologically sorted, ready to read.
+
+## Transition names are exact strings
+
+`jira-transition.py do KEY "<name>"` matches the transition name verbatim — including emoji prefixes some instances configure (e.g. `✅ Resolve`, `❌ QA failed`). On mismatch the error lists the available names; copy the wanted one exactly as printed. `jira-issue.py act KEY` shows them up front.

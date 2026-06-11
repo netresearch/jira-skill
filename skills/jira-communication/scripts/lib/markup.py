@@ -9,8 +9,11 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
 - Unbalanced block tags (odd occurrence count), which leave an unclosed
   block that swallows everything after it.
 
-Escaped tags (\\{code\\}) and tags inside {code}/{noformat} blocks are
-ignored.
+Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
+*other* tags inside an open block are ignored. An occurrence of the
+*same* tag inside an open block closes it — exactly what the Jira
+renderer does (verified against Jira Server 9.12: a mid-line {code}
+inside a code block terminates the block there).
 """
 
 import re
@@ -18,7 +21,8 @@ import re
 BLOCK_TAGS = ("code", "noformat", "quote", "panel")
 
 # Unescaped block tag, optionally with parameters ({code:bash}, {panel:title=x}).
-_TAG_RE = re.compile(r"(?<!\\)\{(code|noformat|quote|panel)(?::[^}\n]*)?\}")
+# (?<!\{) keeps {{code}} / {{panel}} (inline monospace content) out of scope.
+_TAG_RE = re.compile(r"(?<!\\)(?<!\{)\{(code|noformat|quote|panel)(?::[^}\n]*)?\}")
 
 
 def lint_wiki_markup(text: str) -> list[str]:
@@ -50,8 +54,10 @@ def lint_wiki_markup(text: str) -> list[str]:
         for m in matches:
             counts[m.group(1)] += 1
 
-        # A clean block-tag line contains nothing but the tag itself.
-        if _TAG_RE.sub("", line).strip():
+        # A clean block-tag line contains nothing but a single tag; several
+        # tags on one line ({code} {panel}) are inline usage even when the
+        # remainder is whitespace.
+        if _TAG_RE.sub("", line).strip() or len(matches) > 1:
             findings.append(
                 f"line {lineno}: block tag used inline - {{code}}/{{noformat}}/"
                 f"{{quote}}/{{panel}} are block markup and never inline; escape "
