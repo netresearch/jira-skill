@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.17.0] - 2026-06-11
+
+### Added
+
+- `jira-comment add` / `edit`: comments are now linted for wiki-markup problems before posting. The new `lib/markup.py` `lint_wiki_markup()` helper catches the most damaging authoring mistakes: block-markup tags (`{code}`, `{noformat}`, `{quote}`, `{panel}`) used inline — these are block-level macros, so an unescaped tag with other text on the same line opens a real block mid-prose and swallows the rest of the line — plus unbalanced (odd-count) block tags and unclosed blocks. Escaped tags (`\{code\}`), inline-monospace lookalikes (`{{code}}`) and other tags inside an open block are ignored, matching the Jira Server 9.12 renderer. Findings abort the post with an explanatory error; `--force` posts anyway and downgrades findings to warnings. ([#131](https://github.com/netresearch/jira-skill/pull/131))
+- `validate-jira-syntax.sh`: new error for block tags used inline (same rule as the comment lint; escaped `\{code\}` literals and `{{code}}` monospace lookalikes are stripped per line before testing), and a new warning for unescaped `*` inside `{{...}}` monospace blocks, which turns bold mid-token (e.g. `{{jira-*backup-*}}` renders "backup-" bold). Escape as `\*`.
+
+### Changed
+
+- `validate-jira-syntax.sh`: the unescaped-brace-inside-`{{...}}` check now skips backslash-escaped braces (`\{` `\}`), which render literally and are fine; the `{code}` language extraction and the tag-balance counts for `{code}`/`{panel}`/`{noformat}`/`{quote}`/`{anchor}` now ignore escaped literals (`\{code\}`) and inline-monospace lookalikes (`{{code}}`) — both are prose, not block markup.
+- `references/cross-project-refs.md` and the quick reference now document escaping (`\{` `\}` `\*`) as the primary fix for literal braces and `*` inside `{{...}}` monospace, verified against the Jira Server 9.12 wiki renderer; splitting into separate `{{...}}` references remains a fallback when escaping hurts readability.
+
 ## [3.16.0] - 2026-06-09
 
 ### Added
@@ -597,7 +609,10 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.13.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.17.0...HEAD
+[3.17.0]: https://github.com/netresearch/jira-skill/compare/v3.16.0...v3.17.0
+[3.16.0]: https://github.com/netresearch/jira-skill/compare/v3.15.0...v3.16.0
+[3.15.0]: https://github.com/netresearch/jira-skill/compare/v3.14.0...v3.15.0
 [3.13.1]: https://github.com/netresearch/jira-skill/compare/v3.13.0...v3.13.1
 [3.13.0]: https://github.com/netresearch/jira-skill/compare/v3.12.0...v3.13.0
 [3.12.0]: https://github.com/netresearch/jira-skill/compare/v3.11.0...v3.12.0
