@@ -30,11 +30,22 @@ When an issue references multiple repos in the same group (e.g. `jira/jira` for 
 
 ## Inside `{{...}}` monospace
 
-`!`, `#`, and `@` all work inside `{{...}}`, but **literal `{` and `}` inside a `{{...}}` block break Jira's parser** and render the whole block as raw text. If a reference contains brace expansion or set notation, split it:
+`!`, `#`, and `@` all work inside `{{...}}`, but **unescaped `{`, `}` and `*` inside a `{{...}}` block break Jira's parser**: a raw `{` makes the whole block render as raw text, and a `*` pair turns bold mid-token. Escape them with a backslash (verified against the Jira Server 9.12 wiki renderer).
+
+Broken — the block falls apart on the raw `{`, and `backup-` renders bold:
 
 ```
-✗ {{compose.example.{yml,override.pga.yml}}}
-✓ {{compose.example.yml}} and {{compose.example.override.pga.yml}}
+{{compose.example.{yml,override.pga.yml}}}
+{{jira-*backup-*}}
 ```
 
-The `validate-jira-syntax.sh` script catches this collision.
+Correct — renders `compose.example.{yml,override.pga.yml}` and `jira-*backup-*` in monospace:
+
+```
+{{compose.example.\{yml,override.pga.yml\}}}
+{{jira-\*backup-\*}}
+```
+
+Splitting into separate `{{...}}` references also works when escaping would hurt readability.
+
+The `validate-jira-syntax.sh` script catches the brace collision.

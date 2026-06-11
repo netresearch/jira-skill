@@ -153,8 +153,8 @@ uv run scripts/workflow/jira-create.py issue PROJ \
 - [ ] h3. headings for subsections
 - [ ] Numbered list (#) for Steps to Reproduce
 - [ ] Bulleted list (*) for Environment details
-- [ ] {panel} for error messages with appropriate bgColor
-- [ ] {code:language} for code snippets with correct language
+- [ ] \{panel\} for error messages with appropriate bgColor
+- [ ] \{code:language\} for code snippets with correct language
 - [ ] [^filename] format for attachment references
 - [ ] [PROJ-XXX] format for issue links
 - [ ] [~username] format for user mentions

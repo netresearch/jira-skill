@@ -34,4 +34,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download \
 
 ## Safety guarantees
 
-- **Path traversal**: output paths are constrained to the current working directory — the script rejects targets that resolve outside cwd.
+- **Path traversal**: output paths are constrained to the current working directory — the script rejects targets that resolve outside cwd. `cd` to the target directory before downloading.
+
+## Don't use raw curl
+
+Fetching `/secure/attachment/...` URLs with plain `curl` returns the Jira login page, not the file — attachment downloads need the authenticated session handling this script provides. Always use `jira-attachment.py download`.

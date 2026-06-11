@@ -56,5 +56,19 @@
         "pattern": "```"
       }
     ]
+  },
+  {
+    "name": "escape_literal_block_tag_mention",
+    "prompt": "Write a short Jira QA comment in wiki markup with one finding line stating that all commands are documented in {code} blocks with command and output together, plus one real code block containing: ls -l",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "\\\\\\{code\\\\\\}"
+      },
+      {
+        "type": "not_content",
+        "pattern": "\\{code\\}[^\\n]*[A-Za-z]"
+      }
+    ]
   }
 ]

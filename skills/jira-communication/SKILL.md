@@ -12,7 +12,7 @@ allowed-tools: Bash(python:*) Bash(uv:*) Read Write
 
 # Jira Communication
 
-CLI scripts via `uv run`. All support `--help`, `--json`, `--quiet`, `--debug`.
+CLI scripts via `uv run`, all supporting `--help`, `--json`, `--quiet`, `--debug`.
 
 ## Auto-Trigger
 
@@ -27,7 +27,7 @@ On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
 | change status | `jira-issue.py act KEY` → `jira-transition.py do` |
 | audit / sibling discovery | `jira-qa-gather.py KEY` |
 
-Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` for the same key — use the matching verb. See `references/intent-verbs.md`.
+Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` on one key — use the matching verb. See `references/intent-verbs.md`.
 
 ## Scripts
 
@@ -55,7 +55,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 ```
 
 > **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
-> resolution field stays empty and the ticket appears unresolved in the UI. See `references/intent-verbs.md`.
+> resolution field stays empty and the ticket appears unresolved. See `references/intent-verbs.md`.
 
 ## Related Skills
 
@@ -68,16 +68,16 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 - `references/troubleshooting.md` — auth, SSL, 401, 403, connection
 - `references/issue-editing.md` — `--description`, `--fields-json`, reporter, deletes, moves
 - `references/creation.md` — `--parent`, components, custom fields
-- `references/comments.md` — edit, delete, list comments
+- `references/comments.md` — edit, delete, list, markup lint / `--force`
 - `references/worklog.md` — `--started`, date ranges, `jira-worklog-query.py`
-- `references/attachments.md` — upload, download, inspect attachments
-- `references/links.md` — issue and web links
+- `references/attachments.md` — upload, download (cwd-only), inspect
+- `references/links.md` — issue/web links, instance-specific link types
 - `references/agile.md` — sprints, boards, `board --name`
 - `references/fields-and-users.md` — custom field IDs, users, issue types
 - `references/watchers.md` — watch, subscribe, list watchers
 - `references/versions.md` — fix/affects versions, releases, version CRUD
 - `references/qa-gather.md` — comprehensive audit bundle (siblings, prose URLs)
-- `references/intent-verbs.md` — `work / qa / qa-fail / act`: heuristic + status-set config
+- `references/intent-verbs.md` — `work / qa / qa-fail / act`, exact transition names
 
 ## Authentication
 
