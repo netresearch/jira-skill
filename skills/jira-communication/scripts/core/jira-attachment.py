@@ -167,13 +167,14 @@ def _report_download_error(ctx, exc: Exception) -> None:
     if isinstance(exc, CaptchaError):
         raise exc
     if isinstance(exc, KeyError):
+        # Config key names are non-sensitive metadata — no sanitization needed.
         error(f"Missing required configuration: {exc}")
     elif isinstance(exc, (SessionExpiredError, AuthenticationError)):
-        error(str(exc))
+        error(_sanitize_error(str(exc)))
     elif isinstance(exc, (DownloadError, requests.exceptions.RequestException)):
-        error(f"Download failed: {exc}")
+        error(f"Download failed: {_sanitize_error(str(exc))}")
     else:
-        error(f"Failed to download attachment: {exc}")
+        error(f"Failed to download attachment: {_sanitize_error(str(exc))}")
     sys.exit(1)
 
 
@@ -326,9 +327,27 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
             return
 
         if dry_run:
-            warning(f"DRY RUN — {len(attachments)} attachment(s) on {issue_key}:")
-            for att in attachments:
-                print(f"  {att.get('filename')} ({att.get('size', 0):,} bytes)")
+            if ctx.obj["json"]:
+                print(
+                    json.dumps(
+                        {
+                            "status": "dry-run",
+                            "issue": issue_key,
+                            "count": len(attachments),
+                            "attachments": [
+                                {"id": att.get("id"), "filename": att.get("filename"), "size": att.get("size", 0)}
+                                for att in attachments
+                            ],
+                        }
+                    )
+                )
+            elif ctx.obj["quiet"]:
+                for att in attachments:
+                    print(att.get("filename"))
+            else:
+                warning(f"DRY RUN — {len(attachments)} attachment(s) on {issue_key}:")
+                for att in attachments:
+                    print(f"  {att.get('filename')} ({att.get('size', 0):,} bytes)")
             return
 
         safe_dir.mkdir(parents=True, exist_ok=True)
@@ -350,10 +369,13 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
                 warning(f"Skipping unsafe filename: {att.get('filename')!r}")
                 continue
 
+            # Per-file resilience: a single bad file (404/500/redirect anomaly)
+            # must not abort the whole batch. Auth/session/CAPTCHA errors are NOT
+            # caught here — they propagate and abort, since retrying is pointless.
             try:
                 _stream_to_path(att["content"], jira_url, auth, headers, dest)
-            except DownloadError as e:
-                warning(f"Skipping {filename}: {e}")
+            except (DownloadError, requests.exceptions.RequestException) as e:
+                warning(f"Skipping {filename}: {_sanitize_error(str(e))}")
                 continue
             downloaded.append(str(dest))
 

@@ -442,3 +442,44 @@ class TestDownloadAll:
         result = self._run(tmp_path, [_att("1", "a.pdf")], extra_args=["--dir", "../escape"])
         assert result.exit_code != 0
         assert "escape" in result.output.lower()
+
+    def test_dry_run_json_is_valid_json(self, tmp_path):
+        """--json --dry-run must emit valid JSON on stdout, not plain text."""
+        runner = click.testing.CliRunner()
+
+        def fake_get(url, *args, **kwargs):
+            return _make_meta_response([_att("1", "a.pdf"), _att("2", "b.txt")])
+
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["--json", "download-all", "TEST-1", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        import json as _json
+
+        payload = _json.loads(result.output)
+        assert payload["status"] == "dry-run"
+        assert payload["count"] == 2
+
+    def test_partial_failure_continues(self, tmp_path):
+        """A single failing attachment must be skipped, not abort the whole batch."""
+        runner = click.testing.CliRunner()
+
+        def fake_get(url, *args, **kwargs):
+            if "/rest/api/2/issue/" in url:
+                return _make_meta_response([_att("1", "good.pdf"), _att("2", "bad.txt")])
+            if url.endswith("/content/2"):
+                raise jira_attachment.requests.exceptions.ConnectionError("boom")
+            return _make_mock_response("application/octet-stream", b"data")
+
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "bad.txt").exists()
