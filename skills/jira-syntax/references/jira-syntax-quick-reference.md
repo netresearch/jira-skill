@@ -144,6 +144,26 @@ Preserves whitespace and formatting
 {noformat}
 ```
 
+### Block Tags Are Never Inline
+
+`{code}`, `{noformat}`, `{quote}` and `{panel}` are **block-level** macros: the tag must stand alone on its own line. An unescaped tag inside a prose sentence opens a real block mid-line and swallows the rest of the line — the classic failure is writing *about* code blocks.
+
+Broken — renders everything after "in" as an opened code block:
+
+```
+All commands are documented in {code} blocks with output.
+```
+
+Correct — renders the literal text `{code}`:
+
+```
+All commands are documented in \{code\} blocks with output.
+```
+
+Escape literal mentions of any block tag with backslashes: `\{code\}`, `\{noformat\}`, `\{quote\}`, `\{panel\}`. For inline monospace use `{{...}}`, never an inline `{code}` pair — even `{code}one-liner{code}` renders as a block, not inline.
+
+`scripts/validate-jira-syntax.sh` flags inline block tags and unbalanced tag counts; run it on composed text before submitting to Jira.
+
 ## Tables
 
 ### Basic Table
@@ -257,7 +277,11 @@ Horizontal rule (4 dashes)
 \{escaped brace\}
 ```
 
-To escape special characters, use backslash: `\*`, `\{`, `\[`
+To escape special characters, use backslash: `\*`, `\{`, `\[`.
+
+- **Only escape characters Jira actually parses as markup** — `*`, `_`, `-`, `+`, `^`, `~`, `{`, `[`, `|`, `\`. Do **not** escape plain punctuation such as `.`, `,`, or `:` — `\.` renders the backslash literally and produces the wrong output.
+- **Never escape inline monospace** — `{{text}}` is not a macro, so `\{\{text\}\}` is wrong. Only escape the opening brace of a *macro name* shown as prose (e.g. `\{code\}`).
+- **Preserve existing backslash escapes** — a source `\*`, `\_`, or `\{` already suppresses Markdown markup; keep it as-is, because Jira uses the same `\` escape mechanism for the same characters.
 
 ### Common gotcha: macro names in prose
 
@@ -432,7 +456,7 @@ Before submitting, verify:
 | `- item` | `* item` | Use asterisk for bullets |
 | `h2.Title` | `h2. Title` | Missing space after period |
 | `{code}` | `{code:java}` | Missing language identifier |
-| `|Header|` | `||Header||` | Header needs double pipes |
+| `\|Header\|` | `\|\|Header\|\|` | Header needs double pipes |
 
 ## Resources
 

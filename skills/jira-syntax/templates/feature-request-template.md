@@ -242,8 +242,8 @@ uv run scripts/workflow/jira-create.py issue PROJ \
 - [ ] Bulleted lists (*) for requirements and criteria
 - [ ] Numbered lists (#) for Acceptance Criteria
 - [ ] Tables (||header|| syntax) for Success Metrics
-- [ ] {code:language} blocks for technical details
-- [ ] {panel} for important launch/timeline information
+- [ ] \{code:language\} blocks for technical details
+- [ ] \{panel\} for important launch/timeline information
 - [ ] [^filename] for mockup/wireframe references
 - [ ] [PROJ-XXX] format for dependency links
 - [ ] [~username] format for stakeholder mentions

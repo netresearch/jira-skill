@@ -81,19 +81,30 @@ validate_file() {
         warning "Found Markdown inline code (\`code\`). Consider Jira format: {{code}}"
     fi
 
-    # Check for literal { or } inside {{...}} monospace blocks. The Jira parser
-    # is greedy and breaks on inner braces, rendering the block as raw text
+    # Check for unescaped { or } inside {{...}} monospace blocks. The Jira parser
+    # is greedy and breaks on raw inner braces, rendering the block as raw text
     # (e.g. {{compose.example.{yml,override.pga.yml}}} renders verbatim).
+    # Backslash-escaped braces (\{ \}) render literally and are fine.
     # Two failure modes:
-    #   1. {{ followed by another { before any } — e.g. {{path/{a,b}.txt}}
+    #   1. {{ followed by another raw { before any } — e.g. {{path/{a,b}.txt}}
     #      or {{a{b}c}}.
-    #   2. A {{ block with an extra } before the closing }} — e.g. {{a}b}}.
-    # ERE alternation: the first branch catches mode 1 robustly without needing
-    # to span the closing }}; the second branch catches mode 2.
-    if grep -qE '\{\{[^}]*\{|\{\{[^{]*\}[^{]*\}\}' <<< "$content"; then
-        error "Found literal { or } inside {{...}} monospace block — Jira parser will render it as raw text. Split the reference or escape the braces."
+    #   2. A {{ block with an extra raw } before the closing }} — e.g. {{a}b}}.
+    # `([^...\\]|\\.)*` skips escaped characters so \{ and \} don't false-positive.
+    local brace_re='\{\{([^{}\\]|\\.)*\{|\{\{([^{}\\]|\\.)*\}([^{}\\]|\\.)*\}\}'
+    if grep -qE "$brace_re" <<< "$content"; then
+        error "Found unescaped { or } inside {{...}} monospace block — Jira parser will render it as raw text. Escape as \\{ \\} or split the reference."
         echo "   Lines with issue:"
-        grep -nE '\{\{[^}]*\{|\{\{[^{]*\}[^{]*\}\}' <<< "$content" | head -3
+        grep -nE "$brace_re" <<< "$content" | head -3
+    fi
+
+    # Check for unescaped * inside {{...}} monospace blocks. Jira still parses
+    # inline markup inside {{...}}: a * pair turns bold mid-token
+    # (e.g. {{jira-*backup-*}} renders "backup-" bold). Escape as \*.
+    local star_re='\{\{([^{}*\\]|\\.)*\*'
+    if grep -qE "$star_re" <<< "$content"; then
+        warning "Found unescaped * inside {{...}} monospace block — renders as bold mid-token. Escape as \\* (e.g. {{jira-\\*backup-\\*}})."
+        echo "   Lines with issue:"
+        grep -nE "$star_re" <<< "$content" | head -3
     fi
 
     # Check for Markdown-style links ([text](url) instead of [text|url])
@@ -111,7 +122,8 @@ validate_file() {
     fi
 
     # Check for code blocks without language specification
-    if echo "$content" | grep -qE "{code}[^{]"; then
+    # (skip escaped \{code\} literals and inline-monospace {{code}})
+    if grep -qE '(^|[^\\{])\{code\}[^{]' <<< "$content"; then
         warning "Found {code} blocks without language. Consider: {code:java} for syntax highlighting"
     fi
 
@@ -154,7 +166,7 @@ validate_file() {
                 error "Unsupported {code:$lang} language. Jira Server rejects this; use {code:none} or one of: $valid_langs"
             fi
         fi
-    done < <(grep -oE '\{code:[^}|]+' <<< "$content" | sed 's/^{code://' | sort -u)
+    done < <(grep -oE '(^|[^\\{])\{code:[^}|\\]+' <<< "$content" | sed 's/.*{code://' | sort -u)
 
     # Check for tables with incorrect header syntax (|Header| instead of ||Header||)
     if echo "$content" | grep -qE "^\|[^|]+\|$" && ! echo "$content" | grep -qE "^\|\|"; then
@@ -167,14 +179,18 @@ validate_file() {
     # Use `grep -o ... | wc -l` to count each occurrence (not just matching
     # lines), matching the {color} check below for consistency and to catch
     # multiple tags on the same line.
-    local code_count=$(grep -oE "\{code[}:]" <<< "$content" | wc -l)
+    # `(^|[^\\{])` skips escaped literals (\{code\}) and inline-monospace
+    # lookalikes ({{code}}) — both are prose, not block markup.
+    local code_count
+    code_count=$(grep -oE '(^|[^\\{])\{code[}:]' <<< "$content" | wc -l)
     if [ $((code_count % 2)) -ne 0 ]; then
         error "Mismatched {code} tags: odd number ($code_count) of occurrences (expected pairs)"
     fi
 
     # Check for unclosed {panel} blocks
     # Same rule applies: {panel} opens and closes the block.
-    local panel_count=$(grep -oE "\{panel[}:]" <<< "$content" | wc -l)
+    local panel_count
+    panel_count=$(grep -oE '(^|[^\\{])\{panel[}:]' <<< "$content" | wc -l)
     if [ $((panel_count % 2)) -ne 0 ]; then
         error "Mismatched {panel} tags: odd number ($panel_count) of occurrences (expected pairs)"
     fi
@@ -189,11 +205,36 @@ validate_file() {
     # Same single-token open/close rule as {code}, {panel}, {color}: an odd
     # occurrence count signals an unescaped literal in prose or a missing close.
     for macro in noformat quote anchor; do
-        local mcount=$(grep -oE "\{${macro}[}:]" <<< "$content" | wc -l)
+        local mcount
+        mcount=$(grep -oE "(^|[^\\\\{])\{${macro}[}:]" <<< "$content" | wc -l)
         if [ $((mcount % 2)) -ne 0 ]; then
             warning "Potential unclosed {${macro}} tag (odd number of occurrences)"
         fi
     done
+
+    # Check for block-markup tags used inline. {code}, {noformat}, {quote} and
+    # {panel} are block-level macros: the tag must stand alone on its own line.
+    # An unescaped tag with other text on the same line opens the block
+    # mid-prose and swallows the rest of the line (classic case: writing
+    # *about* {code} in a sentence). Escape literal mentions as \{code\}.
+    # Escaped tags (\{code\}) and {{monospace}} lookalikes ({{code}}) are
+    # stripped per line BEFORE testing — a line-level exclusion would hide a
+    # genuine unescaped tag sharing a line with an escaped/monospace mention.
+    local inline_hits
+    inline_hits=$(awk '
+        {
+            line = $0
+            gsub(/\\\{(code|noformat|quote|panel)[^}]*\\\}/, "", line)
+            gsub(/\{\{(code|noformat|quote|panel)(:[^}]*)?\}\}/, "", line)
+            if (line ~ /\{(code|noformat|quote|panel)(:[^}]*)?\}/ &&
+                line !~ /^[[:space:]]*\{(code|noformat|quote|panel)(:[^}]*)?\}[[:space:]]*$/)
+                printf "%d:%s\n", NR, $0
+        }' <<< "$content" | head -3)
+    if [ -n "$inline_hits" ]; then
+        error "Block tag used inline — {code}/{noformat}/{quote}/{panel} must stand alone on their own line; escape literal mentions as \\{code\\}"
+        echo "   Lines with issue:"
+        echo "$inline_hits"
+    fi
 
     # Check for Markdown-style lists (- item instead of * item)
     if echo "$content" | grep -qE "^- [^-]"; then

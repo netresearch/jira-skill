@@ -32,6 +32,25 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download \
     ./attachments/report.pdf
 ```
 
+## Download all attachments
+
+To grab every attachment on an issue in one call (no need to harvest URLs first), use `download-all`. Files are saved under `--dir` (default cwd) using their original Jira filenames; duplicate names are disambiguated with the attachment id, and a filename that would escape `--dir` is skipped.
+
+```bash
+# All attachments into the current directory
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download-all PROJ-123
+
+# Into a specific directory (created if missing, must stay within cwd)
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download-all PROJ-123 --dir ./attachments
+
+# Preview the list without downloading
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download-all PROJ-123 --dry-run
+```
+
 ## Safety guarantees
 
-- **Path traversal**: output paths are constrained to the current working directory — the script rejects targets that resolve outside cwd.
+- **Path traversal**: output paths are constrained to the current working directory — the script rejects targets that resolve outside cwd. `cd` to the target directory before downloading. `download-all` additionally strips path components from each Jira-supplied filename and constrains it within `--dir`.
+
+## Don't use raw curl
+
+Fetching `/secure/attachment/...` URLs with plain `curl` returns the Jira login page, not the file — attachment downloads need the authenticated session handling this script provides. Always use `jira-attachment.py download`.

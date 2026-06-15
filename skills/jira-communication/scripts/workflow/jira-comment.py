@@ -22,7 +22,25 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
+from lib.markup import lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
+
+
+def _check_markup(comment_text: str, force: bool) -> None:
+    """Lint wiki markup; abort on findings unless --force is given."""
+    findings = lint_wiki_markup(comment_text)
+    if not findings:
+        return
+    if force:
+        for finding in findings:
+            warning(f"markup: {finding}")
+        return
+    error(
+        "Wiki-markup lint found problems:\n  " + "\n  ".join(findings),
+        suggestion="Block tags are never inline; escape literal mentions as \\{code\\}. Re-run with --force to post anyway.",
+    )
+    sys.exit(1)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -56,8 +74,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @cli.command()
 @click.argument("issue_key")
 @click.argument("comment_text")
+@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
 @click.pass_context
-def add(ctx, issue_key: str, comment_text: str):
+def add(ctx, issue_key: str, comment_text: str, force: bool):
     """Add a comment to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -68,14 +87,18 @@ def add(ctx, issue_key: str, comment_text: str):
     Note: Use Jira wiki syntax:
       - *bold* not **bold**
       - _italic_ not *italic*
-      - {code}...{code} for code blocks
-      - [link text|url] for links
+      - {code}...{code} blocks for multi-line code, {{monospace}} for inline
+      - [link text|url] for links, [^file.log] for attachments
+
+    Block tags ({code}, {noformat}, {quote}, {panel}) must stand alone on
+    their own line; literal mentions in prose must be escaped (\\{code\\}).
+    The comment is linted for this before posting (override with --force).
 
     Examples:
 
       jira-comment add PROJ-123 "Fixed in commit abc123"
 
-      jira-comment add PROJ-123 "See {code}config.py{code} for details"
+      jira-comment add PROJ-123 "See {{config.py}} for details"
 
       cat comment.txt | jira-comment add PROJ-123 -
     """
@@ -117,6 +140,8 @@ def add(ctx, issue_key: str, comment_text: str):
             )
             sys.exit(1)
 
+    _check_markup(comment_text, force)
+
     try:
         result = client.issue_add_comment(issue_key, comment_text)
 
@@ -139,8 +164,9 @@ def add(ctx, issue_key: str, comment_text: str):
 @click.argument("issue_key")
 @click.argument("comment_id")
 @click.argument("comment_text")
+@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
 @click.pass_context
-def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
+def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool):
     """Edit an existing comment on an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -148,7 +174,8 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
     COMMENT_ID: The ID of the comment to edit (use 'list' to find IDs)
 
     COMMENT_TEXT: New comment text (use Jira wiki markup, not Markdown).
-    Use "-" to read from stdin (e.g., cat file.txt | jira-comment edit PROJ-123 12345 -)
+    Use "-" to read from stdin (e.g., cat file.txt | jira-comment edit PROJ-123 12345 -).
+    Linted for wiki-markup problems before posting (override with --force).
 
     Examples:
 
@@ -195,6 +222,8 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str):
                 suggestion="Verify your piped command produces non-empty output.",
             )
             sys.exit(1)
+
+    _check_markup(comment_text, force)
 
     try:
         result = client.issue_edit_comment(issue_key, comment_id, comment_text)

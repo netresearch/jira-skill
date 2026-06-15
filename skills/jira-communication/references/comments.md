@@ -20,7 +20,8 @@ The JSON output has a top-level `comments` array; each entry has `id`, `author.d
 
 ```bash
 # Full replacement of the body — edits preserve created timestamp, update the "updated" timestamp
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py edit PROJ-123 --id 594276 "Corrected text"
+# (issue key, comment ID and text are positional arguments)
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py edit PROJ-123 594276 "Corrected text"
 ```
 
 Jira appends an "edited" marker in the UI automatically.
@@ -29,10 +30,10 @@ Jira appends an "edited" marker in the UI automatically.
 
 ```bash
 # Preview
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 --id 594276 --dry-run
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 594276 --dry-run
 
 # Real delete
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 --id 594276
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 594276
 ```
 
 Deleting someone else's comment requires the Delete All Comments permission.
@@ -53,3 +54,7 @@ cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py ad
 ```
 
 Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
+
+## Markup lint
+
+`add` and `edit` lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose) and unbalanced tag counts abort with an error. Escape literal mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
