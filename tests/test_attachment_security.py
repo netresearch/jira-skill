@@ -339,3 +339,147 @@ class TestDownloadContentTypeGuard:
         assert result.exit_code == 0, result.output
         assert out.exists()
         assert out.read_bytes() == b"fake"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: _build_auth helper
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBuildAuth:
+    """Auth selection: PAT → Bearer header; Cloud → basic auth tuple."""
+
+    def test_personal_token_uses_bearer_header(self):
+        auth, headers = jira_attachment._build_auth(
+            {"JIRA_URL": "https://jira.example.com", "JIRA_PERSONAL_TOKEN": "pat-123"}
+        )
+        assert auth is None
+        assert headers == {"Authorization": "Bearer pat-123"}
+
+    def test_cloud_uses_basic_auth(self):
+        auth, headers = jira_attachment._build_auth(_FAKE_CONFIG)
+        assert auth == ("user@example.com", "fake-token")
+        assert headers == {}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: download-all command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_meta_response(attachments: list[dict]):
+    """Mock issue-metadata response carrying fields.attachment."""
+    resp = mock.Mock()
+    resp.status_code = 200
+    resp.url = "https://jira.example.com/rest/api/2/issue/TEST-1"
+    resp.headers = {"Content-Type": "application/json"}
+    resp.raise_for_status = mock.Mock()
+    resp.json.return_value = {"fields": {"attachment": attachments}}
+    return resp
+
+
+def _att(att_id: str, filename: str, size: int = 4):
+    return {
+        "id": att_id,
+        "filename": filename,
+        "size": size,
+        "content": f"https://jira.example.com/rest/api/2/attachment/content/{att_id}",
+    }
+
+
+class TestDownloadAll:
+    """download-all fetches issue metadata then streams each attachment."""
+
+    def _run(self, tmp_path, attachments, extra_args=None):
+        runner = click.testing.CliRunner()
+
+        def fake_get(url, *args, **kwargs):
+            if "/rest/api/2/issue/" in url:
+                return _make_meta_response(attachments)
+            return _make_mock_response("application/octet-stream", b"data")
+
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1", *(extra_args or [])])
+        return result
+
+    def test_downloads_all_attachments(self, tmp_path):
+        result = self._run(tmp_path, [_att("1", "a.pdf"), _att("2", "b.txt")])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "a.pdf").read_bytes() == b"data"
+        assert (tmp_path / "b.txt").read_bytes() == b"data"
+
+    def test_no_attachments_is_success(self, tmp_path):
+        result = self._run(tmp_path, [])
+        assert result.exit_code == 0, result.output
+        assert "No attachments" in result.output
+
+    def test_dry_run_writes_nothing(self, tmp_path):
+        result = self._run(tmp_path, [_att("1", "a.pdf")], extra_args=["--dry-run"])
+        assert result.exit_code == 0, result.output
+        assert "DRY RUN" in result.output
+        assert not (tmp_path / "a.pdf").exists()
+
+    def test_filename_path_components_stripped(self, tmp_path):
+        """A Jira filename with path components must be saved by basename, never escape --dir."""
+        result = self._run(tmp_path, [_att("1", "../../etc/passwd")])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "passwd").exists()
+        assert not (tmp_path.parent / "passwd").exists()
+
+    def test_duplicate_filenames_disambiguated(self, tmp_path):
+        """Two attachments with the same name must not overwrite each other."""
+        result = self._run(tmp_path, [_att("1", "dup.txt"), _att("2", "dup.txt")])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "dup.txt").exists()
+        assert (tmp_path / "2_dup.txt").exists()
+
+    def test_dir_outside_cwd_rejected(self, tmp_path):
+        """--dir resolving outside cwd must be rejected (path traversal guard)."""
+        result = self._run(tmp_path, [_att("1", "a.pdf")], extra_args=["--dir", "../escape"])
+        assert result.exit_code != 0
+        assert "escape" in result.output.lower()
+
+    def test_dry_run_json_is_valid_json(self, tmp_path):
+        """--json --dry-run must emit valid JSON on stdout, not plain text."""
+        runner = click.testing.CliRunner()
+
+        def fake_get(url, *args, **kwargs):
+            return _make_meta_response([_att("1", "a.pdf"), _att("2", "b.txt")])
+
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["--json", "download-all", "TEST-1", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        import json as _json
+
+        payload = _json.loads(result.output)
+        assert payload["status"] == "dry-run"
+        assert payload["count"] == 2
+
+    def test_partial_failure_continues(self, tmp_path):
+        """A single failing attachment must be skipped, not abort the whole batch."""
+        runner = click.testing.CliRunner()
+
+        def fake_get(url, *args, **kwargs):
+            if "/rest/api/2/issue/" in url:
+                return _make_meta_response([_att("1", "good.pdf"), _att("2", "bad.txt")])
+            if url.endswith("/content/2"):
+                raise jira_attachment.requests.exceptions.ConnectionError("boom")
+            return _make_mock_response("application/octet-stream", b"data")
+
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "bad.txt").exists()
