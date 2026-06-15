@@ -94,6 +94,90 @@ def validate_output_path(output_file: str, working_dir: str) -> Path | None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Download Helpers (shared by `download` and `download-all`)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DownloadError(Exception):
+    """Raised for download-level anomalies (CDN redirects, TLS downgrade)."""
+
+
+def _build_auth(config: dict) -> tuple[tuple[str, str] | None, dict]:
+    """Build (auth, headers) for an authenticated Jira request.
+
+    Personal access tokens go in a Bearer header; Cloud uses basic auth.
+    """
+    if "JIRA_PERSONAL_TOKEN" in config:
+        return None, {"Authorization": f"Bearer {config['JIRA_PERSONAL_TOKEN']}"}
+    return (config["JIRA_USERNAME"], config["JIRA_API_TOKEN"]), {}
+
+
+def _stream_to_path(url: str, jira_url: str, auth, headers: dict, safe_path: Path) -> None:
+    """Stream an attachment URL to safe_path with CDN-redirect protection.
+
+    Follows exactly one CDN redirect without forwarding credentials, refuses
+    TLS downgrades, and rejects unexpected redirect chains so a 302 HTML body
+    is never written as the file. Raises DownloadError on redirect anomalies;
+    propagates the typed auth errors from _handle_response().
+    """
+    response = requests.get(
+        url,
+        auth=auth,
+        headers=headers,
+        allow_redirects=False,
+        stream=True,
+        verify=True,
+        timeout=DOWNLOAD_TIMEOUT,
+    )
+
+    # Follow one CDN redirect without forwarding credentials (Jira Cloud stores
+    # attachments in S3/CDN which returns 302).
+    if response.status_code in (301, 302, 303, 307, 308) and "Location" in response.headers:
+        redirect_url = response.headers["Location"]
+        # Reject HTTP downgrade — prevents MITM on non-TLS redirects
+        if redirect_url.startswith("http://"):
+            raise DownloadError("refusing HTTP redirect (TLS downgrade)")
+        response = requests.get(
+            redirect_url,
+            allow_redirects=False,
+            stream=True,
+            verify=True,
+            timeout=DOWNLOAD_TIMEOUT,
+        )
+
+    # Reject unexpected redirect (e.g., CDN chain with >1 hop) — without this
+    # the 302 HTML body would be silently saved as the file.
+    if 300 <= response.status_code < 400:
+        raise DownloadError(f"unexpected redirect (status {response.status_code})")
+
+    # _handle_response() raises typed errors for 401/403/session-expiry;
+    # raise_for_status() handles the remaining 4xx/5xx.
+    _handle_response(response, jira_url, url=getattr(response, "url", url))
+    response.raise_for_status()
+
+    with open(safe_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+            f.write(chunk)
+
+
+def _report_download_error(ctx, exc: Exception) -> None:
+    """Map a download exception to a user-facing message and exit non-zero."""
+    if ctx.obj.get("debug"):
+        raise exc
+    if isinstance(exc, CaptchaError):
+        raise exc
+    if isinstance(exc, KeyError):
+        error(f"Missing required configuration: {exc}")
+    elif isinstance(exc, (SessionExpiredError, AuthenticationError)):
+        error(str(exc))
+    elif isinstance(exc, (DownloadError, requests.exceptions.RequestException)):
+        error(f"Download failed: {exc}")
+    else:
+        error(f"Failed to download attachment: {exc}")
+    sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -152,15 +236,7 @@ def download(ctx, attachment_url: str, output_file: str):
             sys.exit(1)
 
         # Determine authentication method
-        if "JIRA_PERSONAL_TOKEN" in config:
-            auth_token = config["JIRA_PERSONAL_TOKEN"]
-            auth = None
-            headers = {"Authorization": f"Bearer {auth_token}"}
-        else:
-            username = config["JIRA_USERNAME"]
-            api_token = config["JIRA_API_TOKEN"]
-            auth = (username, api_token)
-            headers = {}
+        auth, headers = _build_auth(config)
 
         # Build full URL if needed
         if attachment_url.startswith(("http://", "https://")):
@@ -183,51 +259,7 @@ def download(ctx, attachment_url: str, output_file: str):
             error(f"Output path exists and is not a file: {output_file}")
             sys.exit(1)
 
-        # Download with authentication (explicit verify and timeout).
-        # First request uses allow_redirects=False to handle CDN redirects
-        # safely — Jira Cloud stores attachments in S3/CDN which returns 302.
-        # We follow exactly one redirect but strip credentials to avoid
-        # leaking them to the CDN host.
-        response = requests.get(
-            url,
-            auth=auth,
-            headers=headers,
-            allow_redirects=False,
-            stream=True,
-            verify=True,
-            timeout=DOWNLOAD_TIMEOUT,
-        )
-
-        # Follow one CDN redirect without forwarding credentials
-        if response.status_code in (301, 302, 303, 307, 308) and "Location" in response.headers:
-            redirect_url = response.headers["Location"]
-            # Reject HTTP downgrade — prevents MITM on non-TLS redirects
-            if redirect_url.startswith("http://"):
-                error("Download failed: refusing HTTP redirect (TLS downgrade)")
-                sys.exit(1)
-            response = requests.get(
-                redirect_url,
-                allow_redirects=False,
-                stream=True,
-                verify=True,
-                timeout=DOWNLOAD_TIMEOUT,
-            )
-
-        # Reject unexpected redirect (e.g., CDN chain with >1 hop) —
-        # without this check, the 302 HTML body would be silently saved as the file.
-        if 300 <= response.status_code < 400:
-            error(f"Download failed: unexpected redirect (status {response.status_code})")
-            sys.exit(1)
-
-        # _handle_response() raises typed errors for 401/403/session-expiry;
-        # raise_for_status() handles the remaining 4xx/5xx.
-        _handle_response(response, jira_url, url=getattr(response, "url", url))
-        response.raise_for_status()
-
-        # Write to file
-        with open(safe_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                f.write(chunk)
+        _stream_to_path(url, jira_url, auth, headers, safe_path)
 
         if ctx.obj["quiet"]:
             print(str(safe_path))
@@ -236,31 +268,109 @@ def download(ctx, attachment_url: str, output_file: str):
         else:
             success(f"Downloaded to: {safe_path}")
 
-    except KeyError as e:
-        if ctx.obj["debug"]:
-            raise
-        error(f"Missing required configuration: {e}")
-        sys.exit(1)
-    except SessionExpiredError as e:
-        if ctx.obj["debug"]:
-            raise
-        error(str(e))
-        sys.exit(1)
-    except AuthenticationError as e:
-        if ctx.obj["debug"]:
-            raise
-        error(str(e))
-        sys.exit(1)
-    except requests.exceptions.RequestException as e:
-        if ctx.obj["debug"]:
-            raise
-        error(f"Download failed: {e}")
-        sys.exit(1)
     except Exception as e:
-        if ctx.obj["debug"]:
-            raise
-        error(f"Failed to download attachment: {e}")
-        sys.exit(1)
+        _report_download_error(ctx, e)
+
+
+@cli.command("download-all")
+@click.argument("issue_key")
+@click.option("--dir", "output_dir", default=".", help="Output directory (created if missing; must stay within cwd)")
+@click.option("--dry-run", is_flag=True, help="List attachments without downloading")
+@click.pass_context
+def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
+    """Download all attachments of a Jira issue.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    Files are saved under --dir using their original Jira filenames. Duplicate
+    filenames are disambiguated with the attachment id. Files whose name would
+    escape --dir are skipped.
+
+    Examples:
+
+      jira-attachment download-all PROJ-123
+
+      jira-attachment download-all PROJ-123 --dir ./attachments
+
+      jira-attachment download-all PROJ-123 --dry-run
+    """
+    try:
+        config = load_config(env_file=ctx.obj["env_file"], profile=ctx.obj.get("profile"))
+        jira_url = config["JIRA_URL"]
+        auth, headers = _build_auth(config)
+
+        # Path traversal protection: constrain output dir within cwd (matches `download`)
+        safe_dir = validate_output_path(output_dir, Path.cwd())
+        if safe_dir is None:
+            error(f"Output directory escapes working directory: {output_dir}")
+            sys.exit(1)
+
+        # Fetch attachment metadata for the issue
+        meta_response = requests.get(
+            f"{jira_url}/rest/api/2/issue/{issue_key}",
+            params={"fields": "attachment"},
+            auth=auth,
+            headers={**headers, "Accept": "application/json"},
+            verify=True,
+            timeout=DOWNLOAD_TIMEOUT,
+        )
+        _handle_response(meta_response, jira_url, url=getattr(meta_response, "url", None))
+        meta_response.raise_for_status()
+        attachments = (meta_response.json().get("fields") or {}).get("attachment") or []
+
+        if not attachments:
+            if ctx.obj["json"]:
+                print(json.dumps({"status": "success", "issue": issue_key, "count": 0, "downloaded": []}))
+            elif not ctx.obj["quiet"]:
+                warning(f"No attachments on {issue_key}")
+            return
+
+        if dry_run:
+            warning(f"DRY RUN — {len(attachments)} attachment(s) on {issue_key}:")
+            for att in attachments:
+                print(f"  {att.get('filename')} ({att.get('size', 0):,} bytes)")
+            return
+
+        safe_dir.mkdir(parents=True, exist_ok=True)
+        downloaded: list[str] = []
+        seen: set[str] = set()
+        for att in attachments:
+            # Strip any path components from the Jira-supplied filename (untrusted)
+            filename = Path(att.get("filename", "")).name
+            if not filename:
+                warning(f"Skipping attachment with empty filename (id={att.get('id')})")
+                continue
+            # Disambiguate duplicate filenames so they don't overwrite each other
+            if filename in seen:
+                filename = f"{att.get('id', 'dup')}_{filename}"
+            seen.add(filename)
+
+            dest = validate_output_path(filename, str(safe_dir))
+            if dest is None:
+                warning(f"Skipping unsafe filename: {att.get('filename')!r}")
+                continue
+
+            try:
+                _stream_to_path(att["content"], jira_url, auth, headers, dest)
+            except DownloadError as e:
+                warning(f"Skipping {filename}: {e}")
+                continue
+            downloaded.append(str(dest))
+
+        if ctx.obj["quiet"]:
+            for path in downloaded:
+                print(path)
+        elif ctx.obj["json"]:
+            print(
+                json.dumps(
+                    {"status": "success", "issue": issue_key, "count": len(downloaded), "downloaded": downloaded}
+                )
+            )
+        else:
+            success(f"Downloaded {len(downloaded)}/{len(attachments)} attachment(s) from {issue_key} to {safe_dir}")
+
+    except Exception as e:
+        _report_download_error(ctx, e)
 
 
 @cli.command("add")
