@@ -176,6 +176,13 @@
       "prompt": "Download all attachments from TEST-135 into ./attachments",
       "expected_output": "Agent runs jira-attachment.py download-all TEST-135 --dir ./attachments (single bulk command, not per-URL download loop)",
       "ideal_tools": 1
+    },
+    {
+      "id": 26,
+      "name": "transition-emoji-tolerant",
+      "prompt": "Resolve TEST-135 (its transition is labelled '✅ Resolve')",
+      "expected_output": "Agent runs jira-transition.py do TEST-135 'Resolve' (or 'Resolved') — the resolver tolerates the emoji prefix; no need to guess the exact emoji string",
+      "ideal_tools": 1
     }
   ]
 }
