@@ -41,6 +41,53 @@ def _get_to_status(transition: dict) -> str:
     return str(to_value)
 
 
+def _normalize_transition_name(name: str) -> str:
+    """Normalize a transition/status name for tolerant matching.
+
+    Strips leading non-alphanumeric noise (emoji, symbols, whitespace) and
+    lowercases, so a user-supplied "Resolve" matches a Jira transition labelled
+    "✅ Resolve".
+    """
+    return re.sub(r"^[^0-9a-zA-Z]+", "", name or "").strip().lower()
+
+
+def find_matching_transition(transitions: list[dict], status_name: str) -> tuple[dict | None, list[dict]]:
+    """Resolve a user-supplied name to a transition, tolerating emoji prefixes.
+
+    Tiers, first hit wins: (1) exact case-insensitive on transition name or
+    target status; (2) normalized equality (emoji/symbol prefix stripped);
+    (3) unique normalized-substring match. Returns (match, candidates): match is
+    the resolved transition or None; candidates lists the >1 transitions that an
+    ambiguous substring matched (empty otherwise), so the caller can report them.
+    """
+    target = status_name.lower()
+    for t in transitions:
+        if t.get("name", "").lower() == target or _get_to_status(t).lower() == target:
+            return t, []
+
+    norm_target = _normalize_transition_name(status_name)
+    if norm_target:
+        for t in transitions:
+            if norm_target in (
+                _normalize_transition_name(t.get("name", "")),
+                _normalize_transition_name(_get_to_status(t)),
+            ):
+                return t, []
+
+        substring = [
+            t
+            for t in transitions
+            if norm_target in _normalize_transition_name(t.get("name", ""))
+            or norm_target in _normalize_transition_name(_get_to_status(t))
+        ]
+        if len(substring) == 1:
+            return substring[0], []
+        if len(substring) > 1:
+            return None, substring
+
+    return None, []
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,22 +191,18 @@ def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, re
         # Get available transitions
         transitions = client.get_issue_transitions(issue_key)
 
-        # Find matching transition (case-insensitive)
-        matching = None
-        for t in transitions:
-            if t.get("name", "").lower() == status_name.lower():
-                matching = t
-                break
-            # Also check target status name
-            to_status = _get_to_status(t)
-            if to_status.lower() == status_name.lower():
-                matching = t
-                break
+        # Find matching transition (exact → emoji-tolerant → unique substring)
+        matching, ambiguous = find_matching_transition(transitions, status_name)
 
         if not matching:
-            available = [t.get("name", "") for t in transitions]
-            error(f"Transition '{status_name}' not available for {issue_key}")
-            print(f"\nAvailable transitions: {', '.join(available)}")
+            if ambiguous:
+                names = [t.get("name", "") for t in ambiguous]
+                error(f"Transition '{status_name}' is ambiguous for {issue_key}")
+                print(f"\nMatches: {', '.join(names)} — use the exact name")
+            else:
+                available = [t.get("name", "") for t in transitions]
+                error(f"Transition '{status_name}' not available for {issue_key}")
+                print(f"\nAvailable transitions: {', '.join(available)}")
             sys.exit(1)
 
         # Dry run
