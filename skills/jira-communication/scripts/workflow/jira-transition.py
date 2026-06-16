@@ -42,13 +42,15 @@ def _get_to_status(transition: dict) -> str:
 
 
 def _normalize_transition_name(name: str) -> str:
-    """Normalize a transition/status name for tolerant matching.
+    r"""Normalize a transition/status name for tolerant matching.
 
-    Strips leading non-alphanumeric noise (emoji, symbols, whitespace) and
-    lowercases, so a user-supplied "Resolve" matches a Jira transition labelled
-    "✅ Resolve".
+    Strips leading non-word noise (emoji, symbols, whitespace) and case-folds,
+    so a user-supplied "Resolve" matches a Jira transition labelled "✅ Resolve".
+    Uses ``\W`` (Unicode-aware) rather than an ASCII class so localized names
+    (Cyrillic, Han, accented, …) are preserved instead of stripped to empty, and
+    ``casefold()`` for correct Unicode case-insensitive comparison.
     """
-    return re.sub(r"^[^0-9a-zA-Z]+", "", name or "").strip().lower()
+    return re.sub(r"^\W+", "", name or "", flags=re.UNICODE).strip().casefold()
 
 
 def find_matching_transition(transitions: list[dict], status_name: str) -> tuple[dict | None, list[dict]]:
@@ -60,9 +62,9 @@ def find_matching_transition(transitions: list[dict], status_name: str) -> tuple
     the resolved transition or None; candidates lists the >1 transitions that an
     ambiguous substring matched (empty otherwise), so the caller can report them.
     """
-    target = status_name.lower()
+    target = status_name.casefold()
     for t in transitions:
-        if t.get("name", "").lower() == target or _get_to_status(t).lower() == target:
+        if t.get("name", "").casefold() == target or _get_to_status(t).casefold() == target:
             return t, []
 
     norm_target = _normalize_transition_name(status_name)

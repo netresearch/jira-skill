@@ -56,3 +56,20 @@ class TestFindMatchingTransition:
         match, ambiguous = _mod.find_matching_transition(ts, "Review")
         assert match["name"] == "Review"
         assert ambiguous == []
+
+    def test_non_latin_name_not_stripped_to_empty(self):
+        """Localized (non-ASCII) transition names must survive normalization.
+
+        Regression: an ASCII-only strip class would reduce a fully-Cyrillic name
+        to '' and break matching. '\\W'-based stripping keeps Unicode letters.
+        """
+        ts = [_t("✅ Решить", "Решено"), _t("▶ Начать", "В работе")]
+        match, ambiguous = _mod.find_matching_transition(ts, "Решить")
+        assert match["name"] == "✅ Решить"
+        assert ambiguous == []
+
+    def test_unicode_casefold_equality(self):
+        """German ß should casefold-match 'ss' (Unicode-correct comparison)."""
+        ts = [_t("Abschließen", "Done")]
+        match, _ = _mod.find_matching_transition(ts, "ABSCHLIESSEN")
+        assert match["name"] == "Abschließen"
