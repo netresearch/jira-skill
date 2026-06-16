@@ -1,0 +1,23 @@
+name: OpenSSF Scorecard
+
+# Closes the skill-repo security gap: supply-chain posture scoring (branch
+# protection, pinned actions, token permissions, …). Runs on default-branch
+# push and on a weekly schedule; results upload to the code-scanning dashboard.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scorecard:
+    uses: netresearch/.github/.github/workflows/scorecard.yml@main
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+      actions: read

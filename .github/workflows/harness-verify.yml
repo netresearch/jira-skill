@@ -1,12 +1,17 @@
 name: Harness Verification
 
+# Verifies agent-harness consistency (AGENTS.md index, docs drift) via the
+# skill-repo-skill reusable. The reusable declares `permissions: contents:
+# read` at top level (read-only validator); the calling job mirrors it.
+
 on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   harness-verify:
     uses: netresearch/skill-repo-skill/.github/workflows/harness-verify.yml@main
+    permissions:
+      contents: read

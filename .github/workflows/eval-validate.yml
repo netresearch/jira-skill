@@ -1,0 +1,18 @@
+name: Eval Validation
+
+# Runs the skill's eval suite via the skill-repo-skill reusable. The reusable
+# declares `permissions: contents: read` at top level (read-only validator);
+# the calling job mirrors it explicitly.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  eval-validate:
+    uses: netresearch/skill-repo-skill/.github/workflows/eval-validate.yml@main
+    permissions:
+      contents: read

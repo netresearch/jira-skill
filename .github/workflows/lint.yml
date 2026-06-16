@@ -1,0 +1,20 @@
+name: Lint
+
+# Skill validation (SKILL.md word cap, plugin.json schema, markdown lint, …)
+# via the skill-repo-skill reusable. The reusable declares `permissions:
+# contents: read` at top level; the calling job mirrors it explicitly so the
+# grant is visible at the call site and independent of the repo default.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Skill Validation
+    uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
+    permissions:
+      contents: read
