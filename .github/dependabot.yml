@@ -1,6 +1,52 @@
+# Managed by netresearch/.github/templates/skill/
+#
+# Declares only the ecosystems every skill consumer is guaranteed to have:
+# github-actions (CI workflows) and composer (every skill repo ships a
+# composer.json for split-licensing / Packagist distribution).
+#
+# npm and devcontainers are OPT-IN: a repo that actually has package.json
+# fixtures (e.g. skills/<name>/references/examples/**) or a devcontainer adds
+# the block below to its own dependabot.yml and lists `.github/dependabot.yml`
+# under `intentional-drift:` in .github/template.yaml so the template sync
+# stops managing the file. Declaring an ecosystem without its manifest makes
+# the Dependabot run fail with `dependency_file_not_found`.
+#
+# Opt-in npm (use Dependabot's plural `directories:` to consolidate multiple
+# fixture dirs into one grouped PR):
+#   - package-ecosystem: npm
+#     directories:
+#       - /skills/<name>/references/examples/<project>
+#     schedule:
+#       interval: weekly
+#       day: monday
+#     open-pull-requests-limit: 5
+#     groups:
+#       npm:
+#         patterns: ['*']
+#     cooldown:
+#       default-days: 7
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ['*']
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      composer:
+        patterns: ['*']
+    cooldown:
+      default-days: 7

@@ -1,14 +1,22 @@
 name: Release
 
+# Skill release pipeline (composer/npm package publish + Sigstore cosign +
+# SHA256SUMS attestation) via the skill-repo-skill reusable. The reusable's
+# release job declares contents/id-token/attestations: write; the calling job
+# grants exactly that union. id-token + attestations are required for the
+# OIDC-backed Sigstore signing and the GitHub native attestation API.
+
 on:
   push:
     tags:
       - 'v*'
+
+permissions: {}
 
 jobs:
   release:
     uses: netresearch/skill-repo-skill/.github/workflows/release.yml@main
     permissions:
       contents: write          # release upload
-      id-token: write          # OIDC for sigstore (required by the attest job)
-      attestations: write      # GitHub native attestation API (required by the attest job)
+      id-token: write          # OIDC for sigstore (cosign + attest)
+      attestations: write      # GitHub native attestation API
