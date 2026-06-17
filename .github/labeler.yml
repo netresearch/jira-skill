@@ -6,7 +6,15 @@ ci:
       - any-glob-to-any-file: ['.github/**/*', 'Makefile']
 dependencies:
   - changed-files:
-      - any-glob-to-any-file: ['composer.json', 'composer.lock', 'package.json', 'package-lock.json', 'bun.lock', 'bun.lockb', 'yarn.lock', '.devcontainer/**/*']
+      - any-glob-to-any-file:
+          - 'composer.json'
+          - 'composer.lock'
+          - 'package.json'
+          - 'package-lock.json'
+          - 'bun.lock'
+          - 'bun.lockb'
+          - 'yarn.lock'
+          - '.devcontainer/**/*'
 skill:
   - changed-files:
       - any-glob-to-any-file: ['skills/**/*', '.claude-plugin/**/*', 'plugin.json']
