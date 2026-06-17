@@ -69,6 +69,7 @@ ${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh path/to/content.txt
 | `[text](url)` | `[text\|url]` |
 | `- bullet` | `* bullet` |
 | `h2.Title` | `h2. Title` |
+| `MR !42` (bare GitLab ref) | `[MR 42\|url]` or full `group/project!42` — a bare `!…!` is image markup |
 
 ## Integration with jira-communication Skill
 
