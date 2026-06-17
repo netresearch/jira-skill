@@ -109,5 +109,145 @@
         "pattern": "Fixed in commit abc123"
       }
     ]
+  },
+  {
+    "name": "read_issue_status_and_assignee",
+    "prompt": "What's the status and assignee of PROJ-135?",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-issue\\.py.*get\\s+PROJ-135"
+      },
+      {
+        "type": "content",
+        "pattern": "(status|assignee)"
+      }
+    ]
+  },
+  {
+    "name": "get_issue_as_json",
+    "prompt": "Get PROJ-135 details as JSON",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-issue\\.py.*--json.*get\\s+PROJ-135|jira-issue\\.py.*get\\s+PROJ-135.*--json"
+      },
+      {
+        "type": "content",
+        "pattern": "--json"
+      }
+    ]
+  },
+  {
+    "name": "update_issue_priority_field",
+    "prompt": "Change the priority of PROJ-135 to Critical",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-issue\\.py.*update\\s+PROJ-135"
+      },
+      {
+        "type": "content",
+        "pattern": "--priority.*Critical"
+      }
+    ]
+  },
+  {
+    "name": "identify_current_jira_user",
+    "prompt": "Which Jira user am I logged in as?",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-user\\.py.*me"
+      },
+      {
+        "type": "content",
+        "pattern": "jira-user\\.py"
+      }
+    ]
+  },
+  {
+    "name": "create_issue_link_blocks",
+    "prompt": "Link PROJ-100 as blocking PROJ-200 and show me all links on PROJ-100",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-link\\.py.*create"
+      },
+      {
+        "type": "content",
+        "pattern": "(Blocks|blocks).*PROJ-200|PROJ-100.*PROJ-200"
+      },
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-link\\.py.*list\\s+PROJ-100"
+      }
+    ]
+  },
+  {
+    "name": "add_watcher_to_issue",
+    "prompt": "Add asmith as a watcher on PROJ-135",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-watchers\\.py.*add\\s+PROJ-135\\s+asmith"
+      },
+      {
+        "type": "content",
+        "pattern": "asmith"
+      }
+    ]
+  },
+  {
+    "name": "list_unreleased_versions",
+    "prompt": "List unreleased versions in project PROJ",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-version\\.py.*list\\s+PROJ"
+      },
+      {
+        "type": "content",
+        "pattern": "(--status.*unreleased|unreleased)"
+      }
+    ]
+  },
+  {
+    "name": "upload_attachment_to_issue",
+    "prompt": "Attach the file /tmp/eval-report.txt to PROJ-135",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-attachment\\.py.*add\\s+PROJ-135"
+      },
+      {
+        "type": "content",
+        "pattern": "/tmp/eval-report\\.txt"
+      }
+    ]
+  },
+  {
+    "name": "download_all_attachments_from_issue",
+    "prompt": "Download all attachments from PROJ-135 into ./attachments",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-attachment\\.py.*download-all\\s+PROJ-135"
+      },
+      {
+        "type": "content",
+        "pattern": "(\\./)?attachments"
+      }
+    ]
   }
 ]
