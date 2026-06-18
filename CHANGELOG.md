@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.18.0] - 2026-06-18
+
+### Added
+
+- `jira-attachment download-all`: bulk-download every attachment on an issue in one call, with per-file progress and resilient error handling ([#134](https://github.com/netresearch/jira-skill/pull/134)).
+- `jira-issue transition`: tolerant, Unicode-safe transition-name matching — transitions resolve case- and whitespace-insensitively (and across Unicode normalisation forms) instead of requiring an exact label match ([#136](https://github.com/netresearch/jira-skill/pull/136)).
+
+### Fixed
+
+- `jira-communication`: surface the comment count and never render requested fields silently — when a field is requested but absent it is reported rather than dropped without notice ([#127](https://github.com/netresearch/jira-skill/pull/127), [#130](https://github.com/netresearch/jira-skill/pull/130)).
+
+### Documentation
+
+- `jira-syntax`: clarified wiki-markup escaping rules and fixed table pipe (`|`) escaping in the reference ([#133](https://github.com/netresearch/jira-skill/pull/133)).
+- `jira-syntax`: warn that a bare GitLab `!N` reference renders as image markup in Jira wiki syntax ([#138](https://github.com/netresearch/jira-skill/pull/138)).
+
 ## [3.17.0] - 2026-06-11
 
 ### Added
