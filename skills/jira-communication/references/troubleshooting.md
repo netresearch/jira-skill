@@ -117,6 +117,20 @@ uv run scripts/core/jira-issue.py get PROJ-123 --json
 uv run scripts/core/jira-issue.py --json get PROJ-123
 ```
 
+### "Transition 'X' not available" (passing the transition ID)
+
+**Cause**: `jira-transition.py do` expects the **target status name**, not the numeric transition ID that `jira-transition.py list` prints in its leftmost column.
+
+**Fix**: Pass the destination status, in quotes:
+```bash
+# Wrong — 311 is the transition ID from `list`
+uv run scripts/workflow/jira-transition.py do PROJ-123 311
+
+# Correct — the To-Status name
+uv run scripts/workflow/jira-transition.py do PROJ-123 "Resolved"
+```
+When two transitions share a name but differ by icon (e.g. "✅ QA" → Resolved vs "❌ QA" → Reopened), disambiguate by passing the **target status** ("Resolved" / "Reopened"), which is unique.
+
 ### "Issue does not exist"
 
 **Cause**: Wrong key or no permission.

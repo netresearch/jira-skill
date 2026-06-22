@@ -19,6 +19,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-user.py me
 
 Useful when `--assignee`, `--reporter`, or `--user` rejects a value: search returns the canonical username (Server/DC) or accountId (Cloud) the API expects.
 
+**`[~mention]` in comments needs the canonical username, not a guess.** The mention token resolves on the account's `name`/`key` — which can differ from **both** the display name and the email local-part (renamed accounts are common: e.g. display "Jane Doe", email `jane.doe@…`, but `name=jane.smith` after a rename). Guessing from the display name or email silently produces a non-notifying mention. Resolve it first — `jira-user.py search "<display name>"`, or read the `name` field of an existing comment's author — then write `[~<name>]`. If someone says "your mention pinged the wrong/no user", this is why. (Jira **Cloud** uses `[~accountId:<accountId>]` instead of `[~username]`; resolve the `accountId` the same way and use that form.)
+
 ## Custom fields
 
 ```bash
