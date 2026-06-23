@@ -315,6 +315,24 @@ A quick sanity check before posting: run `skills/jira-syntax/scripts/validate-ji
 | `(on)` | 💡 | Light bulb on |
 | `(off)` | 🔌 | Light bulb off |
 | `(*)` | ⭐ | Star |
+| `(/)` | ✅ | Green check / done |
+| `(x)` | ❌ | Red cross / not done |
+
+### Checklists with `(/)` and `(x)`
+
+`(/)` and `(x)` are the conventional checklist markers: `(/)` for a completed
+item, `(x)` for an open one. Use them only with that meaning.
+
+- Do not put `(/)` on items that are merely proposed or not yet implemented.
+  It renders as a green check and reads as "done".
+- `( )` (empty parentheses) is **not** a macro. It renders literally as two
+  parentheses, so it conveys nothing. For an open item use `(x)`, or a plain
+  bullet when no status is intended.
+
+```
+* (/) Migration script written and tested
+* (x) Rollback procedure documented
+```
 
 ## Common Patterns
 

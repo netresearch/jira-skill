@@ -70,6 +70,8 @@ ${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh path/to/content.txt
 | `- bullet` | `* bullet` |
 | `h2.Title` | `h2. Title` |
 | `MR !42` (bare GitLab ref) | `[MR 42\|url]` or full `group/project!42` — a bare `!…!` is image markup |
+| `(/)` on an open/proposed item | `(x)` — `(/)` renders as a green check (done); use `(x)` for open items |
+| `( )` as a checkbox | `(x)` — `( )` is not a macro and renders literally |
 
 ## Integration with jira-communication Skill
 
