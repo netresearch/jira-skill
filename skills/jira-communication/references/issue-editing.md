@@ -37,6 +37,8 @@ The script merges `--fields-json` onto the typed-flag payload (`update_fields.up
 
 Look up custom field IDs with `jira-fields.py` — see `fields-and-users.md`.
 
+**Epic Link is edit-screen-only.** On Jira Server/DC the Epic Link field (look it up with `jira-fields.py search epic`, e.g. `customfield_10580`) is usually **not on the create screen** — passing it to `jira-create.py … --fields-json` fails with *"Field … cannot be set. It is not on the appropriate screen, or unknown."* Create the issue first, then set the epic with `jira-issue.py update KEY --fields-json '{"customfield_10580": "PROJ-1"}'`.
+
 ## Labels: replace vs incremental updates
 
 `jira-issue.py update` supports three modes:
@@ -94,3 +96,5 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue PROJ-100 PROJ --i
 # Execute the type change (issue key stays the same)
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-move.py issue PROJ-100 PROJ --issue-type Task
 ```
+
+This works between two standard types (or two sub-task types). **Converting a sub-task ↔ a standard issue cannot be done via the API.** `jira-move.py … --issue-type Task` on a *sub-task* fails with *"Issue type N is not a sub-task but a parent is specified"* — the parent can't be cleared through the edit endpoint, and `jira-issue.py update --fields-json '{"parent": null, ...}'` also fails. It is a **UI-only** operation: open the issue → **More → Convert to Issue** (this is *not* the "Move" action). After converting in the UI the issue becomes a standard type and can take an Epic Link (above).
