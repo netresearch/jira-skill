@@ -21,6 +21,23 @@ Useful when `--assignee`, `--reporter`, or `--user` rejects a value: search retu
 
 **`[~mention]` in comments needs the canonical username, not a guess.** The mention token resolves on the account's `name`/`key` — which can differ from **both** the display name and the email local-part (renamed accounts are common: e.g. display "Jane Doe", email `jane.doe@…`, but `name=jane.smith` after a rename). Guessing from the display name or email silently produces a non-notifying mention. Resolve it first — `jira-user.py search "<display name>"`, or read the `name` field of an existing comment's author — then write `[~<name>]`. If someone says "your mention pinged the wrong/no user", this is why. (Jira **Cloud** uses `[~accountId:<accountId>]` instead of `[~username]`; resolve the `accountId` the same way and use that form.)
 
+## Assignee — assign and unassign
+
+```bash
+# Assign to a user (or to self)
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee john.doe
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me
+
+# Unassign — clear the assignee (no dedicated flag; use the field directly)
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --fields-json '{"assignee": null}'
+```
+
+There is no `--unassign` flag: `--assignee` only *sets* a value. To clear the
+assignee, pass `{"assignee": null}` via `--fields-json` (works on Server/DC). On
+some instances a `null` assignment can revert to a project default rather than
+"Unassigned" — verify with `jira-issue.py get PROJ-123` afterwards (look for
+`Assignee: Unassigned`).
+
 ## Custom fields
 
 ```bash
