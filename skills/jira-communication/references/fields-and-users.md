@@ -35,8 +35,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --fields-j
 There is no `--unassign` flag: `--assignee` only *sets* a value. To clear the
 assignee, pass `{"assignee": null}` via `--fields-json` (works on Server/DC). On
 some instances a `null` assignment can revert to a project default rather than
-"Unassigned" — verify with `jira-issue.py get PROJ-123` afterwards (look for
-`Assignee: Unassigned`).
+"Unassigned" — verify with `uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123`
+afterwards (look for `Assignee: Unassigned`).
 
 ## Custom fields
 
