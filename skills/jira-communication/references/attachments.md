@@ -36,15 +36,17 @@ The output location is the **second positional argument** (`OUTPUT_FILE`), not a
 
 ### Verify the download succeeded
 
-`jira-attachment.py download` carries Jira authentication (PAT via `Authorization: Bearer`, or Cloud basic auth) and refuses to save a redirect/login body as the file. But if an attachment is ever fetched **without** auth (e.g. a hand-rolled `curl`/`wget`, or a CDN redirect followed without credentials), the request lands on the login page or an empty response and you get a **0-byte file that looks like success**. Always check the size after downloading:
+`jira-attachment.py download` carries Jira authentication (PAT via `Authorization: Bearer`, or Cloud basic auth) and refuses to save a redirect/login body as the file, exiting non-zero on failure. When scripting, always check the command's exit status to detect failures:
 
 ```bash
 out=./attachments/report.pdf
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download "$url" "$out"
-[ -s "$out" ] || { echo "ERROR: empty download — check authentication" >&2; exit 1; }
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download "$url" "$out" || {
+    echo "ERROR: download failed" >&2
+    exit 1
+}
 ```
 
-`[ -s FILE ]` is true only when the file exists and is non-empty. A 0-byte result almost always means the request was unauthenticated.
+An unauthenticated or redirected fetch (e.g. a hand-rolled `curl`/`wget` that lands on the login page) yields a bad or empty file — but rely on the command's exit status, not a size test, to detect it: a size check masks the script's real error and falsely fails on legitimate 0-byte attachments.
 
 ## Download all attachments
 
