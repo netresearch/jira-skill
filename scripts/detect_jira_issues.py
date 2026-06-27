@@ -16,6 +16,17 @@ from urllib.parse import urlparse
 # Common project prefixes for Netresearch
 ISSUE_KEY_PATTERN = r"\b([A-Z][A-Z0-9_]+-\d+)\b"
 
+# PREFIX-123 shapes that look like issue keys but never are: security
+# identifiers (CVE-2024, CWE-918, GHSA-…), encodings/standards/crypto
+# (UTF-8, SHA-256, ISO-8601, RFC-2119, MD5-…, AES-256, TLS-12), and the
+# universal doc placeholders PROJ-/EXAMPLE- (any number, e.g. PROJ-456).
+NON_JIRA_KEY_PREFIXES = frozenset(
+    {"CVE", "CWE", "GHSA", "ISO", "RFC", "UTF", "SHA", "MD5", "AES", "TLS", "PROJ", "EXAMPLE"}
+)
+
+# Literal placeholder keys used in docs and examples (not real tickets).
+PLACEHOLDER_KEYS = frozenset({"ABC-123"})
+
 # Jira URL patterns
 JIRA_URL_PATTERNS = [
     r"https?://jira\.[^/]+/browse/([A-Z][A-Z0-9_]+-\d+)",
@@ -40,18 +51,37 @@ def _normalize_netloc(url: str) -> str:
     return host
 
 
+def _is_jira_key(key: str) -> bool:
+    """Return False for PREFIX-123 shapes that are never real Jira issue keys.
+
+    Filters out literal doc placeholders (PROJ-123) and non-Jira identifier
+    classes such as security IDs (CVE-2024-1234, CWE-918) and encodings or
+    standards (UTF-8, SHA-256, ISO-8601, RFC-2119). Real project keys such as
+    NRS-4477 are kept.
+    """
+    if key in PLACEHOLDER_KEYS:
+        return False
+    prefix = key.rsplit("-", 1)[0]
+    return prefix not in NON_JIRA_KEY_PREFIXES
+
+
 def extract_issue_keys(text: str) -> list[str]:
     """Extract unique Jira issue keys from text."""
     keys = set()
 
     # Direct issue keys
     for match in re.finditer(ISSUE_KEY_PATTERN, text):
-        keys.add(match.group(1))
+        key = match.group(1)
+        if _is_jira_key(key):
+            keys.add(key)
 
-    # Issue keys from URLs
+    # Issue keys from URLs (inherently Jira, but stay consistent and drop
+    # placeholder/non-Jira shapes like .../browse/PROJ-123 too).
     for pattern in JIRA_URL_PATTERNS:
         for match in re.finditer(pattern, text):
-            keys.add(match.group(1))
+            key = match.group(1)
+            if _is_jira_key(key):
+                keys.add(key)
 
     return sorted(keys)
 
