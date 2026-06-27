@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 # Add scripts directory to path
 _test_dir = Path(__file__).parent
 _scripts_dir = _test_dir.parent / "scripts"
@@ -29,8 +31,9 @@ class TestExtractIssueKeys:
         assert extract_issue_keys("WEB-1381 and NRS-4167") == ["NRS-4167", "WEB-1381"]
 
     def test_key_from_url(self):
-        keys = extract_issue_keys("https://jira.example.com/browse/PROJ-123")
-        assert "PROJ-123" in keys
+        # Uses a non-placeholder key: PROJ-123 is a denylisted doc placeholder.
+        keys = extract_issue_keys("https://jira.example.com/browse/WEB-1381")
+        assert "WEB-1381" in keys
 
     def test_key_from_atlassian_url(self):
         keys = extract_issue_keys("https://company.atlassian.net/browse/CLOUD-42")
@@ -46,6 +49,49 @@ class TestExtractIssueKeys:
     def test_underscore_in_prefix(self):
         keys = extract_issue_keys("FIX_ME-123 is an issue")
         assert "FIX_ME-123" in keys
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: extract_issue_keys() denylist — non-Jira PREFIX-123 false positives
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestExtractIssueKeysDenylist:
+    """PREFIX-123 shapes that are not Jira keys must not trigger detection."""
+
+    NON_JIRA_TOKENS = [
+        "CWE-918",
+        "CVE-2024-1234",
+        "UTF-8",
+        "SHA-256",
+        "ISO-8601",
+        "RFC-2119",
+        "MD5-7",
+        "PROJ-123",  # literal doc placeholder
+    ]
+
+    REAL_KEYS = [
+        "NRS-4477",
+        "JIRA-42",
+        "WEB-1381",
+        "FIX_ME-123",
+    ]
+
+    @pytest.mark.parametrize("token", NON_JIRA_TOKENS)
+    def test_non_jira_token_not_detected(self, token):
+        assert extract_issue_keys(f"see {token} for details") == []
+
+    @pytest.mark.parametrize("key", REAL_KEYS)
+    def test_real_key_still_detected(self, key):
+        assert key in extract_issue_keys(f"work on {key} today")
+
+    def test_security_ids_filtered_real_key_kept_in_same_text(self):
+        text = "CWE-918 and CVE-2024-1234 relate to NRS-4477 and UTF-8 / SHA-256 encoding"
+        assert extract_issue_keys(text) == ["NRS-4477"]
+
+    def test_placeholder_filtered_from_url_too(self):
+        """The PROJ-123 placeholder is filtered even inside a Jira /browse/ URL."""
+        assert extract_issue_keys("https://jira.example.com/browse/PROJ-123") == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
