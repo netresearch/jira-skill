@@ -32,6 +32,22 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download \
     ./attachments/report.pdf
 ```
 
+The output location is the **second positional argument** (`OUTPUT_FILE`), not an option. There is **no `--output-dir` flag** on `download` — passing one fails with `Error: No such option: --output-dir` (exit 2). To choose a directory, either include it in the `OUTPUT_FILE` path (as above) or use `download-all --dir <dir>` (the `--dir` flag exists only on the `download-all` subcommand, not on `download`).
+
+### Verify the download succeeded
+
+`jira-attachment.py download` carries Jira authentication (PAT via `Authorization: Bearer`, or Cloud basic auth) and refuses to save a redirect/login body as the file, exiting non-zero on failure. When scripting, always check the command's exit status to detect failures:
+
+```bash
+out=./attachments/report.pdf
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download "$url" "$out" || {
+    echo "ERROR: download failed" >&2
+    exit 1
+}
+```
+
+An unauthenticated or redirected fetch (e.g. a hand-rolled `curl`/`wget` that lands on the login page) yields a bad or empty file — but rely on the command's exit status, not a size test, to detect it: a size check masks the script's real error and falsely fails on legitimate 0-byte attachments.
+
 ## Download all attachments
 
 To grab every attachment on an issue in one call (no need to harvest URLs first), use `download-all`. Files are saved under `--dir` (default cwd) using their original Jira filenames; duplicate names are disambiguated with the attachment id, and a filename that would escape `--dir` is skipped.
