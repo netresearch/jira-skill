@@ -17,12 +17,15 @@ from urllib.parse import urlparse
 ISSUE_KEY_PATTERN = r"\b([A-Z][A-Z0-9_]+-\d+)\b"
 
 # PREFIX-123 shapes that look like issue keys but never are: security
-# identifiers (CVE-2024, CWE-918, GHSA-…), encodings and standards
-# (UTF-8, SHA-256, ISO-8601, RFC-2119, MD5-…).
-NON_JIRA_KEY_PREFIXES = frozenset({"CVE", "CWE", "GHSA", "ISO", "RFC", "UTF", "SHA", "MD5"})
+# identifiers (CVE-2024, CWE-918, GHSA-…), encodings/standards/crypto
+# (UTF-8, SHA-256, ISO-8601, RFC-2119, MD5-…, AES-256, TLS-12), and the
+# universal doc placeholders PROJ-/EXAMPLE- (any number, e.g. PROJ-456).
+NON_JIRA_KEY_PREFIXES = frozenset(
+    {"CVE", "CWE", "GHSA", "ISO", "RFC", "UTF", "SHA", "MD5", "AES", "TLS", "PROJ", "EXAMPLE"}
+)
 
 # Literal placeholder keys used in docs and examples (not real tickets).
-PLACEHOLDER_KEYS = frozenset({"PROJ-123", "EXAMPLE-123", "ABC-123"})
+PLACEHOLDER_KEYS = frozenset({"ABC-123"})
 
 # Jira URL patterns
 JIRA_URL_PATTERNS = [

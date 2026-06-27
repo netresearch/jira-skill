@@ -67,7 +67,12 @@ class TestExtractIssueKeysDenylist:
         "ISO-8601",
         "RFC-2119",
         "MD5-7",
+        "AES-256",
+        "TLS-12",
+        "PROJ-456",  # PROJ-/EXAMPLE- placeholders blocked by prefix, any number
+        "EXAMPLE-99",
         "PROJ-123",  # literal doc placeholder
+        "ABC-123",  # literal doc placeholder
     ]
 
     REAL_KEYS = [
