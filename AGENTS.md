@@ -15,6 +15,10 @@ Claude Code plugin with two skills. See SKILL.md in each skill directory for usa
 - Version managed ONLY in `.claude-plugin/plugin.json`
 - Update SKILL.md when changing user-facing behavior
 
+## Dependencies
+
+- **`atlassian-python-api` is pinned `>=3.41,<4` on purpose — do NOT bump to v4 without a Jira Cloud test tenant.** Primary target is jira.netresearch.de (Jira Server/DC 9.12), where v3 works fine. v4 added Cloud's `search/jql` (Atlassian removed `/rest/api/3/search` on Cloud — CHANGE-2046) but had DC regressions through 4.0.5 (fixed in 4.0.6). Cloud-pathway bug reports against this skill are "known, blocked on test infra" — acknowledge, don't re-investigate, until a Cloud tenant is available.
+
 ## Pre-commit checks
 
 ```bash
