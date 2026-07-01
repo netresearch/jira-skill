@@ -61,18 +61,23 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 
 **jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.
 
+## No editorializing
+
+In tickets, comments and worklog notes, state what happened, not how good the work is; no self-praise or narrating the expected. See `references/no-editorializing.md`.
+
 ## References
 
-- `references/jql-quick-reference.md`, `references/jql-cookbook.md` — JQL beyond simple filters
-- `references/multi-profile.md` — multiple Jira instances, `--profile`
-- `references/troubleshooting.md` — auth, SSL, 401, 403, connection
-- `references/issue-editing.md` — `--description`, `--fields-json`, reporter, deletes, moves
-- `references/creation.md` — `--parent`, components, custom fields
-- `references/comments.md` — edit, delete, list, markup lint / `--force`
-- `references/worklog.md` — `--started`, date ranges, `jira-worklog-query.py`
-- `references/attachments.md` — upload, download (cwd-only), inspect
-- `references/links.md` — issue/web links, instance-specific link types
-- `references/agile.md` — sprints, boards, `board --name`
+- `references/jql-quick-reference.md`, `references/jql-cookbook.md`
+- `references/multi-profile.md` — `--profile`
+- `references/troubleshooting.md` — auth, 401/403
+- `references/issue-editing.md` — edit, delete
+- `references/creation.md` — create, `--parent`, fields
+- `references/comments.md` — edit, delete, lint
+- `references/worklog.md` — `--started`, ranges
+- `references/attachments.md` — upload, download
+- `references/links.md` — links
+- `references/agile.md` — sprints/boards
+- `references/no-editorializing.md` — no self-praise
 - `references/fields-and-users.md` — custom field IDs, users, issue types
 - `references/watchers.md` — watch, subscribe, list watchers
 - `references/versions.md` — fix/affects versions, releases, version CRUD
