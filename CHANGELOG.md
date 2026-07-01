@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.18.3] - 2026-07-01
+
+### Documentation
+
+- All skills: added a "no editorializing" rule for written output — commit messages, PR/MR descriptions, review comments, tickets, and chat state what changed, not how good it is ([#150](https://github.com/netresearch/jira-skill/pull/150)).
+- `AGENTS.md`: documented the `atlassian-python-api >=3.41,<4` pin rationale (no Jira Cloud test tenant) ([#148](https://github.com/netresearch/jira-skill/pull/148)).
+
+## [3.18.2] - 2026-06-27
+
+### Fixed
+
+- `hooks`: the Jira-key guard no longer flags `CWE`/`CVE`/encoding IDs or `PROJ-123`-style placeholders as real keys, and blocks the `PROJ`/`EXAMPLE`/`AES`/`TLS` prefixes ([#146](https://github.com/netresearch/jira-skill/pull/146)).
+
+### Documentation
+
+- `jira-communication`: check `jira-attachment download` exit status instead of file size, and document its auth requirement ([#145](https://github.com/netresearch/jira-skill/pull/145)); document unassigning an issue ([#144](https://github.com/netresearch/jira-skill/pull/144)).
+- `jira-syntax`: document the `(/)` and `(x)` status emoticons and checklist semantics ([#141](https://github.com/netresearch/jira-skill/pull/141)).
+
+## [3.18.1] - 2026-06-24
+
+### Documentation
+
+- `jira-communication`: note the Jira Cloud `[~accountId]` mention form, transition-by-status-name, and `[~mention]` username gotchas ([#140](https://github.com/netresearch/jira-skill/pull/140)).
+- `jira-editing`: epic-link is edit-screen-only; subtask↔standard conversion is via the UI "Convert to Issue" ([#142](https://github.com/netresearch/jira-skill/pull/142)).
+
 ## [3.18.0] - 2026-06-18
 
 ### Added
