@@ -29,6 +29,12 @@ from lib.output import comment_to_text, error, format_json, warning
 # Backwards-compatible alias (older code paths/tests refer to the private name)
 _jql_escape = jql_escape
 
+# Hard cap on Tempo worklog pagination. A malformed/mocked response whose
+# metadata never signals "last page" would otherwise loop forever, accumulating
+# entries until the process exhausts memory. 1000 pages × 1000/page = 1M
+# worklogs is far beyond any real query.
+MAX_PAGES = 1000
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Query building
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -201,6 +207,24 @@ def search_issues(client, jql: str) -> list[dict]:
     return issues
 
 
+def _build_issue_map(client, worklogs: list[dict]) -> dict[str, str]:
+    """Map issue keys → summaries via one batched JQL search (avoids N+1 fetches).
+
+    Falls back to empty summaries if the batch lookup fails.
+    """
+    issue_keys = {key for wl in worklogs if (key := wl.get("_issue_key", "Unknown")) != "Unknown"}
+    if not issue_keys:
+        return {}
+    quoted = ", ".join(f'"{_jql_escape(k)}"' for k in sorted(issue_keys))
+    jql = f"issueKey in ({quoted})"
+    try:
+        found = search_issues(client, jql)
+        return {i["key"]: i["summary"] for i in found}
+    except Exception:
+        # Fallback: empty summaries if batch fetch fails
+        return {k: "" for k in issue_keys}
+
+
 def fetch_worklogs(client, issue_key: str) -> list[dict]:
     """Fetch all worklogs for a single issue. Returns raw worklog dicts."""
     result = client.issue_get_worklog(issue_key)
@@ -233,19 +257,23 @@ def fetch_all_worklogs(client, issues: list[dict]) -> list[dict]:
 
 
 def detect_tempo(client) -> bool:
-    """Check if Tempo Timesheets plugin is available.
+    """Check if the Tempo Timesheets (Server/DC) plugin is installed.
 
-    Tries a minimal request to the Tempo REST API. Returns True if Tempo
-    responds (200), False if the endpoint doesn't exist (404) or auth fails.
+    Probes the Tempo REST namespace. Note: the v4 ``/worklogs`` resource only
+    accepts POST (``/worklogs/search``); a GET returns **405**, so we must NOT
+    require a 200 here — that misdetects real Tempo Server instances as "no
+    Tempo" and silently falls back to the JQL backend (which cannot see
+    Tempo-only worklogs). A 404 means the plugin is absent (e.g. Tempo Cloud,
+    which uses the separate api.tempo.io API); a 401/403 means we can't use the
+    endpoint anyway, and a 5xx means Jira/Tempo is unhealthy — all treated as "not
+    available" so we don't select the Tempo backend only to fail on the real query.
+    Anything else (200, 400, 405, …) means the plugin is present and reachable.
     """
     try:
         base_url = client.url.rstrip("/")
         url = f"{base_url}/rest/tempo-timesheets/4/worklogs"
-        today = date.today().isoformat()
-        params = {"dateFrom": today, "dateTo": today, "limit": 1}
-
-        response = client._session.get(url, params=params, timeout=5)
-        return response.status_code == 200
+        response = client._session.get(url, timeout=5)
+        return response.status_code < 500 and response.status_code not in (401, 403, 404)
     except Exception:
         return False
 
@@ -276,38 +304,27 @@ def fetch_worklogs_tempo(
         params["projectKey"] = project
 
     all_worklogs = []
-    while True:
+    for _ in range(MAX_PAGES):
         response = client._session.get(url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
 
         # Handle both array response and paginated object response
         if isinstance(data, list):
-            entries = data
-            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
+            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in data)
             break  # Array response = no pagination
-        else:
-            entries = data.get("results", data.get("worklogs", []))
-            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
-            metadata = data.get("metadata", {})
-            if not metadata.get("next"):
-                break
-            params["offset"] = metadata.get("offset", 0) + metadata.get("limit", 1000)
+        entries = data.get("results") or data.get("worklogs") or []
+        all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
+        metadata = data.get("metadata", {})
+        if not metadata.get("next"):
+            break
+        params["offset"] = metadata.get("offset", 0) + metadata.get("limit", 1000)
+    else:
+        raise RuntimeError(
+            f"Tempo worklog pagination exceeded {MAX_PAGES} pages — aborting to avoid unbounded memory use."
+        )
 
-    # Build issue_map via batch JQL instead of N+1 individual fetches
-    issue_keys = {wl["_issue_key"] for wl in all_worklogs if wl["_issue_key"] != "Unknown"}
-    issue_map: dict[str, str] = {}
-    if issue_keys:
-        quoted = ", ".join(f'"{_jql_escape(k)}"' for k in sorted(issue_keys))
-        jql = f"issueKey in ({quoted})"
-        try:
-            found = search_issues(client, jql)
-            issue_map = {i["key"]: i["summary"] for i in found}
-        except Exception:
-            # Fallback: empty summaries if batch fetch fails
-            issue_map = {k: "" for k in issue_keys}
-
-    return all_worklogs, issue_map
+    return all_worklogs, _build_issue_map(client, all_worklogs)
 
 
 def normalize_tempo_worklog(tempo_wl: dict) -> dict:
@@ -321,15 +338,92 @@ def normalize_tempo_worklog(tempo_wl: dict) -> dict:
     if len(started) == 10:
         started = f"{started}T00:00:00.000+0000"
 
+    # The /worklogs endpoint returns a user object in "author"; /worklogs/search returns "worker".
+    # Normalize both so filter/format see a consistent shape.
+    # Guarantee author is always a dict so filter_worklogs/format_detail can
+    # safely call .get() on it.
+    author = tempo_wl.get("author")
+    if isinstance(author, str) and author:
+        # Some payloads put the username directly in "author".
+        author = {"name": author, "displayName": author}
+    elif not isinstance(author, dict) or not author:
+        # No usable author object → derive from worker/updater (search endpoint).
+        author = {}
+        worker = tempo_wl.get("worker") or tempo_wl.get("updater")
+        if isinstance(worker, dict):
+            author = {
+                "name": worker.get("name") or worker.get("accountId", ""),
+                "accountId": worker.get("accountId", ""),
+                "displayName": worker.get("displayName") or worker.get("name") or worker.get("accountId", ""),
+            }
+        elif isinstance(worker, str) and worker:
+            author = {"name": worker, "displayName": worker}
+    elif not author.get("displayName"):
+        # author dict present but missing displayName → fall back to name so
+        # format_detail doesn't render "Unknown" for a known user.
+        author["displayName"] = author.get("name") or "Unknown"
+
     return {
         "id": str(tempo_wl.get("tempoWorklogId", "")),
         "started": started,
         "timeSpentSeconds": tempo_wl.get("timeSpentSeconds", 0),
         "timeSpent": "",
         "comment": tempo_wl.get("comment", ""),
-        "author": tempo_wl.get("author", {}),
+        "author": author,
         "_issue_key": tempo_wl.get("issue", {}).get("key", "Unknown"),
     }
+
+
+def fetch_worklogs_tempo_account(
+    client,
+    from_date: str,
+    to_date: str,
+    account_keys: list[str],
+) -> tuple[list[dict], dict[str, str]]:
+    """Fetch worklogs for one or more Tempo *accounts* via the search endpoint.
+
+    The plain ``/worklogs`` endpoint filters by worker/project/date but NOT by
+    Tempo account, so the worked time booked to a customer account (across all
+    workers) is only reachable through ``POST /worklogs/search`` with
+    ``accountKey``. Returns ``(worklogs, issue_map)`` in the same shape as
+    :func:`fetch_worklogs_tempo`.
+    """
+    base_url = client.url.rstrip("/")
+    url = f"{base_url}/rest/tempo-timesheets/4/worklogs/search"
+    payload: dict = {
+        "from": from_date,
+        "to": to_date,
+        "accountKey": account_keys,
+        "limit": 1000,
+        "offset": 0,
+    }
+
+    all_worklogs: list[dict] = []
+    for _ in range(MAX_PAGES):
+        response = client._session.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        if isinstance(data, list):
+            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in data)
+            break
+
+        entries = data.get("results") or data.get("worklogs") or []
+        all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
+
+        metadata = data.get("metadata", {})
+        next_offset = metadata.get("nextOffset")
+        if next_offset is not None:
+            payload["offset"] = next_offset
+        elif metadata.get("next") or metadata.get("hasMore"):
+            payload["offset"] = metadata.get("offset", 0) + metadata.get("limit", payload["limit"])
+        else:
+            break
+    else:
+        raise RuntimeError(
+            f"Tempo account worklog pagination exceeded {MAX_PAGES} pages — aborting to avoid unbounded memory use."
+        )
+    return all_worklogs, _build_issue_map(client, all_worklogs)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -341,6 +435,14 @@ def normalize_tempo_worklog(tempo_wl: dict) -> dict:
 @click.option("--from", "from_date", help="Start date YYYY-MM-DD (default: Monday of current week)")
 @click.option("--to", "to_date", help="End date YYYY-MM-DD (default: today)")
 @click.option("--user", help="Username or accountId (default: current user)")
+@click.option(
+    "--tempo-account",
+    help=(
+        "Tempo account key(s), comma-separated (e.g. ACME) — worked time "
+        "for a customer ACCOUNT across ALL workers. Forces the Tempo backend; "
+        "ignores --user/--issue/--epic/--sprint/--project."
+    ),
+)
 @click.option("--project", help="Project key (e.g., HMKG)")
 @click.option("--issue", help="Issue key(s), comma-separated")
 @click.option("--epic", help="Epic key (e.g., HMKG-1940)")
@@ -361,6 +463,7 @@ def cli(
     from_date,
     to_date,
     user,
+    tempo_account,
     project,
     issue,
     epic,
@@ -402,22 +505,55 @@ def cli(
         if context_key:
             client.with_context(issue_key=context_key)
 
-        # Resolve user default
+        # Tempo account mode spans all workers → no per-user resolution/filter
+        account_keys = [k.strip() for k in tempo_account.split(",") if k.strip()] if tempo_account is not None else None
+        if tempo_account is not None and not account_keys:
+            raise click.BadParameter(
+                "must contain at least one non-empty account key",
+                param_hint="--tempo-account",
+            )
+
+        # Resolve user default (not used in account mode)
         effective_user = user
-        if not effective_user:
+        if not account_keys and not effective_user:
             me = client.myself()
             effective_user = me.get("name") or me.get("accountId", "")
 
-        # Determine backend
+        # Subject shown in output headers
+        subject = f"account {', '.join(account_keys)}" if account_keys else effective_user
+
+        # Determine backend (account mode is Tempo-only)
         use_tempo = False
-        if backend == "tempo":
+        if account_keys or backend == "tempo":
             use_tempo = True
         elif backend == "auto":
             use_tempo = detect_tempo(client)
             if use_tempo and debug:
                 click.echo("Tempo detected — using Tempo API", err=True)
 
-        if use_tempo:
+        # Forced Tempo paths (--tempo-account, --backend tempo) still need the
+        # Tempo Server/DC REST API to actually be present. --backend auto already
+        # reflects detection above, so only re-check when Tempo was forced.
+        if use_tempo and (account_keys or backend == "tempo") and not detect_tempo(client):
+            error(
+                "Tempo Timesheets REST API (/rest/tempo-timesheets/4) is not available or not "
+                "reachable on this Jira (plugin absent, auth failure, or a server error). "
+                "'--tempo-account' and '--backend tempo' require Tempo on Jira Server/DC; "
+                "Tempo Cloud (api.tempo.io) is a different API and is not supported."
+            )
+            sys.exit(1)
+
+        if use_tempo and account_keys:
+            # Tempo account path: worked time for a customer account, all workers
+            if user or issue_list or epic or sprint or project:
+                warning("--tempo-account ignores --user/--issue/--epic/--sprint/--project filters.")
+            if debug:
+                click.echo(f"Tempo account query: {from_date} to {to_date}, accounts={account_keys}", err=True)
+
+            all_worklogs, issue_map = fetch_worklogs_tempo_account(client, from_date, to_date, account_keys)
+            # Account query is already scoped by account; filter by date only.
+            filtered = filter_worklogs(all_worklogs, user=None, from_date=from_date, to_date=to_date)
+        elif use_tempo:
             # Tempo path: native filtering, no JQL needed
             # Note: Tempo doesn't support issue/epic/sprint filters natively,
             # so we warn if those are specified
@@ -472,13 +608,13 @@ def cli(
             click.echo(seconds_to_human(total_seconds))
         elif detail:
             backend_label = " (via Tempo)" if use_tempo else ""
-            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}{backend_label}"
+            header = f"Worklogs for {subject} | {from_date} -> {to_date}{backend_label}"
             click.echo(header)
             click.echo()
             click.echo(format_detail(filtered))
         else:
             backend_label = " (via Tempo)" if use_tempo else ""
-            header = f"Worklogs for {effective_user} | {from_date} -> {to_date}{backend_label}"
+            header = f"Worklogs for {subject} | {from_date} -> {to_date}{backend_label}"
             click.echo(header)
             click.echo()
             click.echo(format_summary(filtered, issue_map))

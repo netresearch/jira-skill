@@ -73,7 +73,7 @@ In tickets, comments and worklog notes, state what happened, not how good the wo
 - `references/issue-editing.md` — edit, delete
 - `references/creation.md` — create, `--parent`, fields
 - `references/comments.md` — edit, delete, lint
-- `references/worklog.md` — `--started`, ranges
+- `references/worklog.md` — `--started`, ranges, `--tempo-account`
 - `references/attachments.md` — upload, download
 - `references/links.md` — links
 - `references/agile.md` — sprints/boards
@@ -81,7 +81,7 @@ In tickets, comments and worklog notes, state what happened, not how good the wo
 - `references/fields-and-users.md` — custom field IDs, users, issue types
 - `references/watchers.md` — watch, subscribe, list watchers
 - `references/versions.md` — fix/affects versions, releases, version CRUD
-- `references/qa-gather.md` — comprehensive audit bundle (siblings, prose URLs)
+- `references/qa-gather.md` — audit bundle (siblings, prose URLs)
 - `references/intent-verbs.md` — `work / qa / qa-fail / act`, exact transition names
 
 ## Authentication

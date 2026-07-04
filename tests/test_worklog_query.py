@@ -4,6 +4,7 @@ import json
 from unittest import mock
 
 import click.testing
+import pytest
 from conftest import load_script
 
 _mod = load_script("jira-worklog-query", "utility")
@@ -270,6 +271,25 @@ class TestDetectTempo:
         mock_client._session.get.side_effect = Exception("Connection refused")
         assert _mod.detect_tempo(mock_client) is False
 
+    def test_tempo_server_error_not_available(self):
+        # A 5xx means Jira/Tempo is unhealthy — do not select the Tempo backend
+        # only to fail on the real query.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 503
+        mock_client._session.get.return_value = mock_response
+        assert _mod.detect_tempo(mock_client) is False
+
+    def test_tempo_method_not_allowed_is_available(self):
+        # v4 /worklogs only accepts POST; a GET returns 405 → plugin present.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 405
+        mock_client._session.get.return_value = mock_response
+        assert _mod.detect_tempo(mock_client) is True
+
 
 class TestNormalizeTempoWorklog:
     """Test Tempo-to-Jira worklog normalization."""
@@ -316,6 +336,27 @@ class TestNormalizeTempoWorklog:
         assert result["_issue_key"] == "Unknown"
         assert result["timeSpentSeconds"] == 0
         assert result["comment"] == ""
+
+    def test_string_author_coerced_to_dict(self):
+        # A truthy non-dict author must not leak downstream where .get() is called.
+        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "author": "psiedler"})
+        assert result["author"] == {"name": "psiedler", "displayName": "psiedler"}
+
+    def test_worker_object_mapped_to_author(self):
+        # /worklogs/search returns "worker"; map it to an author dict.
+        result = _mod.normalize_tempo_worklog(
+            {"issue": {"key": "X-1"}, "worker": {"name": "psiedler", "displayName": "Paul Siedler"}}
+        )
+        assert result["author"]["name"] == "psiedler"
+        assert result["author"]["displayName"] == "Paul Siedler"
+
+    def test_worker_string_mapped_to_author(self):
+        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "worker": "psiedler"})
+        assert result["author"] == {"name": "psiedler", "displayName": "psiedler"}
+
+    def test_author_missing_displayname_falls_back_to_name(self):
+        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "author": {"name": "psiedler"}})
+        assert result["author"]["displayName"] == "psiedler"
 
 
 SAMPLE_TEMPO_RESPONSE = [
@@ -410,6 +451,22 @@ class TestFetchWorklogsTempo:
         assert len(worklogs) == 2
         assert mock_client._session.get.call_count == 2
 
+    def test_pagination_is_bounded(self):
+        # A response whose metadata always reports another page must not loop
+        # forever — the MAX_PAGES cap raises instead of exhausting memory.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        never_ending = mock.MagicMock()
+        never_ending.json.return_value = {
+            "results": SAMPLE_TEMPO_RESPONSE[:1],
+            "metadata": {"offset": 0, "limit": 1, "next": "/more"},
+        }
+        mock_client._session.get.return_value = never_ending
+
+        with mock.patch.object(_mod, "MAX_PAGES", 5), pytest.raises(RuntimeError, match="pagination exceeded"):
+            _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
+        assert mock_client._session.get.call_count == 5
+
     def test_empty_result(self):
         mock_client = mock.MagicMock()
         mock_client.url = "https://jira.example.com"
@@ -448,6 +505,61 @@ class TestFetchWorklogsTempo:
         output = _mod.format_detail(worklogs)
         assert "HMKG-100" in output
         assert "Paul Siedler" in output
+
+
+class TestFetchWorklogsTempoAccount:
+    """Test the Tempo account (customer) worklog search path."""
+
+    def test_fetches_and_normalizes(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        post_response = mock.MagicMock()
+        post_response.json.return_value = SAMPLE_TEMPO_RESPONSE
+        mock_client._session.post.return_value = post_response
+        mock_client.jql.return_value = {
+            "issues": [
+                {"key": "HMKG-100", "fields": {"summary": "Fix login"}},
+                {"key": "HMKG-200", "fields": {"summary": "Review"}},
+            ],
+            "total": 2,
+            "startAt": 0,
+            "maxResults": 50,
+        }
+
+        worklogs, issue_map = _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
+        assert len(worklogs) == 2
+        assert issue_map["HMKG-100"] == "Fix login"
+        # POST body carries the accountKey array and date range
+        payload = mock_client._session.post.call_args.kwargs["json"]
+        assert payload["accountKey"] == ["ACME"]
+        assert payload["from"] == "2026-04-01"
+        assert payload["to"] == "2026-04-30"
+
+    def test_empty_result(self):
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        post_response = mock.MagicMock()
+        post_response.json.return_value = []
+        mock_client._session.post.return_value = post_response
+
+        worklogs, issue_map = _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
+        assert worklogs == []
+        assert issue_map == {}
+
+    def test_pagination_is_bounded(self):
+        # metadata that always reports another page must raise, not OOM.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        never_ending = mock.MagicMock()
+        never_ending.json.return_value = {
+            "results": SAMPLE_TEMPO_RESPONSE[:1],
+            "metadata": {"offset": 0, "limit": 1, "hasMore": True},
+        }
+        mock_client._session.post.return_value = never_ending
+
+        with mock.patch.object(_mod, "MAX_PAGES", 5), pytest.raises(RuntimeError, match="pagination exceeded"):
+            _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
+        assert mock_client._session.post.call_count == 5
 
 
 class TestSearchIssues:
@@ -553,6 +665,10 @@ class TestCli:
             "total": 1,
             "maxResults": 1048576,
         }
+        # No Tempo plugin installed → default (auto) backend resolves to JQL.
+        no_tempo = mock.MagicMock()
+        no_tempo.status_code = 404
+        mock_client._session.get.return_value = no_tempo
 
         with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
             runner = click.testing.CliRunner()
@@ -564,6 +680,10 @@ class TestCli:
         mock_client = mock.MagicMock()
         mock_client.myself.return_value = {"name": "psiedler"}
         mock_client.jql.return_value = {"issues": [], "total": 0, "startAt": 0, "maxResults": 50}
+        # No Tempo plugin installed → default (auto) backend resolves to JQL.
+        no_tempo = mock.MagicMock()
+        no_tempo.status_code = 404
+        mock_client._session.get.return_value = no_tempo
 
         with mock.patch.object(_mod, "LazyJiraClient", return_value=mock_client):
             runner = click.testing.CliRunner()
@@ -670,3 +790,48 @@ class TestCliTempo:
         result = runner.invoke(_mod.cli, ["--backend", "tempo"])
         assert result.exit_code == 0
         assert "No worklogs found" in result.output
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_tempo_account_path(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_tempo_client(mock_client)  # detect_tempo → 200; jql → issue_map
+        post_response = mock.MagicMock()
+        post_response.status_code = 200
+        post_response.json.return_value = SAMPLE_TEMPO_RESPONSE
+        mock_client._session.post.return_value = post_response
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--tempo-account", "ACME", "--from", "2026-04-01", "--to", "2026-04-30"])
+        assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+        assert "HMKG-100" in result.output
+        assert "via Tempo" in result.output
+        payload = mock_client._session.post.call_args.kwargs["json"]
+        assert payload["accountKey"] == ["ACME"]
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_tempo_account_empty_keys_rejected(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.url = "https://jira.example.com"
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--tempo-account", ",", "--from", "2026-04-01", "--to", "2026-04-30"])
+        assert result.exit_code != 0
+        assert "account key" in result.output.lower()
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_forced_tempo_unavailable_errors(self, mock_client_cls):
+        # --backend tempo on a Jira without Tempo (404) must error, not fall back.
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.url = "https://jira.example.com"
+        mock_client.myself.return_value = {"name": "psiedler"}
+        no_tempo = mock.MagicMock()
+        no_tempo.status_code = 404
+        mock_client._session.get.return_value = no_tempo
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--backend", "tempo", "--from", "2026-04-01", "--to", "2026-04-01"])
+        assert result.exit_code != 0
+        assert "not available" in result.output.lower()
