@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.19.0] - 2026-07-06
+
+### Added
+
+- `jira-communication`: `jira-worklog-query.py` gains `--tempo-account` to query a customer/Tempo account's worked time ([#149](https://github.com/netresearch/jira-skill/pull/149)).
+
 ## [3.18.3] - 2026-07-01
 
 ### Documentation
