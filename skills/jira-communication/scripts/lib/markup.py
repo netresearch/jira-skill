@@ -57,7 +57,7 @@ def lint_wiki_markup(text: str) -> list[str]:
         # unescaped `||`: `||` is the header-cell delimiter and splits the row
         # mid-cell. An escaped `\|` is a literal pipe, so ignore it.
         stripped = line.strip()
-        if stripped.startswith("|") and not stripped.startswith("||") and re.search(r"(?<!\\)\|\|", stripped):
+        if stripped.startswith("|") and not stripped.startswith("||") and re.search(r"(?<!\\)(?:\\\\)*\|\|", stripped):
             findings.append(
                 f"line {lineno}: table data row contains an unescaped '||' inside "
                 f"a cell (e.g. a Composer constraint '^12.4 || ^13.4') - '|' is the "

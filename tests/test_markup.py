@@ -103,3 +103,8 @@ class TestTablePipes:
     def test_escaped_pipe_before_delimiter_is_clean(self):
         # `\|` is a literal pipe; `\||` is literal-pipe + delimiter, not broken.
         assert lint_wiki_markup(r"| a\|| b |") == []
+
+    def test_escaped_backslash_before_double_pipe_flagged(self):
+        # `\\` is a literal backslash, so the following `||` is unescaped.
+        findings = lint_wiki_markup(r"| luxletter | 29.0.1, ^12.4 \\|| ^13.4 | 2 |")
+        assert any("splits the row" in f for f in findings)
