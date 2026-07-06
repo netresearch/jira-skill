@@ -8,6 +8,11 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   line. Literal mentions must be escaped as \\{code\\}.
 - Unbalanced block tags (odd occurrence count), which leave an unclosed
   block that swallows everything after it.
+- Table data rows containing an unescaped ``||`` inside a cell. In a table
+  ``|`` is the cell and ``||`` the header-cell delimiter, so a ``||`` in a
+  normal ``|`` row (typically a Composer constraint like ``^12.4 || ^13.4``)
+  splits the row and shifts every following column. An escaped ``\\|`` is a
+  literal pipe and is left alone. Rewrite the cell without unescaped pipes.
 
 Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
 *other* tags inside an open block are ignored. An occurrence of the
@@ -47,6 +52,18 @@ def lint_wiki_markup(text: str) -> list[str]:
                     )
                 in_block = None
             continue
+
+        # Table data row (starts with a single `|`) must not contain an
+        # unescaped `||`: `||` is the header-cell delimiter and splits the row
+        # mid-cell. An escaped `\|` is a literal pipe, so ignore it.
+        stripped = line.strip()
+        if stripped.startswith("|") and not stripped.startswith("||") and re.search(r"(?<!\\)(?:\\\\)*\|\|", stripped):
+            findings.append(
+                f"line {lineno}: table data row contains an unescaped '||' inside "
+                f"a cell (e.g. a Composer constraint '^12.4 || ^13.4') - '|' is the "
+                f"cell delimiter, so this splits the row; rewrite the cell without "
+                f"unescaped pipes: {stripped[:80]!r}"
+            )
 
         if not matches:
             continue

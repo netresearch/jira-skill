@@ -77,3 +77,34 @@ class TestRendererSemantics:
 
     def test_closing_tag_alone_is_fine(self):
         assert lint_wiki_markup("{code}\nfoo\n{code}") == []
+
+
+class TestTablePipes:
+    """`||` inside a normal `|` table row splits the row and must be flagged."""
+
+    def test_header_row_is_clean(self):
+        assert lint_wiki_markup("|| Paket || Constraint || PT ||") == []
+
+    def test_plain_data_row_is_clean(self):
+        assert lint_wiki_markup("| news | ^13.1 | 1 |") == []
+
+    def test_double_pipe_in_data_cell_flagged(self):
+        findings = lint_wiki_markup("| luxletter | 29.0.1, ^12.4 || ^13.4 | 2 |")
+        assert any("splits the row" in f for f in findings)
+
+    def test_double_pipe_in_prose_is_not_a_table(self):
+        # A line that does not start with `|` is prose, not a table row.
+        assert lint_wiki_markup("supports ^12.4 || ^13.4 in composer.json") == []
+
+    def test_escaped_double_pipe_in_data_cell_is_clean(self):
+        # A cell may hold a literal `||` written as the escaped `\|\|`.
+        assert lint_wiki_markup(r"| luxletter | 29.0.1, ^12.4 \|\| ^13.4 | 2 |") == []
+
+    def test_escaped_pipe_before_delimiter_is_clean(self):
+        # `\|` is a literal pipe; `\||` is literal-pipe + delimiter, not broken.
+        assert lint_wiki_markup(r"| a\|| b |") == []
+
+    def test_escaped_backslash_before_double_pipe_flagged(self):
+        # `\\` is a literal backslash, so the following `||` is unescaped.
+        findings = lint_wiki_markup(r"| luxletter | 29.0.1, ^12.4 \\|| ^13.4 | 2 |")
+        assert any("splits the row" in f for f in findings)
