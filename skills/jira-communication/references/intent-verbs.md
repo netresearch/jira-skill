@@ -2,6 +2,12 @@
 
 `jira-issue.py work / qa / qa-fail / act` — single-call context bundles for the four common intents.
 
+## Access — this skill IS the Jira path
+
+Reach for these scripts on **any** Jira intent, even with no issue key — "create a ticket in the right project", "find the ticket for X", or just naming Jira. You do not need a key to start (`jira-search.py` finds existing issues by JQL; `jira-create.py` opens new ones; the right project comes from your project conventions, e.g. the `netresearch-jira` skill's routing reference).
+
+Do **not** conclude "no Jira access" from an MCP connector's scopes. A Confluence/Atlassian MCP connector — e.g. a cloud `*.atlassian.net` connector limited to Confluence — is a **separate system** from these scripts, which talk to Jira Server/DC (or Cloud) directly via `~/.env.jira`. A connector being Confluence-only says nothing about Jira reachability. If Jira genuinely seems unreachable, run `jira-setup.py` to check config — and tell the user up front, immediately, rather than burying it in options.
+
 ## When to load
 
 Whenever you have a Jira issue key and need more than just meta. Each verb composes the right bundle for one intent. Empirically replaces 3–6 separate calls.
