@@ -257,7 +257,7 @@
       {
         "type": "tool_use",
         "tool": "Bash",
-        "pattern": "jira-create\\.py"
+        "pattern": "jira-create\\.py\\s+issue"
       },
       {
         "type": "content",
