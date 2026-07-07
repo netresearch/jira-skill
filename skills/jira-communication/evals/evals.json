@@ -249,5 +249,24 @@
         "pattern": "(\\./)?attachments"
       }
     ]
+  },
+  {
+    "name": "create_ticket_from_intent_without_key",
+    "prompt": "We just decided on this work - please create a Jira task in project ACME titled 'Document the new export API'. I don't have an issue key yet.",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-create\\.py"
+      },
+      {
+        "type": "content",
+        "pattern": "(--type|--issuetype).*(Task|task)"
+      },
+      {
+        "type": "content",
+        "pattern": "ACME"
+      }
+    ]
   }
 ]
