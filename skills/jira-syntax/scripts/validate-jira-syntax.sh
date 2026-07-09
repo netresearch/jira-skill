@@ -155,6 +155,7 @@ validate_file() {
                 kotlin|kt)                           hint="{code:java} (Kotlin lexes acceptably as Java) or {code:none}" ;;
                 typescript|ts|tsx)                   hint="{code:javascript} or {code:none}" ;;
                 shell|zsh|fish|console)              hint="{code:bash} or {code:none}" ;;
+                powershell|ps1|pwsh)                 hint="{code:none} for PowerShell" ;;
                 make|makefile)                       hint="{code:none} for Makefile" ;;
                 ini|toml|conf|properties)            hint="{code:none} for INI / TOML / config" ;;
                 diff|patch)                          hint="{code:none}" ;;
