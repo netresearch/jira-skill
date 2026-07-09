@@ -125,7 +125,7 @@ The Jira Server source-code formatter accepts ONLY this fixed list. Using any ot
 
 **Notes:**
 - Use `c#` / `c++` literally, not `csharp` / `cplusplus` (though `cpp` is also accepted).
-- There is no `typescript`, `rust`, `kotlin`, `dart`, `shell`, `yml`, `dockerfile`, `terraform`, or `typoscript` formatter.
+- There is no `typescript`, `rust`, `kotlin`, `dart`, `powershell`, `shell`, `yml`, `dockerfile`, `terraform`, or `typoscript` formatter.
 - For unsupported languages, fall back to `{code:none}` (or `{noformat}`) to preserve the block without highlighting.
 
 ```
