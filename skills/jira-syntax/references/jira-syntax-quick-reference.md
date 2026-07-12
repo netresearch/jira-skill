@@ -15,10 +15,7 @@ Complete reference for Jira's wiki markup syntax to ensure proper formatting in 
 - [Special Blocks](#special-blocks)
 - [Line Breaks and Horizontal Rules](#line-breaks-and-horizontal-rules)
 - [Special Characters](#special-characters)
-- [Emoticons](#emoticons)
-- [Common Patterns](#common-patterns)
-- [Validation Checklist](#validation-checklist)
-- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+- [Checklist Markers](#checklist-markers)
 
 ## Text Formatting
 
@@ -44,10 +41,7 @@ h5. Heading Level 5
 h6. Heading Level 6 (smallest)
 ```
 
-**Rules:**
-- Space required after `h1.` through `h6.`
-- One heading per line
-- Use h2 for main sections, h3 for subsections
+Space required after the period (`h2. Title`, not `h2.Title`).
 
 ## Lists
 
@@ -77,7 +71,7 @@ h6. Heading Level 6 (smallest)
 
 **Rules:**
 - Space after `*` or `#`
-- Nesting uses additional symbols (`**`, `##`)
+- Nesting uses additional symbols (`**`, `##`), not indentation
 - Can mix list types with combined syntax (`#*`)
 
 ## Links
@@ -95,18 +89,12 @@ h6. Heading Level 6 (smallest)
 ## Code Blocks
 
 ### Inline Code
-```
-Use {{code}} for inline monospace text
-```
+Use `{{code}}` for inline monospace text.
 
 ### Code Blocks with Syntax Highlighting
 ```
 {code:java}
-public class Example {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
-    }
-}
+System.out.println("Hello, World!");
 {code}
 ```
 
@@ -179,14 +167,6 @@ Escape literal mentions of any block tag with backslashes: `\{code\}`, `\{noform
 - Rows must have same number of cells
 - No trailing pipe at end of row
 
-### Example with Content
-```
-||Feature||Status||Owner||Priority||
-|User Login|{color:green}Complete{color}|[~john.doe]|High|
-|Password Reset|{color:yellow}In Progress{color}|[~jane.smith]|Medium|
-|2FA|{color:red}Not Started{color}|Unassigned|Low|
-```
-
 ## Panels and Quotes
 
 ### Panel with Title and Background
@@ -225,27 +205,9 @@ bq. This is a block quote on one line
 {color:#FF0000}Hex color text{color}
 ```
 
-**Named Colors:**
-- `red`, `blue`, `green`, `yellow`, `orange`, `purple`
-- `black`, `white`, `gray`, `grey`
-- Or use hex codes: `#FF0000`, `#00FF00`, `#0000FF`
+Named colors (`red`, `blue`, `green`, `yellow`, `orange`, `purple`, `black`, `white`, `gray`/`grey`) or any hex code work as the macro parameter.
 
 ## Special Blocks
-
-### Notice/Info Panels
-```
-{panel:title=⚠️ Warning|bgColor=#FFEBE9|borderColor=#FF0000}
-This is a warning message
-{panel}
-
-{panel:title=ℹ️ Information|bgColor=#DEEBFF|borderColor=#0052CC}
-This is an info message
-{panel}
-
-{panel:title=✅ Success|bgColor=#E3FCEF|borderColor=#00875A}
-This is a success message
-{panel}
-```
 
 ### Expand/Collapse Section
 ```
@@ -299,26 +261,7 @@ The backslash escape is the official Jira mechanism; the rephrase is editorial; 
 
 A quick sanity check before posting: run `skills/jira-syntax/scripts/validate-jira-syntax.sh <file>` on your draft (from the repo root). The script verifies that the six paired macros (`code`, `panel`, `color`, `noformat`, `quote`, `anchor`) are balanced — every opener matches a closer, even with a language tag like `{code:bash}` — and catches Markdown leakage (` ``` ` fences, `[text](url)` links, `` `code` `` spans), language declarations Jira Server does not recognise, and malformed table headers.
 
-## Emoticons
-
-| Code | Emoji | Meaning |
-|------|-------|---------|
-| `:)` | 🙂 | Happy |
-| `:(` | 🙁 | Sad |
-| `:P` | 😛 | Tongue |
-| `:D` | 😀 | Big smile |
-| `;)` | 😉 | Wink |
-| `(y)` | 👍 | Thumbs up |
-| `(n)` | 👎 | Thumbs down |
-| `(!)` | ⚠️ | Warning |
-| `(?)` | ❓ | Question |
-| `(on)` | 💡 | Light bulb on |
-| `(off)` | 🔌 | Light bulb off |
-| `(*)` | ⭐ | Star |
-| `(/)` | ✅ | Green check / done |
-| `(x)` | ❌ | Red cross / not done |
-
-### Checklists with `(/)` and `(x)`
+## Checklist Markers
 
 `(/)` and `(x)` are the conventional checklist markers: `(/)` for a completed
 item, `(x)` for an open one. Use them only with that meaning.
@@ -333,151 +276,3 @@ item, `(x)` for an open one. Use them only with that meaning.
 * (/) Migration script written and tested
 * (x) Rollback procedure documented
 ```
-
-## Common Patterns
-
-### Status Update Comment
-```
-h3. Status Update - 2025-11-06
-
-h4. Completed
-* Implemented user authentication
-* Added unit tests (95% coverage)
-* Updated documentation
-
-h4. In Progress
-* Integration testing
-* Performance optimization
-
-h4. Blocked
-* Waiting for API key from [~admin]
-* See [PROJ-123] for details
-
-h4. Next Steps
-# Deploy to staging environment
-# Conduct security review
-# Schedule production deployment
-```
-
-### Code Review Comment
-```
-h3. Code Review Findings
-
-h4. ✅ Approved Changes
-* Clean separation of concerns
-* Comprehensive error handling
-* Well-documented functions
-
-h4. 🔧 Suggestions
-{code:java}
-// Current implementation
-public void processData(String input) {
-    // Process directly
-}
-
-// Suggested improvement
-public void processData(String input) {
-    validateInput(input);  // Add validation
-    // Process after validation
-}
-{code}
-
-h4. ❌ Issues Found
-* Missing null check on line 45
-* Potential memory leak in {{DataProcessor}}
-* Security vulnerability: [OWASP-A03|https://owasp.org/Top10/A03_2021-Injection/]
-
-[~developer] Please address these before merging.
-```
-
-### Meeting Notes
-```
-h2. Sprint Planning Meeting - 2025-11-06
-
-h3. Attendees
-* [~pm] - Product Manager
-* [~tech-lead] - Technical Lead
-* [~dev1], [~dev2], [~dev3] - Development Team
-
-h3. Agenda
-# Review last sprint outcomes
-# Plan current sprint scope
-# Assign tasks and estimates
-
-h3. Decisions
-||Decision||Owner||Action Items||
-|Implement caching layer|[~tech-lead]|[PROJ-500] - Research Redis options|
-|Upgrade to Node 20|[~dev1]|[PROJ-501] - Test compatibility|
-|Refactor authentication|[~dev2]|[PROJ-502] - Design proposal needed|
-
-h3. Action Items
-# [~pm] - Update roadmap with Q1 priorities
-# [~tech-lead] - Schedule architecture review
-# [~dev1] - Provide effort estimates by Friday
-
-h3. Next Meeting
-*Date:* 2025-11-13 10:00 AM
-*Focus:* Sprint retrospective
-```
-
-## Validation Checklist
-
-Before submitting, verify:
-
-### Headings
-- [ ] Using `h1.` through `h6.` (not Markdown `#`)
-- [ ] Space after period (`h2. Title` not `h2.Title`)
-- [ ] One heading per line
-
-### Text Formatting
-- [ ] `*bold*` not `**bold**`
-- [ ] `_italic_` not `*italic*`
-- [ ] `{{code}}` not `` `code` ``
-
-### Lists
-- [ ] `*` for bullets, not `-`
-- [ ] `#` for numbers
-- [ ] Proper nesting (`**`, `##` not spaces/tabs)
-
-### Code
-- [ ] `{code:language}` not ``` language ```
-- [ ] Proper language identifier
-- [ ] Closing `{code}` tag
-
-### Links
-- [ ] `[Label|url]` not `[Label](url)`
-- [ ] `[PROJ-123]` for issues
-- [ ] `[~username]` for mentions
-
-### Tables
-- [ ] `||` for headers
-- [ ] `|` for cells
-- [ ] Consistent column count
-
-### Colors
-- [ ] `{color:name}text{color}` format
-- [ ] Proper closing `{color}` tag
-
-### Panels
-- [ ] Opening `{panel:params}`
-- [ ] Closing `{panel}`
-- [ ] Valid parameters
-
-## Common Mistakes to Avoid
-
-| ❌ Wrong | ✅ Correct | Note |
-|---------|-----------|------|
-| `## Heading` | `h2. Heading` | Markdown vs Jira |
-| `**bold**` | `*bold*` | Double asterisk is not bold |
-| `` `code` `` | `{{code}}` | Markdown backticks don't work |
-| `[text](url)` | `[text\|url]` | Markdown link format |
-| `- item` | `* item` | Use asterisk for bullets |
-| `h2.Title` | `h2. Title` | Missing space after period |
-| `{code}` | `{code:java}` | Missing language identifier |
-| `\|Header\|` | `\|\|Header\|\|` | Header needs double pipes |
-
-## Resources
-
-- [Official Jira Wiki Markup](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
-- [Jira Text Formatting](https://support.atlassian.com/jira-cloud-administration/docs/advanced-formatting/)
-- [JQL Reference](https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/)
