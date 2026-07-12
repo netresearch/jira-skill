@@ -16,6 +16,8 @@ Complete reference for Jira's wiki markup syntax to ensure proper formatting in 
 - [Line Breaks and Horizontal Rules](#line-breaks-and-horizontal-rules)
 - [Special Characters](#special-characters)
 - [Checklist Markers](#checklist-markers)
+- [Validation Checklist](../SKILL.md#validation-checklist)
+- [Common Mistakes](../SKILL.md#common-mistakes)
 
 ## Text Formatting
 
@@ -89,7 +91,7 @@ Space required after the period (`h2. Title`, not `h2.Title`).
 ## Code Blocks
 
 ### Inline Code
-Use `{{code}}` for inline monospace text.
+Use `{{text}}` for inline monospace text.
 
 ### Code Blocks with Syntax Highlighting
 ```
