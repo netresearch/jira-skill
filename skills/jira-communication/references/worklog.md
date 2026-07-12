@@ -70,3 +70,43 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py \
     --from "$(date -d 'monday last week' -I)" --to "$(date -I)"
 ```
 
+
+## TimeTracker (tt.netresearch.de) vs Jira Tempo — "TT" means TimeTracker
+
+At Netresearch **"TT" / "via TT" means TimeTracker** (https://tt.netresearch.de),
+a system **separate from** Jira Tempo. `jira-worklog.py add` writes to **Jira
+Tempo**, which does **not** appear in TimeTracker. TimeTracker **auto-syncs its
+own entries into Jira Tempo**, so:
+
+- If the user asks to book "via TT", book in **TimeTracker**, not with
+  `jira-worklog.py` — a direct Tempo entry is invisible in TT and **double-books**
+  (it duplicates the entry TimeTracker later syncs in).
+- The existing Tempo worklogs you see on an issue usually originated in
+  TimeTracker and synced across.
+
+### Booking in TimeTracker (MCP)
+
+TimeTracker exposes an MCP endpoint. Token in `~/.secrets/tt` (starts `tt_p…`).
+
+```bash
+TOK=$(tr -d '\r\n' < ~/.secrets/tt); BASE=https://tt.netresearch.de/mcp
+# handshake: initialize -> capture the mcp-session-id header -> notifications/initialized
+# then tools/call. Responses are plain JSON: .result.content[0].text holds a JSON string.
+```
+
+Key tools: `log_time` (project + activity **required**; ticket, date, start/end or
+durationMinutes, description), `get_day`, `list_recent_entries`, `list_activities`,
+`list_projects`, `update_entry`, `delete_entry`.
+
+- **NRS tickets** (jira.netresearch.de `NRS-*`): project **948** "Netresearch IT
+  Support/Help Desk", activity **1 = Entwicklung** (19 = Analyse, 4 = Dokumentation,
+  2 = QA). Booking under project 25 (F+E) fails with *"Given ticket does not have a
+  valid prefix"* — F+E's ticket system does not include the NRS prefix. Match how the
+  same ticket class was booked before via `list_recent_entries`.
+- Pass explicit `start`/`end` so the 09:00 default does not overlap existing entries.
+- **ADR-025 agent model**: `log_time` also accepts `agentWalltimeMinutes` +
+  `humanMinutes` + `touchpoints` to dual-write an AI-agent + delegated-human entry —
+  the honest representation for agent-assisted work; ask which the user wants.
+
+To fix a mistaken direct-Tempo booking, delete the Jira worklog with the client lib:
+`client.delete(f"rest/api/2/issue/KEY/worklog/{id}")` (jira-worklog.py has no delete).

@@ -73,7 +73,7 @@ In tickets, comments and worklog notes, state what happened, not how good the wo
 - `references/issue-editing.md` — edit, delete
 - `references/creation.md` — create, `--parent`, fields
 - `references/comments.md` — edit, delete, lint
-- `references/worklog.md` — `--started`, ranges, `--tempo-account`
+- `references/worklog.md` — `--started`, ranges, `--tempo-account`; **"TT"/TimeTracker (tt.netresearch.de) ≠ Jira Tempo** — book "via TT" in TimeTracker, not `jira-worklog.py` (a direct Tempo entry double-books)
 - `references/attachments.md` — upload, download
 - `references/links.md` — links
 - `references/agile.md` — sprints/boards
