@@ -70,7 +70,7 @@ In tickets, comments and worklog notes, state what happened, not how good the wo
 - `references/jql-quick-reference.md`, `references/jql-cookbook.md`
 - `references/multi-profile.md` — `--profile`
 - `references/troubleshooting.md` — auth, 401/403
-- `references/issue-editing.md` — edit, delete
+- `references/issue-editing.md` — edit, delete, custom fields via `--fields-json` (no `--field` flag)
 - `references/creation.md` — create, `--parent`, fields
 - `references/comments.md` — edit, delete, lint
 - `references/worklog.md` — `--started`, ranges, `--tempo-account`
