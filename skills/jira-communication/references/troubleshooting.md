@@ -117,6 +117,19 @@ uv run scripts/core/jira-issue.py get PROJ-123 --json
 uv run scripts/core/jira-issue.py --json get PROJ-123
 ```
 
+### "No such option: -f" / "-n" (query options before the subcommand)
+
+**Cause**: The inverse of the error above — a *subcommand* option placed before the subcommand. `-f/--fields`, `-n/--max-results`, and `--order-by` belong to `query`, so they must follow the JQL, not precede `query`. Global options (`--json`, `-q`) go before the subcommand; query options go after the positional JQL. A stub that ignores argument order hides this — verify the ordering against the live tool.
+
+**Fix**: Move query flags after the JQL:
+```bash
+# Wrong — -f before the `query` subcommand → "Error: No such option: -f" (exit 2)
+uv run scripts/core/jira-search.py --json -f key,status query "project = OPS"
+
+# Correct — global flags before `query`, query flags after the JQL
+uv run scripts/core/jira-search.py --json query "project = OPS" -f key,status -n 500
+```
+
 ### "Transition 'X' not available" (passing the transition ID)
 
 **Cause**: `jira-transition.py do` expects the **target status name**, not the numeric transition ID that `jira-transition.py list` prints in its leftmost column.
