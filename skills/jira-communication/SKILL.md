@@ -27,7 +27,7 @@ On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
 | change status | `jira-issue.py act KEY` → `jira-transition.py do` |
 | audit / sibling discovery | `jira-qa-gather.py KEY` |
 
-Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` on one key — use the matching verb. See `references/intent-verbs.md`.
+Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — use the matching verb. See `references/intent-verbs.md`.
 
 ## Scripts
 
@@ -63,7 +63,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 
 ## No editorializing
 
-In tickets, comments and worklog notes, state what happened, not how good the work is; no self-praise or narrating the expected. See `references/no-editorializing.md`.
+In tickets, comments and worklog notes, state what happened, not how good it is; no self-praise. See `references/no-editorializing.md`.
 
 ## References
 
