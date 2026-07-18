@@ -108,3 +108,65 @@ class TestTablePipes:
         # `\\` is a literal backslash, so the following `||` is unescaped.
         findings = lint_wiki_markup(r"| luxletter | 29.0.1, ^12.4 \\|| ^13.4 | 2 |")
         assert any("splits the row" in f for f in findings)
+
+
+class TestInlineEmphasis:
+    """Emphasis markers glued mid-word render literally and must be flagged,
+    while snake_case identifiers and boundary-correct emphasis stay clean."""
+
+    def test_underscore_midword_flagged(self):
+        findings = lint_wiki_markup("§4.1 bewertet die Konzept_qualität_, nicht den Preis.")
+        assert any("starts mid-word" in f for f in findings)
+
+    def test_star_midword_flagged(self):
+        findings = lint_wiki_markup("das ist Fett*wort* im Satz")
+        assert any("starts mid-word" in f for f in findings)
+
+    def test_boundary_italic_is_clean(self):
+        assert lint_wiki_markup("das ist _wichtig_ und bleibt sauber") == []
+
+    def test_boundary_bold_is_clean(self):
+        assert lint_wiki_markup("das ist *fett* und bleibt sauber") == []
+
+    def test_snake_case_identifiers_are_clean(self):
+        # be_acl, sys_file_reference, sf_event_mgt: no closer lands on a boundary.
+        assert lint_wiki_markup("Extensions be_acl, sys_file_reference und sf_event_mgt bleiben.") == []
+
+    def test_trailing_underscore_identifier_is_clean(self):
+        assert lint_wiki_markup("wir nutzen leuphana_solr am Ende.") == []
+
+    def test_emphasis_after_hyphen_is_clean(self):
+        # `-` is a non-word boundary, so AG-_Entscheidung_ opens correctly.
+        assert lint_wiki_markup("die AG-_Entscheidung_ war eindeutig") == []
+
+    def test_underscores_in_monospace_are_clean(self):
+        assert lint_wiki_markup("siehe {{Prefix_Wort_}} im Backend") == []
+
+    def test_underscores_in_link_are_clean(self):
+        assert lint_wiki_markup("[Prefix_Wort_|https://example.com/x] ansehen") == []
+
+    def test_php_magic_constants_are_clean(self):
+        # Symmetric double-marker tokens must not match (non-empty body required).
+        assert lint_wiki_markup("__LINE__, __FILE__, __CLASS__ und __init__ bleiben.") == []
+
+    def test_markdown_double_marker_is_clean(self):
+        # Carried-over Markdown bold **x** / __x__ must not be flagged.
+        assert lint_wiki_markup("Text **bold** und __kursiv__ sowie foo**bar** bleiben.") == []
+
+    def test_format_string_and_path_segments_are_clean(self):
+        # An inner _seg_/…*seg* whose next segment starts with a connector
+        # (% $ /) is a format string / path, not a clause-boundary closer.
+        assert lint_wiki_markup("Ordner %d_%m_%Y, Zeit %H_%M_%S und path/to/some_dir_/file.") == []
+        assert lint_wiki_markup("Key user_$id_$tenant lesen.") == []
+
+    def test_nfd_combining_accent_before_marker_flagged(self):
+        # "café_wert_" in decomposed form (e + U+0301) must still be caught;
+        # the scan NFC-normalises so the accented letter counts as a word char.
+        assert any("starts mid-word" in f for f in lint_wiki_markup("café_wert_ Ende."))
+
+    def test_broken_emphasis_before_closing_quote_flagged(self):
+        # Quoted UI/field labels with a glued marker: the closer sits before
+        # a quote, a real clause boundary (common in German prose).
+        assert any("starts mid-word" in f for f in lint_wiki_markup('Das Label "Konzept_qualitaet_" ist falsch.'))
+        german = "Im Feld " + chr(0x201E) + "Anmelden_jetzt_" + chr(0x201C) + " fehlt."
+        assert any("starts mid-word" in f for f in lint_wiki_markup(german))

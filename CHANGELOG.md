@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.20.0] - 2026-07-13
+
+### Added
+
+- `jira-communication`: wiki-markup lint flags `||` (header separators) inside table data rows, with escaped-pipe handling ([#153](https://github.com/netresearch/jira-skill/pull/153)).
+
+### Changed
+
+- `jira-syntax`: trimmed generic content from the quick-reference; fixed TOC links and the inline-code placeholder ([#156](https://github.com/netresearch/jira-skill/pull/156)).
+
+### Documentation
+
+- `jira-communication`: skill triggers on keyless Jira intent ("create/find a ticket", "pick a project"); clarified MCP-connector access ([#154](https://github.com/netresearch/jira-skill/pull/154)).
+- `jira-syntax`: noted PowerShell has no code-block lexer; added validator hint ([#155](https://github.com/netresearch/jira-skill/pull/155)).
+
 ## [3.19.0] - 2026-07-06
 
 ### Added
