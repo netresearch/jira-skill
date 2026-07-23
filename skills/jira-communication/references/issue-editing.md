@@ -18,9 +18,31 @@ cat body.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ
 
 The body is Jira wiki markup (see the `jira-syntax` skill).
 
+## Clearing a field
+
+Typed flags cannot clear a field — `--assignee ""` contributes nothing and the
+CLI reports `✗ No fields specified for update`, so the field keeps its old
+value and nothing signals that the clear was a no-op. Pass an explicit `null`
+via `--fields-json`:
+
+```bash
+# Unassign (back to the team queue)
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
+    --fields-json '{"assignee": null}'
+
+# Clear a due date and a custom user-picker field in one call
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
+    --fields-json '{"duedate": null, "customfield_12608": null}'
+```
+
+Not every field can be cleared this way — the field must be on the issue's edit
+screen. Assignee on a transition-only screen needs the dedicated
+`/rest/api/2/issue/KEY/assignee` endpoint, and `parent` cannot be cleared at all
+(see the sub-task note below).
+
 ## `--fields-json` for custom fields and structured payloads
 
-`jira-issue.py update` accepts a raw JSON object to set any field the Jira REST API exposes — reach for it when the typed flags don't cover the field:
+`jira-issue.py update` accepts a raw JSON object to set any field the Jira REST API exposes — reach for it when the typed flags don't cover the field. There is **no** `--field` flag; `--fields-json` is the only generic setter:
 
 ```bash
 # Custom fields (Sprint ID as integer, Epic Link as issue key)

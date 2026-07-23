@@ -278,3 +278,39 @@ item, `(x)` for an open one. Use them only with that meaning.
 * (/) Migration script written and tested
 * (x) Rollback procedure documented
 ```
+
+## Validation is a gate, not a formality
+
+`scripts/validate-jira-syntax.sh` only helps if its **result** is read before
+the content is posted. Run it as its own step:
+
+```bash
+validate-jira-syntax.sh comment.txt   # read the result
+# only then:
+jira-comment.py add PROJ-123 -        # body piped from the same file
+```
+
+Never chain it with the posting command. With `;` the comment posts even
+though validation failed; with `&&` the report scrolls past unread. Either way
+the broken comment is already on the ticket and needs a follow-up edit —
+visible to everyone watching it.
+
+### Frequent catch: braces inside a monospace span
+
+`${VAR}` (or any `{`/`}`) inside `{{...}}` breaks the span — the Jira parser
+renders it as raw text:
+
+```
+{{traefik.http.middlewares.office-allow-${ENVIRONMENT}.ipallowlist.sourcerange}}
+```
+
+The validator reports:
+
+```
+ERROR: Found unescaped { or } inside {{...}} monospace block — Jira parser
+will render it as raw text. Escape as \{ \} or split the reference.
+```
+
+Escape the braces as `\{ \}`, split the reference, or move the whole line into
+a `{code}` block — a `{code}` block is usually the most readable for anything
+command-shaped.

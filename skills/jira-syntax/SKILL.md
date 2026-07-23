@@ -49,10 +49,8 @@ Run before submitting to Jira:
 ${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh path/to/content.txt
 ```
 
-**Validation is a gate.** Run it as its own step and read the result before
-posting — never chain it with the posting command, since `;` posts the broken
-comment anyway and `&&` hides the report. Frequent catch: `${VAR}` inside a
-`{{...}}` span breaks the span.
+**It gates the post** — run it as its own step, never chained with the
+posting command.
 
 ### Validation Checklist
 - [ ] Headings: `h2. Title` (space after period)
@@ -75,7 +73,6 @@ comment anyway and `&&` hides the report. Frequent catch: `${VAR}` inside a
 | `- bullet` | `* bullet` |
 | `h2.Title` | `h2. Title` |
 | `MR !42` (bare GitLab ref) | `[MR 42\|url]` or full `group/project!42` — a bare `!…!` is image markup |
-| `{{cmd --flag=${VAR}}}` | escape as `\{ \}`, or use a `{code}` block — braces inside `{{...}}` break the span |
 | `(/)` on an open/proposed item | `(x)` — `(/)` renders as a green check (done); use `(x)` for open items |
 | `( )` as a checkbox | `(x)` — `( )` is not a macro and renders literally |
 
