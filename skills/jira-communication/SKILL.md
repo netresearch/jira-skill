@@ -70,9 +70,9 @@ In tickets, comments and worklog notes, state what happened, not how good it is;
 - `references/jql-quick-reference.md`, `references/jql-cookbook.md`
 - `references/multi-profile.md` — `--profile`
 - `references/troubleshooting.md` — auth, 401/403
-- `references/issue-editing.md` — edit, delete, custom fields via `--fields-json` (no `--field` flag)
+- `references/issue-editing.md` — edit, delete, clear fields, `--fields-json`
 - `references/creation.md` — create, `--parent`, fields
-- `references/comments.md` — edit, delete, lint
+- `references/comments.md` — edit, delete, lint, body via `-`
 - `references/worklog.md` — `--started`, ranges, `--tempo-account`
 - `references/attachments.md` — upload, download
 - `references/links.md` — links

@@ -49,6 +49,9 @@ Run before submitting to Jira:
 ${CLAUDE_SKILL_DIR}/scripts/validate-jira-syntax.sh path/to/content.txt
 ```
 
+**It gates the post** — run it as its own step, never chained with the
+posting command.
+
 ### Validation Checklist
 - [ ] Headings: `h2. Title` (space after period)
 - [ ] Bold: `*text*` (single asterisk)
