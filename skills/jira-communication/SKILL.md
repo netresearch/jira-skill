@@ -48,11 +48,17 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed" -n 5 -f key,summary,status
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me --priority Critical
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
+cat body.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 -
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 ```
+
+> **Easy to guess wrong**: a comment body from a file is piped to `-` (there is no
+> `--file`); clear a field with `--fields-json '{"assignee": null}'` (`--assignee ""`
+> is rejected); `download-all` takes `--dir`, while `download` takes an attachment
+> URL, not an issue key.
 
 > **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
 > resolution field stays empty and the ticket appears unresolved. See `references/intent-verbs.md`.
