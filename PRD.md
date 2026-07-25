@@ -158,8 +158,9 @@ To enable future migration to standalone scripts:
 ```python
 # lib/client.py
 # === INLINE_START: client ===
-def get_jira_client(env_file=None):
-    ...
+def get_jira_client(env_file=None): ...
+
+
 # === INLINE_END: client ===
 ```
 
@@ -175,15 +176,17 @@ All scripts MUST use Click for CLI definition:
 ```python
 import click
 
+
 @click.group()
 @click.pass_context
 def cli(ctx):
     """Jira operations."""
     ctx.ensure_object(dict)
-    ctx.obj['client'] = get_jira_client()
+    ctx.obj["client"] = get_jira_client()
+
 
 @cli.command()
-@click.argument('issue_key')
+@click.argument("issue_key")
 @click.pass_context
 def get(ctx, issue_key):
     """Get issue details."""
@@ -635,49 +638,53 @@ from lib.output import format_output
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @click.group()
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--env-file', type=click.Path(), help='Environment file path')
-@click.option('--debug', is_flag=True, help='Show debug information on errors')
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--env-file", type=click.Path(), help="Environment file path")
+@click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.pass_context
 def cli(ctx, output_json, env_file, debug):
     """Jira worklog operations."""
     ctx.ensure_object(dict)
-    ctx.obj['json'] = output_json
-    ctx.obj['debug'] = debug
+    ctx.obj["json"] = output_json
+    ctx.obj["debug"] = debug
     try:
-        ctx.obj['client'] = get_jira_client(env_file)
+        ctx.obj["client"] = get_jira_client(env_file)
     except Exception as e:
         if debug:
             raise
         raise click.ClickException(str(e))
 
+
 @cli.command()
-@click.argument('issue_key')
-@click.argument('time_spent')
-@click.option('--comment', '-c', help='Worklog comment')
-@click.option('--started', help='Start time (ISO format, default: now)')
+@click.argument("issue_key")
+@click.argument("time_spent")
+@click.option("--comment", "-c", help="Worklog comment")
+@click.option("--started", help="Start time (ISO format, default: now)")
 @click.pass_context
 def add(ctx, issue_key, time_spent, comment, started):
     """Add worklog entry to an issue.
 
     TIME_SPENT format: '2h', '2h 30m', '1d', '30m'
     """
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
     result = client.issue_worklog(issue_key, time_spent, comment=comment, started=started)
-    format_output(result, ctx.obj['json'])
+    format_output(result, ctx.obj["json"])
 
-@cli.command('list')
-@click.argument('issue_key')
-@click.option('--limit', '-n', default=10, help='Max entries to show')
+
+@cli.command("list")
+@click.argument("issue_key")
+@click.option("--limit", "-n", default=10, help="Max entries to show")
 @click.pass_context
 def list_worklogs(ctx, issue_key, limit):
     """List worklog entries for an issue."""
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
     result = client.issue_get_worklog(issue_key)
-    format_output(result[:limit], ctx.obj['json'])
+    format_output(result[:limit], ctx.obj["json"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     cli()
 ```
 
