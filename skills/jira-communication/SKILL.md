@@ -52,25 +52,18 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In P
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py project PROJ "Project Name" --from-project OTHERPROJ --lead jdoe
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/tempo-account.py account link 42 PROJ --default
 ```
 
-> **Admin-scope commands**: `jira-create.py project` and `tempo-account.py` exercise
-> Jira Administrator / Tempo Administrator rights on whichever PAT is configured. On
-> Jira Server a PAT carries the full permission set of the user who created it — check
-> before running these against an instance where that is not expected.
->
 > **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
 > resolution field stays empty and the ticket appears unresolved. See `references/intent-verbs.md`.
 
 ## Related Skills
 
-**jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.
+**jira-syntax**: descriptions/comments use Jira wiki markup, not Markdown.
 
 ## No editorializing
 
-In tickets, comments and worklog notes, state what happened, not how good it is; no self-praise. See `references/no-editorializing.md`.
+In tickets, comments and worklog notes, state what happened, not how good it is. See `references/no-editorializing.md`.
 
 ## References
 
@@ -78,7 +71,7 @@ In tickets, comments and worklog notes, state what happened, not how good it is;
 - `references/multi-profile.md` — `--profile`
 - `references/troubleshooting.md` — auth, 401/403
 - `references/issue-editing.md` — edit, delete, clear fields, `--fields-json`
-- `references/creation.md` — create, `--parent`, fields
+- `references/creation.md` — create, `--parent`, fields, admin-scope (`project`, `tempo-account.py`)
 - `references/comments.md` — edit, delete, lint, body via `-`
 - `references/worklog.md` — `--started`, ranges, `--tempo-account`
 - `references/attachments.md` — upload, download
