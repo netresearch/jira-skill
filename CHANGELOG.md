@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.22.0] - 2026-07-25
+
+### Added
+
+- `jira-communication`: `jira-create.py project` creates a new Jira project by copying the permission/notification/workflow schemes from an existing project, with an optional `--bootstrap-issues` flag for the XXX-1/2/3 (config hub, PM epic, deployment epic) convention ([#165](https://github.com/netresearch/jira-skill/pull/165)).
+- `jira-communication`: new `tempo-account.py` script (`customer create`, `account create`, `account link`) wrapping Tempo Accounts management ([#165](https://github.com/netresearch/jira-skill/pull/165)).
+
+### Documentation
+
+- `jira-syntax`: documented that validation gates the post — run it as its own step, never chained with the posting command ([#164](https://github.com/netresearch/jira-skill/pull/164)).
+- `jira-communication`: documented clearing a field via `--fields-json` with an explicit `null` (typed flags like `--assignee ""` are a no-op) ([#164](https://github.com/netresearch/jira-skill/pull/164)).
+
+## [3.21.1] - 2026-07-18
+
+### Documentation
+
+- `jira-communication`: `issue-editing.md`'s reference-index entry now points to `--fields-json` for custom-field updates, so it is found before guessing a non-existent `--field` flag ([#158](https://github.com/netresearch/jira-skill/pull/158)).
+
+## [3.21.0] - 2026-07-16
+
+### Added
+
+- `jira-communication`: wiki-markup lint flags inline emphasis (`*bold*`, `_italic_`) glued mid-word, where Jira does not render it ([#160](https://github.com/netresearch/jira-skill/pull/160)).
+
+### Documentation
+
+- `jira-communication`: documented that `jira-search.py` query-subcommand options (`-f`, `-n`, `--order-by`) must come after `query`, not before it ([#161](https://github.com/netresearch/jira-skill/pull/161)).
+
 ## [3.20.0] - 2026-07-13
 
 ### Added
