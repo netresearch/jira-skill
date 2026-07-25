@@ -34,7 +34,7 @@ Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — us
 Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
 **Core**: `jira-issue.py`, `jira-search.py`, `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
-**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`, `jira-version.py`
+**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`, `jira-version.py`, `tempo-account.py`
 **Utility**: `jira-user.py`, `jira-fields.py`, `jira-link.py`, `jira-weblink.py`, `jira-worklog-query.py`, `jira-watchers.py`, `jira-qa-gather.py`
 
 ## Execution Style
@@ -52,8 +52,15 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In P
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py project PROJ "Project Name" --from-project OTHERPROJ --lead jdoe
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/tempo-account.py account link 42 PROJ --default
 ```
 
+> **Admin-scope commands**: `jira-create.py project` and `tempo-account.py` exercise
+> Jira Administrator / Tempo Administrator rights on whichever PAT is configured. On
+> Jira Server a PAT carries the full permission set of the user who created it — check
+> before running these against an instance where that is not expected.
+>
 > **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
 > resolution field stays empty and the ticket appears unresolved. See `references/intent-verbs.md`.
 
