@@ -189,5 +189,129 @@ def issue(
         sys.exit(1)
 
 
+@cli.command()
+@click.argument("key")
+@click.argument("name")
+@click.option(
+    "--from-project",
+    "source_project",
+    required=True,
+    help="Key or ID of an existing project whose configuration (schemes) to copy",
+)
+@click.option("--lead", required=True, help="Username of the new project's lead")
+@click.option(
+    "--bootstrap-issues",
+    is_flag=True,
+    help="Create the XXX-1/2/3 config-hub/PM-epic/deployment-epic issues after project creation",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
+@click.pass_context
+def project(
+    ctx,
+    key: str,
+    name: str,
+    source_project: str,
+    lead: str,
+    bootstrap_issues: bool,
+    dry_run: bool,
+):
+    """Create a new Jira project by copying configuration from an existing project.
+
+    KEY: The new project's key (e.g., LSB)
+
+    NAME: The new project's display name (e.g., "Landessportbund Sachsen")
+
+    Uses Jira's "shared configuration" mechanism (the same one behind the UI's
+    "Share settings with an existing project" option) to copy the permission,
+    notification and workflow schemes from --from-project, so the new project
+    matches an existing convention without manually specifying scheme IDs.
+
+    Examples:
+
+      jira-create project LSB "Landessportbund Sachsen" --from-project OPSFX --lead thomas.wilhelm
+
+      jira-create project OPSLSB "LSB Operations" --from-project OPSFX --lead tobias.hein --bootstrap-issues
+    """
+    client = ctx.obj["client"]
+
+    try:
+        source = client.project(source_project)
+    except Exception as e:
+        error(f"Could not resolve --from-project '{source_project}': {e}")
+        sys.exit(1)
+
+    source_id = source.get("id") if isinstance(source, dict) else None
+    if not source_id:
+        error(f"Project '{source_project}' has no numeric id in the API response")
+        sys.exit(1)
+
+    if dry_run:
+        warning("DRY RUN - No project will be created")
+        print("\nWould create project:")
+        print(f"  Key: {key}")
+        print(f"  Name: {name}")
+        print(f"  Lead: {lead}")
+        print(f"  Copying schemes from: {source_project} (id={source_id})")
+        if bootstrap_issues:
+            print(
+                f"  Would create bootstrap issues: {key}-1 (Config Hub), {key}-2 (PM Epic), {key}-3 (Deployment Epic)"
+            )
+        return
+
+    try:
+        result = client.create_project_from_shared_template(source_id, key, name, lead)
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to create project: {e}")
+        sys.exit(1)
+
+    if ctx.obj["quiet"]:
+        print(key)
+    elif ctx.obj["json"]:
+        format_output(result, as_json=True)
+    else:
+        success(f"Created project: {key}")
+        print(f"  Name: {name}")
+        print(f"  Lead: {lead}")
+        print(f"  Configuration copied from: {source_project}")
+        print(f"  URL: {client.url}/browse/{key}")
+
+    if bootstrap_issues:
+        _create_bootstrap_issues(client, key, ctx.obj)
+
+
+def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
+    """Create the XXX-1/2/3 convention issues (Config Hub, PM Epic, Deployment Epic).
+
+    Matches the NR-wide "New project structure — first issues" convention
+    (netresearch-jira skill, references/_global/project-routing.md). Each
+    creation is independent — a failure on one (e.g. an unavailable "Epic"
+    issue type) only warns, it does not abort the other two or the project
+    creation that already succeeded.
+    """
+    specs = [
+        (
+            "Task",
+            f"{project_key} — Project Config Hub",
+            "Mail-Handler-Adressen, Matrix-Webhook-URL und weitere Projekt-Einstellungen.",
+        ),
+        ("Epic", f"{project_key} — Project Management", "Sammel-Epic fuer Projektmanagement-Aufgaben."),
+        ("Epic", f"{project_key} — Deployment", "Sammel-Epic fuer Deployment-/Release-Aufgaben."),
+    ]
+    for issue_type, summary, description in specs:
+        fields = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "issuetype": {"name": issue_type},
+            "description": description,
+        }
+        try:
+            result = client.create_issue(fields=fields)
+            success(f"Created {result['key']}: {summary}")
+        except Exception as e:
+            warning(f"Could not create bootstrap issue '{summary}': {e}")
+
+
 if __name__ == "__main__":
     cli()

@@ -30,6 +30,7 @@ _watchers_mod = load_script("jira-watchers", "utility")
 _version_mod = load_script("jira-version", "workflow")
 _qa_gather_mod = load_script("jira-qa-gather", "utility")
 _move_mod = load_script("jira-move", "workflow")
+_tempo_account_mod = load_script("tempo-account", "workflow")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -61,6 +62,10 @@ class TestHelpOutput:
     def test_create_help(self):
         output = self._run_help(_create_mod.cli)
         assert "create" in output.lower() or "issue" in output.lower()
+
+    def test_tempo_account_help(self):
+        output = self._run_help(_tempo_account_mod.cli)
+        assert "tempo" in output.lower() or "account" in output.lower()
 
     def test_transition_help(self):
         output = self._run_help(_transition_mod.cli)
