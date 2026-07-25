@@ -34,7 +34,7 @@ Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — us
 Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
 **Core**: `jira-issue.py`, `jira-search.py`, `jira-worklog.py`, `jira-attachment.py`, `jira-setup.py`, `jira-validate.py`
-**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`, `jira-version.py`
+**Workflow**: `jira-create.py`, `jira-transition.py`, `jira-comment.py`, `jira-move.py`, `jira-sprint.py`, `jira-board.py`, `jira-version.py`, `tempo-account.py`
 **Utility**: `jira-user.py`, `jira-fields.py`, `jira-link.py`, `jira-weblink.py`, `jira-worklog-query.py`, `jira-watchers.py`, `jira-qa-gather.py`
 
 ## Execution Style
@@ -59,11 +59,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 
 ## Related Skills
 
-**jira-syntax**: For descriptions/comments. Jira uses wiki markup, not Markdown.
+**jira-syntax**: descriptions/comments use Jira wiki markup, not Markdown.
 
 ## No editorializing
 
-In tickets, comments and worklog notes, state what happened, not how good it is; no self-praise. See `references/no-editorializing.md`.
+In tickets, comments and worklog notes, state what happened, not how good it is. See `references/no-editorializing.md`.
 
 ## References
 
@@ -71,7 +71,7 @@ In tickets, comments and worklog notes, state what happened, not how good it is;
 - `references/multi-profile.md` — `--profile`
 - `references/troubleshooting.md` — auth, 401/403
 - `references/issue-editing.md` — edit, delete, clear fields, `--fields-json`
-- `references/creation.md` — create, `--parent`, fields
+- `references/creation.md` — create, `--parent`, fields, admin-scope (`project`, `tempo-account.py`)
 - `references/comments.md` — edit, delete, lint, body via `-`
 - `references/worklog.md` — `--started`, ranges, `--tempo-account`
 - `references/attachments.md` — upload, download

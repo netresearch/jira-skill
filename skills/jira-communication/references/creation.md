@@ -45,3 +45,12 @@ Sprint ID is an integer, not an array. Epic Link is the epic's issue key as a st
 ## Combining flags
 
 `--fields-json` wins over typed flags (`--assignee`, `--priority`, `--labels`, `--reporter`, `--components`) when the same field is set in both — the script merges the JSON payload onto the typed-flag payload (`fields.update(extra_fields)`). Use typed flags for the fields the CLI exposes directly, and reach for `--fields-json` only for the long tail.
+
+## Admin-scope commands: `jira-create.py project` and `tempo-account.py`
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py project PROJ "Project Name" --from-project OTHERPROJ --lead jdoe
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/tempo-account.py account link 42 PROJ --default
+```
+
+These exercise Jira Administrator / Tempo Administrator rights on whichever PAT is configured. On Jira Server a PAT carries the full permission set of the user who created it, so there is no separate, narrower credential for this — check before running these against an instance where that scope is not expected.
