@@ -204,6 +204,11 @@ def issue(
     is_flag=True,
     help="Create the XXX-1/2/3 config-hub/PM-epic/deployment-epic issues after project creation",
 )
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Skip the historical-key-collision check (see below) and proceed anyway",
+)
 @click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
 @click.pass_context
 def project(
@@ -213,6 +218,7 @@ def project(
     source_project: str,
     lead: str,
     bootstrap_issues: bool,
+    force: bool,
     dry_run: bool,
 ):
     """Create a new Jira project by copying configuration from an existing project.
@@ -226,11 +232,18 @@ def project(
     notification and workflow schemes from --from-project, so the new project
     matches an existing convention without manually specifying scheme IDs.
 
+    Before creating, checks whether KEY-1 already resolves to an issue. Jira
+    keeps project-key renames as permanent redirects (rename a project's key
+    and its old key still resolves to the same issues forever) — reusing an
+    old, renamed-away key silently skips however many issue numbers that key
+    already used, so the new project's first bootstrap issue would NOT be
+    KEY-1. Use --force to proceed anyway if this is expected.
+
     Examples:
 
       jira-create project LSB "Landessportbund Sachsen" --from-project OPSFX --lead thomas.wilhelm
 
-      jira-create project OPSLSB "LSB Operations" --from-project OPSFX --lead tobias.hein --bootstrap-issues
+      jira-create project OPSLSB "OPS Landessportbund Sachsen" --from-project OPS --lead tobias.hein --bootstrap-issues
     """
     client = ctx.obj["client"]
 
@@ -244,6 +257,18 @@ def project(
     if not source_id:
         error(f"Project '{source_project}' has no numeric id in the API response")
         sys.exit(1)
+
+    collision = _check_key_collision(client, key)
+    if collision and not force:
+        error(
+            f"'{key}-1' already resolves to an existing issue ({collision}). "
+            f"This key was likely used by a project since renamed away from it — Jira will "
+            f"silently skip numbering, so the new project's first issue would NOT be {key}-1. "
+            f"Pick a different key, or pass --force to proceed anyway."
+        )
+        sys.exit(1)
+    elif collision:
+        warning(f"Proceeding despite '{key}-1' already resolving to {collision} (--force)")
 
     if dry_run:
         warning("DRY RUN - No project will be created")
@@ -281,6 +306,32 @@ def project(
         _create_bootstrap_issues(client, key, ctx.obj)
 
 
+def _check_key_collision(client, key: str) -> str | None:
+    """Check whether KEY-1 already resolves to an issue from a different project.
+
+    Jira preserves a permanent key->issue redirect when a project is renamed,
+    so an old, renamed-away key can be reused for a brand-new project, but
+    the issue-numbering counter for that key still silently skips whatever
+    numbers the old project already used. This is only detectable by probing
+    KEY-1 before creation — Jira gives no warning otherwise.
+
+    Returns a human-readable "FOUND-KEY (project NAME)" description if a
+    collision is detected, else None. Never raises — a failure of this
+    diagnostic-only check must not block project creation.
+    """
+    try:
+        result = client.jql(f'key = "{key}-1"', fields=["summary", "project"], limit=1)
+        issues = result.get("issues", [])
+        if not issues:
+            return None
+        found = issues[0]
+        found_key = found.get("key", "?")
+        found_project = found.get("fields", {}).get("project", {}).get("key", "?")
+        return f"{found_key} (project {found_project})"
+    except Exception:
+        return None
+
+
 def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
     """Create the XXX-1/2/3 convention issues (Config Hub, PM Epic, Deployment Epic).
 
@@ -289,7 +340,12 @@ def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
     creation is independent — a failure on one (e.g. an unavailable "Epic"
     issue type) only warns, it does not abort the other two or the project
     creation that already succeeded.
+
+    Epic-type issues additionally require the "Epic Name" custom field
+    (customfield_10581 on this Jira instance) — Epic creation fails without
+    it even though it isn't part of the visible create-screen fields.
     """
+    EPIC_NAME_FIELD = "customfield_10581"
     specs = [
         (
             "Task",
@@ -306,6 +362,8 @@ def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
             "issuetype": {"name": issue_type},
             "description": description,
         }
+        if issue_type == "Epic":
+            fields[EPIC_NAME_FIELD] = summary
         try:
             result = client.create_issue(fields=fields)
             success(f"Created {result['key']}: {summary}")

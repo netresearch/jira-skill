@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-communication`: `jira-create.py project --bootstrap-issues` failed to create both Epic-type issues ("Epic Name is required") — this Jira instance requires the Epic Name custom field, which wasn't being set. Now populated automatically from the issue summary.
+- `jira-communication`: `jira-create.py project` now checks whether `KEY-1` already resolves to an issue before creating — reusing an old, renamed-away project key silently skips Jira's issue numbering (the old key's redirect is permanent), so the new project's first bootstrap issue would silently NOT be `KEY-1`. Aborts with a clear error unless `--force` is passed. Discovered during a real project creation where the key had been used by a project since renamed to a different key back in 2012.
+
 ## [3.22.0] - 2026-07-25
 
 ### Added
