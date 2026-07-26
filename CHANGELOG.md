@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.22.1] - 2026-07-26
+
 ### Fixed
 
 - `jira-communication`: `jira-create.py project --bootstrap-issues` failed to create both Epic-type issues ("Epic Name is required") — this Jira instance requires the Epic Name custom field, which wasn't being set. Now populated automatically from the issue summary.
