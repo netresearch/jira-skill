@@ -202,7 +202,7 @@ def issue(
 @click.option(
     "--bootstrap-issues",
     is_flag=True,
-    help="Create the XXX-1/2/3 config-hub/PM-epic/deployment-epic issues after project creation",
+    help="Create the XXX-1 config-hub issue ('Projektmanagement') after project creation",
 )
 @click.option(
     "--force",
@@ -278,9 +278,7 @@ def project(
         print(f"  Lead: {lead}")
         print(f"  Copying schemes from: {source_project} (id={source_id})")
         if bootstrap_issues:
-            print(
-                f"  Would create bootstrap issues: {key}-1 (Config Hub), {key}-2 (PM Epic), {key}-3 (Deployment Epic)"
-            )
+            print(f"  Would create bootstrap issue: {key}-1 (Projektmanagement, Issue Number One)")
         return
 
     try:
@@ -333,42 +331,38 @@ def _check_key_collision(client, key: str) -> str | None:
 
 
 def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
-    """Create the XXX-1/2/3 convention issues (Config Hub, PM Epic, Deployment Epic).
+    """Create the XXX-1 convention issue (Config Hub / "Projektmanagement").
 
-    Matches the NR-wide "New project structure — first issues" convention
-    (netresearch-jira skill, references/_global/project-routing.md). Each
-    creation is independent — a failure on one (e.g. an unavailable "Epic"
-    issue type) only warns, it does not abort the other two or the project
-    creation that already succeeded.
+    Matches the NR-wide "New project structure — first issue" convention
+    (netresearch-jira skill, references/_global/project-routing.md).
 
-    Epic-type issues additionally require the "Epic Name" custom field
-    (customfield_10581 on this Jira instance) — Epic creation fails without
-    it even though it isn't part of the visible create-screen fields.
+    Uses this instance's dedicated "Issue Number One" issue type
+    (purpose-built for exactly this "config hub" role) rather than a plain
+    Task, with summary "Projektmanagement" per NR convention. Falls back to
+    Task if a --from-project template's issue type scheme doesn't include
+    it — issue type schemes vary per template and this issue existing at all
+    matters more than its exact type.
     """
-    EPIC_NAME_FIELD = "customfield_10581"
-    specs = [
-        (
-            "Task",
-            f"{project_key} — Project Config Hub",
-            "Mail-Handler-Adressen, Matrix-Webhook-URL und weitere Projekt-Einstellungen.",
-        ),
-        ("Epic", f"{project_key} — Project Management", "Sammel-Epic fuer Projektmanagement-Aufgaben."),
-        ("Epic", f"{project_key} — Deployment", "Sammel-Epic fuer Deployment-/Release-Aufgaben."),
-    ]
-    for issue_type, summary, description in specs:
-        fields = {
+    config_hub_description = "Mail-Handler-Adressen, Matrix-Webhook-URL und weitere Projekt-Einstellungen."
+
+    def _config_hub_fields(issue_type: str) -> dict:
+        return {
             "project": {"key": project_key},
-            "summary": summary,
+            "summary": "Projektmanagement",
             "issuetype": {"name": issue_type},
-            "description": description,
+            "description": config_hub_description,
         }
-        if issue_type == "Epic":
-            fields[EPIC_NAME_FIELD] = summary
+
+    try:
+        result = client.create_issue(fields=_config_hub_fields("Issue Number One"))
+        success(f"Created {result['key']}: Projektmanagement")
+    except Exception as e:
+        warning(f"'Issue Number One' type unavailable, falling back to Task: {e}")
         try:
-            result = client.create_issue(fields=fields)
-            success(f"Created {result['key']}: {summary}")
-        except Exception as e:
-            warning(f"Could not create bootstrap issue '{summary}': {e}")
+            result = client.create_issue(fields=_config_hub_fields("Task"))
+            success(f"Created {result['key']}: Projektmanagement")
+        except Exception as e2:
+            warning(f"Could not create bootstrap issue 'Projektmanagement': {e2}")
 
 
 if __name__ == "__main__":
