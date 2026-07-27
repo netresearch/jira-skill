@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.23.0] - 2026-07-27
+
 ### Changed
 
 - `jira-communication`: `jira-create.py project --bootstrap-issues` now creates only the XXX-1 config-hub issue, using this Jira instance's dedicated "Issue Number One" issue type (summary "Projektmanagement") instead of a plain Task — falls back to Task if a `--from-project` template's issue type scheme doesn't include it. No longer auto-creates a PM Epic or Deployment Epic (dropped as unnecessary bootstrap overhead — create them by hand if a project actually needs them).
