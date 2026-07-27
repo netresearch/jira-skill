@@ -98,8 +98,6 @@ class TestProjectCreate:
         mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
         mock_client.create_issue.side_effect = [
             {"key": "LSB-1"},
-            {"key": "LSB-2"},
-            {"key": "LSB-3"},
         ]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
@@ -117,20 +115,21 @@ class TestProjectCreate:
                 ],
             )
         assert result.exit_code == 0, result.output
-        assert mock_client.create_issue.call_count == 3
-        for call in mock_client.create_issue.call_args_list:
-            assert call.kwargs["fields"]["project"] == {"key": "LSB"}
+        assert mock_client.create_issue.call_count == 1
+        call = mock_client.create_issue.call_args_list[0]
+        assert call.kwargs["fields"]["project"] == {"key": "LSB"}
+        assert call.kwargs["fields"]["issuetype"] == {"name": "Issue Number One"}
+        assert call.kwargs["fields"]["summary"] == "Projektmanagement"
 
-    def test_project_create_bootstrap_issue_failure_does_not_abort(self):
-        """One failing bootstrap issue only warns — the project creation that
-        already succeeded, and the other two issues, are unaffected."""
+    def test_project_create_bootstrap_issue_falls_back_to_task(self):
+        """If 'Issue Number One' isn't in the --from-project template's issue
+        type scheme, retries once with Task rather than losing the issue."""
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
         mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
         mock_client.create_issue.side_effect = [
+            Exception("issue type Issue Number One not available"),
             {"key": "LSB-1"},
-            Exception("issue type Epic not available"),
-            {"key": "LSB-3"},
         ]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
@@ -148,7 +147,39 @@ class TestProjectCreate:
                 ],
             )
         assert result.exit_code == 0, result.output
-        assert mock_client.create_issue.call_count == 3
+        assert mock_client.create_issue.call_count == 2
+        first_call, second_call = mock_client.create_issue.call_args_list
+        assert first_call.kwargs["fields"]["issuetype"] == {"name": "Issue Number One"}
+        assert second_call.kwargs["fields"]["issuetype"] == {"name": "Task"}
+        assert second_call.kwargs["fields"]["summary"] == "Projektmanagement"
+
+    def test_project_create_bootstrap_issue_failure_does_not_abort(self):
+        """Both attempts (Issue Number One, then Task fallback) failing only
+        warns — the project creation that already succeeded is unaffected."""
+        mock_client = _make_mock_client()
+        mock_client.project.return_value = {"id": 10101}
+        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_issue.side_effect = [
+            Exception("issue type Issue Number One not available"),
+            Exception("issue type Task not available either"),
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _create_mod.cli,
+                [
+                    "project",
+                    "LSB",
+                    "Landessportbund Sachsen",
+                    "--from-project",
+                    "OPSFX",
+                    "--lead",
+                    "tobias.hein",
+                    "--bootstrap-issues",
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_client.create_issue.call_count == 2
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

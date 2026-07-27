@@ -344,20 +344,22 @@ def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
     matters more than its exact type.
     """
     config_hub_description = "Mail-Handler-Adressen, Matrix-Webhook-URL und weitere Projekt-Einstellungen."
-    config_hub_fields = {
-        "project": {"key": project_key},
-        "summary": "Projektmanagement",
-        "issuetype": {"name": "Issue Number One"},
-        "description": config_hub_description,
-    }
+
+    def _config_hub_fields(issue_type: str) -> dict:
+        return {
+            "project": {"key": project_key},
+            "summary": "Projektmanagement",
+            "issuetype": {"name": issue_type},
+            "description": config_hub_description,
+        }
+
     try:
-        result = client.create_issue(fields=config_hub_fields)
+        result = client.create_issue(fields=_config_hub_fields("Issue Number One"))
         success(f"Created {result['key']}: Projektmanagement")
     except Exception as e:
         warning(f"'Issue Number One' type unavailable, falling back to Task: {e}")
-        config_hub_fields["issuetype"] = {"name": "Task"}
         try:
-            result = client.create_issue(fields=config_hub_fields)
+            result = client.create_issue(fields=_config_hub_fields("Task"))
             success(f"Created {result['key']}: Projektmanagement")
         except Exception as e2:
             warning(f"Could not create bootstrap issue 'Projektmanagement': {e2}")
