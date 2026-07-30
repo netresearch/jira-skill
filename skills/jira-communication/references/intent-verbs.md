@@ -4,7 +4,7 @@
 
 ## Access — this skill IS the Jira path
 
-Reach for these scripts on **any** Jira intent, even with no issue key — "create a ticket in the right project", "find the ticket for X", or just naming Jira. You do not need a key to start (`jira-search.py` finds existing issues by JQL; `jira-create.py` opens new ones; the right project comes from your project conventions, e.g. the `netresearch-jira` skill's routing reference).
+Reach for these scripts on **any** Jira intent, even with no issue key — "create a ticket in the right project", "find the ticket for X", or just naming Jira. You do not need a key to start (`jira-search.py` finds existing issues by JQL; `jira-create.py` opens new ones; the right project comes from your own organisation-specific project-routing conventions).
 
 Do **not** conclude "no Jira access" from an MCP connector's scopes. A Confluence/Atlassian MCP connector — e.g. a cloud `*.atlassian.net` connector limited to Confluence — is a **separate system** from these scripts, which talk to Jira Server/DC (or Cloud) directly via `~/.env.jira`. A connector being Confluence-only says nothing about Jira reachability. If Jira genuinely seems unreachable, run `jira-setup.py` to check config — and tell the user up front, immediately, rather than burying it in options.
 
@@ -60,7 +60,7 @@ A transition is classified as:
 - `into_qa` — `from ∉ qa AND to ∈ qa` (handover)
 - `reject` — `from ∈ qa AND to ∈ working` (fail)
 - `forward` — `from ∈ qa AND to ∈ qa AND from ≠ to` (multi-stage progression: `QA→QA2`, `Review→UAT`, `QA→Acceptance` — **NOT** a fail)
-- `resolved` — `to ∈ resolved` — **always pass `--resolution <value>`** when executing this transition (see below)
+- `resolved` — `to ∈ resolved` — **pass `--resolution <value>`** when executing this transition, unless the screen rejects it (see below)
 - `out` — `from ∈ qa AND to ∉ qa` (uncategorised QA exit)
 - `other` — neither side touches QA
 
@@ -70,7 +70,7 @@ Forward-progression detection is what lets a multi-stage QA workflow (Review →
 
 When a transition lands in a resolved status, Jira stores two separate things: the **status** (visible in the badge) and the **resolution** (the green checkmark, JQL `resolution is not EMPTY`). The transition API sets the status but leaves the resolution field empty unless you pass it explicitly. An empty resolution means the ticket appears unresolved in filters and dashboards even though the status reads "Resolved".
 
-Always pass `--resolution` with the value that matches the outcome:
+Pass `--resolution` with the value that matches the outcome wherever the transition screen accepts it:
 
 | Outcome | `--resolution` value |
 |---|---|
@@ -86,6 +86,33 @@ jira-transition.py do PROJ-123 "Resolved" --resolution Done
 jira-transition.py do PROJ-123 "Resolved" --resolution "Won't do"
 jira-transition.py do PROJ-123 "Resolved" --resolution Duplicate
 ```
+
+#### When the screen rejects `--resolution`
+
+Not every workflow puts the resolution field on its terminal transition screens. Where it is absent the transition fails outright:
+
+```
+jira-transition.py do KEY "Deployed to PROD" --resolution Done
+→ Field 'resolution' cannot be set. It is not on the appropriate screen, or unknown.
+```
+
+Setting it afterwards via `jira-issue.py update KEY --fields-json '{"resolution": {"name": "Done"}}'` fails with the same message — though for a different screen: the transition rejection is about the *transition* screen, this one about the issue's *edit* screen. See *"Field 'xyz' cannot be set"* in `troubleshooting.md`.
+
+The transition itself is atomic — the whole POST is rejected, so nothing half-applies and the issue keeps its previous status. Work through the options in order:
+
+1. **Check whether another transition carries the field.** `jira-transition.py list KEY` may offer a different terminal transition whose screen does include `resolution`; prefer that one.
+2. **Otherwise retry without `--resolution`** and let the ticket land with an empty resolution. On workflows built this way (deployment pipelines with several terminal-looking gates) the resolution is applied by a workflow post-function at a later step, not by the transition you are running.
+3. **Verify rather than assume.** Once the workflow has reached its true terminal status, confirm the post-function actually fired:
+
+   ```bash
+   # One ticket
+   jira-search.py query "key = PROJ-123 AND resolution is EMPTY"
+
+   # Whole project — audit everything that closed without a resolution
+   jira-search.py query "project = PROJ AND statusCategory = Done AND resolution is EMPTY" -f key,status
+   ```
+
+   A hit means the resolution is genuinely missing — say so to the user instead of treating step 2 as success. (`resolution is EMPTY` is the "unresolved" mapping in `references/jql-cookbook.md`'s phrase table; note its *"Resolution helpers"* heading is about resolving fuzzy **names**, not this field.)
 
 Available resolution names vary by Jira instance. Query yours with:
 ```bash

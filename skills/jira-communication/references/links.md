@@ -161,10 +161,6 @@ Destructive — the original link is **deleted** before the inverted one is crea
 
 This is the one-shot fix when `--dry-run` shows you a backwards sentence after a `create`.
 
-## Real-world reference
-
-The `netresearch-jira` skill bundles a [linking-conventions reference](https://github.com/netresearch/netresearch-jira-skill/blob/main/skills/netresearch-jira/references/linking-conventions.md) with concrete `CHILD`/`PARENT` examples for the Netresearch Jira instance. The direction semantics there agree with this document and serve as a sanity check before you call `create`.
-
 ## Web links (links to external URLs)
 
 ```bash

@@ -223,9 +223,9 @@ def project(
 ):
     """Create a new Jira project by copying configuration from an existing project.
 
-    KEY: The new project's key (e.g., LSB)
+    KEY: The new project's key (e.g., NEWP)
 
-    NAME: The new project's display name (e.g., "Landessportbund Sachsen")
+    NAME: The new project's display name (e.g., "Example Customer GmbH")
 
     Uses Jira's "shared configuration" mechanism (the same one behind the UI's
     "Share settings with an existing project" option) to copy the permission,
@@ -241,9 +241,9 @@ def project(
 
     Examples:
 
-      jira-create project LSB "Landessportbund Sachsen" --from-project OPSFX --lead thomas.wilhelm
+      jira-create project NEWP "Example Customer GmbH" --from-project TMPL --lead jane.doe
 
-      jira-create project OPSLSB "OPS Landessportbund Sachsen" --from-project OPS --lead tobias.hein --bootstrap-issues
+      jira-create project OPSNEWP "OPS Example Customer GmbH" --from-project OPS --lead jane.doe --bootstrap-issues
     """
     client = ctx.obj["client"]
 
@@ -333,8 +333,7 @@ def _check_key_collision(client, key: str) -> str | None:
 def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
     """Create the XXX-1 convention issue (Config Hub / "Projektmanagement").
 
-    Matches the NR-wide "New project structure — first issue" convention
-    (netresearch-jira skill, references/_global/project-routing.md).
+    Matches the NR-wide "New project structure — first issue" convention.
 
     Uses this instance's dedicated "Issue Number One" issue type
     (purpose-built for exactly this "config hub" role) rather than a plain
@@ -353,14 +352,24 @@ def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
             "description": config_hub_description,
         }
 
+    def _report_created(issue_key: str) -> None:
+        """Announce the bootstrap issue without corrupting machine-readable output.
+
+        `success()` writes to stdout, so emitting it under `--json` or `--quiet`
+        would append a `✓` line to the payload the caller is parsing.
+        """
+        if ctx_obj.get("quiet") or ctx_obj.get("json"):
+            return
+        success(f"Created {issue_key}: Projektmanagement")
+
     try:
         result = client.create_issue(fields=_config_hub_fields("Issue Number One"))
-        success(f"Created {result['key']}: Projektmanagement")
+        _report_created(result["key"])
     except Exception as e:
         warning(f"'Issue Number One' type unavailable, falling back to Task: {e}")
         try:
             result = client.create_issue(fields=_config_hub_fields("Task"))
-            success(f"Created {result['key']}: Projektmanagement")
+            _report_created(result["key"])
         except Exception as e2:
             warning(f"Could not create bootstrap issue 'Projektmanagement': {e2}")
 

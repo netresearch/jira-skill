@@ -24,7 +24,26 @@ Claude Code plugin with two skills. See SKILL.md in each skill directory for usa
 ```bash
 # Verify scripts still work
 uv run skills/jira-communication/scripts/core/jira-validate.py --help
+
+# Tests (note: --no-project — pyproject.toml has no [project] table)
+uv run --no-project --with pytest --with atlassian-python-api --with click --with requests \
+    python -m pytest tests/ -q
+
+# Both ruff gates, at repo scope, pinned to the version CI uses.
+# `check` and `format --check` are SEPARATE gates: a rename that changes line
+# length can pass the first and fail the second.
+uvx --no-build ruff@0.16.0 check .
+uvx --no-build ruff@0.16.0 format --check $(git ls-files '*.py')
+
+# Markdown
+npx --yes markdownlint-cli2 "**/*.md"
 ```
+
+The authoritative gate list is the "Python lint" step of
+`netresearch/skill-repo-skill/.github/workflows/validate.yml` — read it there rather
+than trusting this block if CI disagrees. Note `Skill Validation` can report
+`Errors: 0` from its own script and still fail on a later step; find the culprit with
+`gh run view <id> --json jobs --jq '.jobs[].steps[] | select(.conclusion=="failure") | .name'`.
 
 ## Release workflow
 

@@ -443,9 +443,9 @@ def fetch_worklogs_tempo_account(
         "ignores --user/--issue/--epic/--sprint/--project."
     ),
 )
-@click.option("--project", help="Project key (e.g., HMKG)")
+@click.option("--project", help="Project key (e.g., PROJ)")
 @click.option("--issue", help="Issue key(s), comma-separated")
-@click.option("--epic", help="Epic key (e.g., HMKG-1940)")
+@click.option("--epic", help="Epic key (e.g., PROJ-1940)")
 @click.option("--sprint", help="Sprint name or ID")
 @click.option("--detail", is_flag=True, help="Show individual worklog entries")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
@@ -483,7 +483,7 @@ def cli(
     Examples:
 
       jira-worklog-query.py                          # my week
-      jira-worklog-query.py --project HMKG            # my week on HMKG
+      jira-worklog-query.py --project PROJ            # my week on PROJ
       jira-worklog-query.py --from 2026-03-01 --to 2026-03-31 --detail
     """
     client = LazyJiraClient(env_file=env_file, profile=profile)

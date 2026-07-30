@@ -66,13 +66,13 @@ def customer():
 def customer_create(ctx, key: str, name: str, dry_run: bool):
     """Create a new Tempo customer.
 
-    KEY: Short, stable customer key (e.g., LSB)
+    KEY: Short, stable customer key (e.g., NEWP)
 
-    NAME: Full customer display name (e.g., "Landessportbund Sachsen")
+    NAME: Full customer display name (e.g., "Example Customer GmbH")
 
     Example:
 
-      tempo-account customer create LSB "Landessportbund Sachsen"
+      tempo-account customer create NEWP "Example Customer GmbH"
     """
     client = ctx.obj["client"]
 
@@ -115,15 +115,15 @@ def account():
 def account_create(ctx, key: str, name: str, lead: str, customer_key: str, dry_run: bool):
     """Create a new Tempo account.
 
-    KEY: Short, stable account key (e.g., LSB)
+    KEY: Short, stable account key (e.g., NEWP)
 
-    NAME: Full account display name (e.g., "Landessportbund Sachsen")
+    NAME: Full account display name (e.g., "Example Customer GmbH")
 
     Requires an existing Tempo customer (see: tempo-account customer create).
 
     Example:
 
-      tempo-account account create LSB "Landessportbund Sachsen" --lead tobias.hein --customer-key LSB
+      tempo-account account create NEWP "Example Customer GmbH" --lead jane.doe --customer-key NEWP
     """
     client = ctx.obj["client"]
 
@@ -177,11 +177,11 @@ def account_link(ctx, account_id: int, project_key: str, default_account: bool, 
 
     ACCOUNT_ID: Numeric Tempo account id (printed by 'account create')
 
-    PROJECT_KEY: Key of the Jira project to link the account to (e.g., LSB)
+    PROJECT_KEY: Key of the Jira project to link the account to (e.g., NEWP)
 
     Example:
 
-      tempo-account account link 42 LSB --default
+      tempo-account account link 42 NEWP --default
     """
     client = ctx.obj["client"]
 

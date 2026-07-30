@@ -54,8 +54,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" 
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 ```
 
-> **Terminal transitions**: always pass `--resolution <value>` (e.g. `Done`, `Won't do`, `Duplicate`) or the
-> resolution field stays empty and the ticket appears unresolved. See `references/intent-verbs.md`.
+> **Terminal transitions**: pass `--resolution <value>` (`Done`, `Won't do`); if rejected ("cannot be set"),
+> retry without it — `references/intent-verbs.md`. **Versions**: read `references/versions.md` before `jira-version.py`.
 
 ## Related Skills
 
