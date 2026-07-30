@@ -65,7 +65,7 @@ export JIRA_PERSONAL_TOKEN=your-personal-access-token
 
 ### "jq: parse error: Invalid numeric literal at line 1, column 10"
 
-**Cause**: `uv run` prints `Installed N packages in Xms` on a cold cache. uv writes that notice to **stderr**, so a plain `--json | jq` pipeline is unaffected — the line only reaches `jq` when stderr has been folded into the pipe: an explicit `2>&1 |`, a wrapper or CI step that combines streams, or an agent harness that captures merged output. Column 10 is the character after `Installed`, which is the fingerprint of this specific cause; the scripts themselves are not the source — warnings go through `output.py:warning()` → stderr, and `--json` mode suppresses the `✓` success lines that `output.py:success()` would otherwise print to stdout.
+**Cause**: `uv run` prints `Installed N packages in Xms` on a cold cache. uv writes that notice to **stderr**, so a plain `--json | jq` pipeline is unaffected — the line only reaches `jq` when stderr has been folded into the pipe: an explicit `2>&1 |`, a wrapper or CI step that combines streams, or an agent harness that captures merged output. Column 10 is the character after `Installed`, which is the fingerprint of this specific cause; the scripts themselves are not the source — warnings and errors go to stderr (`output.py:warning()` / `error()`) and `--json` mode suppresses `✓` lines in the commands you would pipe. (`output.py:success()` does print to stdout, and a few write paths call it unguarded — `jira-create.py project --bootstrap-issues` is one — so pipe write commands with care.)
 
 **Fix**: keep stderr out of a JSON pipe. Where the streams must stay merged, filter the notice:
 
@@ -145,11 +145,12 @@ Shapes across the scripts (verify with `| jq -r 'type'` rather than assuming):
 
 | Subcommand | Top-level JSON | jq path |
 |---|---|---|
-| `search query`, `comment list`, `version list`, `board list`, `transition list`, `link list`, `weblink list`, `sprint list`, `fields search`, `user search` | array | `.[]` |
+| `search query`, `comment list`, `version list`, `board list`, `transition list`, `link list`, `link list-types`, `weblink list`, `worklog list`, `sprint list`, `fields search`, `user search` | array | `.[]` |
 | `issue get` | object | `.key`, `.fields.…` (comments live at `.fields.comment.comments`) |
 | `issue work / qa / qa-fail` | object | `.key`, `.comments[]` |
 | `issue act` | object | `.key`, `.transitions[]` |
-| `watchers list` | object (**the one envelope**) | `.watchers[]`, `.watchCount` |
+| `watchers list` | object — the one *list* subcommand that wraps its result | `.watchers[]`, `.watchCount` |
+| `jira-qa-gather.py KEY` | object (bundle, like `work`) | `.siblings[]`, `.comments[]`, `.worklogs[]` |
 
 **Fix**: index the array directly.
 

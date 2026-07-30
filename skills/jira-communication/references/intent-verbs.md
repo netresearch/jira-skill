@@ -4,7 +4,7 @@
 
 ## Access — this skill IS the Jira path
 
-Reach for these scripts on **any** Jira intent, even with no issue key — "create a ticket in the right project", "find the ticket for X", or just naming Jira. You do not need a key to start (`jira-search.py` finds existing issues by JQL; `jira-create.py` opens new ones; the right project comes from your project conventions, e.g. the `netresearch-jira` skill's routing reference).
+Reach for these scripts on **any** Jira intent, even with no issue key — "create a ticket in the right project", "find the ticket for X", or just naming Jira. You do not need a key to start (`jira-search.py` finds existing issues by JQL; `jira-create.py` opens new ones; the right project comes from your own organisation-specific project-routing conventions).
 
 Do **not** conclude "no Jira access" from an MCP connector's scopes. A Confluence/Atlassian MCP connector — e.g. a cloud `*.atlassian.net` connector limited to Confluence — is a **separate system** from these scripts, which talk to Jira Server/DC (or Cloud) directly via `~/.env.jira`. A connector being Confluence-only says nothing about Jira reachability. If Jira genuinely seems unreachable, run `jira-setup.py` to check config — and tell the user up front, immediately, rather than burying it in options.
 
@@ -105,10 +105,14 @@ The transition itself is atomic — the whole POST is rejected, so nothing half-
 3. **Verify rather than assume.** Once the workflow has reached its true terminal status, confirm the post-function actually fired:
 
    ```bash
+   # One ticket
    jira-search.py query "key = PROJ-123 AND resolution is EMPTY"
+
+   # Whole project — audit everything that closed without a resolution
+   jira-search.py query "project = PROJ AND statusCategory = Done AND resolution is EMPTY" -f key,status
    ```
 
-   A hit means the resolution is genuinely missing — say so to the user instead of treating step 2 as success. See `references/jql-cookbook.md` for the resolution-audit idiom across a whole project.
+   A hit means the resolution is genuinely missing — say so to the user instead of treating step 2 as success. (`resolution is EMPTY` is the "unresolved" mapping in `references/jql-cookbook.md`'s phrase table; note its *"Resolution helpers"* heading is about resolving fuzzy **names**, not this field.)
 
 Available resolution names vary by Jira instance. Query yours with:
 ```bash

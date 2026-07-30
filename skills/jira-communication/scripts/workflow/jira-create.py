@@ -333,8 +333,7 @@ def _check_key_collision(client, key: str) -> str | None:
 def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
     """Create the XXX-1 convention issue (Config Hub / "Projektmanagement").
 
-    Matches the NR-wide "New project structure — first issue" convention
-    (netresearch-jira skill, references/_global/project-routing.md).
+    Matches the NR-wide "New project structure — first issue" convention.
 
     Uses this instance's dedicated "Issue Number One" issue type
     (purpose-built for exactly this "config hub" role) rather than a plain
