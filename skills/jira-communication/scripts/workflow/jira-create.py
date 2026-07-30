@@ -352,14 +352,24 @@ def _create_bootstrap_issues(client, project_key: str, ctx_obj: dict) -> None:
             "description": config_hub_description,
         }
 
+    def _report_created(issue_key: str) -> None:
+        """Announce the bootstrap issue without corrupting machine-readable output.
+
+        `success()` writes to stdout, so emitting it under `--json` or `--quiet`
+        would append a `✓` line to the payload the caller is parsing.
+        """
+        if ctx_obj.get("quiet") or ctx_obj.get("json"):
+            return
+        success(f"Created {issue_key}: Projektmanagement")
+
     try:
         result = client.create_issue(fields=_config_hub_fields("Issue Number One"))
-        success(f"Created {result['key']}: Projektmanagement")
+        _report_created(result["key"])
     except Exception as e:
         warning(f"'Issue Number One' type unavailable, falling back to Task: {e}")
         try:
             result = client.create_issue(fields=_config_hub_fields("Task"))
-            success(f"Created {result['key']}: Projektmanagement")
+            _report_created(result["key"])
         except Exception as e2:
             warning(f"Could not create bootstrap issue 'Projektmanagement': {e2}")
 

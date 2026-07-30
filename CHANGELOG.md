@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-communication`: `jira-create.py project --bootstrap-issues` printed its `✓ Created KEY-1: Projektmanagement` line to stdout even under `--json` / `--quiet`, so the JSON payload failed to parse (`json.loads` → "Extra data") and `--quiet` emitted two lines instead of the project key. `_create_bootstrap_issues` accepted the context dict but never consulted it; it now suppresses the line in both modes. Covered by two regression tests.
+
 ### Documentation
 
 - `jira-communication`: `references/troubleshooting.md` documents both `--json | jq` failure modes. `jq: parse error: Invalid numeric literal at line 1, column 10` is `uv run`'s cold-cache `Installed N packages` notice reaching `jq` — uv writes it to stderr, so only a merged pipe (`2>&1`, a wrapper, or a harness capturing combined output) breaks, with `grep -v '^Installed'` as the fallback. `Cannot index array with string` is the payload shape: list-style subcommands emit a bare array, so the path is `.[]`, never `.issues[]`. Includes a per-subcommand array-vs-object table (`watchers list` is the one list subcommand that wraps its result).

@@ -7,6 +7,7 @@ swapped for a mock, so `ctx.obj["client"].project(...)` etc. resolve through
 the wrapper exactly as they would against a live Jira instance.
 """
 
+import json
 from unittest import mock
 
 import click.testing
@@ -180,6 +181,66 @@ class TestProjectCreate:
             )
         assert result.exit_code == 0, result.output
         assert mock_client.create_issue.call_count == 2
+
+    def test_project_create_bootstrap_json_output_stays_parseable(self):
+        """`--json` output must be pure JSON even when --bootstrap-issues runs.
+
+        The bootstrap helper announces its issue via success(), which writes to
+        stdout; unguarded it appends a `✓` line to the payload and every
+        `--json … | jq` pipeline over `project` fails to parse.
+        """
+        mock_client = _make_mock_client()
+        mock_client.project.return_value = {"id": 10101}
+        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_issue.side_effect = [{"key": "LSB-1"}]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _create_mod.cli,
+                [
+                    "--json",
+                    "project",
+                    "LSB",
+                    "Landessportbund Sachsen",
+                    "--from-project",
+                    "OPSFX",
+                    "--lead",
+                    "tobias.hein",
+                    "--bootstrap-issues",
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_client.create_issue.call_count == 1
+        # Fails with "Extra data" if the ✓ line leaks into stdout.
+        payload = json.loads(result.output)
+        assert payload["key"] == "LSB"
+        assert "Projektmanagement" not in result.output
+
+    def test_project_create_bootstrap_quiet_prints_only_the_key(self):
+        """`--quiet` contracts to just the project key — no bootstrap ✓ line."""
+        mock_client = _make_mock_client()
+        mock_client.project.return_value = {"id": 10101}
+        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_issue.side_effect = [{"key": "LSB-1"}]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _create_mod.cli,
+                [
+                    "--quiet",
+                    "project",
+                    "LSB",
+                    "Landessportbund Sachsen",
+                    "--from-project",
+                    "OPSFX",
+                    "--lead",
+                    "tobias.hein",
+                    "--bootstrap-issues",
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_client.create_issue.call_count == 1
+        assert result.output.strip() == "LSB"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
