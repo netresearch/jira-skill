@@ -253,9 +253,7 @@ class TestTempoCustomerCreate:
         mock_client = _make_mock_client()
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
-            result = runner.invoke(
-                _tempo_mod.cli, ["customer", "create", "NEWP", "Example Customer GmbH", "--dry-run"]
-            )
+            result = runner.invoke(_tempo_mod.cli, ["customer", "create", "NEWP", "Example Customer GmbH", "--dry-run"])
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
         mock_client.tempo_account_add_new_customer.assert_not_called()
