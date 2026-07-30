@@ -63,7 +63,7 @@ Look up custom field IDs with `jira-fields.py` — see `fields-and-users.md`.
 
 ## Array-valued fields: replace vs incremental updates
 
-Every array-valued field — `labels`, `fixVersions`, `versions` (Affects Version/s), `components` — is **replaced wholesale** by whatever you send. Jira's edit endpoint has no append semantics for them, so a payload carrying one entry leaves the issue with exactly that one entry.
+Every array-valued field — `labels`, `fixVersions`, `versions` (Affects Version/s), `components` — is **replaced wholesale** by whatever you send. `jira-issue.py update` has no append path: it always sends a plain `fields` set (`update_fields.update(extra_fields)` → `update_issue_field`). Jira's REST API *does* have an append verb — `{"update": {"fixVersions": [{"add": {"id": "…"}}]}}` — but the scripts do not expose it, so a payload carrying one entry leaves the issue with exactly that one entry.
 
 ### Labels — the one field with incremental flags
 

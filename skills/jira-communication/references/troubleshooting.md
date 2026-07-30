@@ -65,7 +65,7 @@ export JIRA_PERSONAL_TOKEN=your-personal-access-token
 
 ### "jq: parse error: Invalid numeric literal at line 1, column 10"
 
-**Cause**: `uv run` prints `Installed N packages in Xms` on a cold cache. uv writes that notice to **stderr**, so a plain `--json | jq` pipeline is unaffected — the line only reaches `jq` when stderr has been folded into the pipe: an explicit `2>&1 |`, a wrapper or CI step that combines streams, or an agent harness that captures merged output. Column 10 is the character after `Installed`, which is the fingerprint of this specific cause; the scripts themselves never write anything but JSON to stdout in `--json` mode (warnings go through `output.py:warning()` → stderr).
+**Cause**: `uv run` prints `Installed N packages in Xms` on a cold cache. uv writes that notice to **stderr**, so a plain `--json | jq` pipeline is unaffected — the line only reaches `jq` when stderr has been folded into the pipe: an explicit `2>&1 |`, a wrapper or CI step that combines streams, or an agent harness that captures merged output. Column 10 is the character after `Installed`, which is the fingerprint of this specific cause; the scripts themselves are not the source — warnings go through `output.py:warning()` → stderr, and `--json` mode suppresses the `✓` success lines that `output.py:success()` would otherwise print to stdout.
 
 **Fix**: keep stderr out of a JSON pipe. Where the streams must stay merged, filter the notice:
 
@@ -81,7 +81,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py --json list --project 
   | grep -v '^Installed' | jq -c '.[]'
 ```
 
-One warm-up call (`… --help`) also silences the notice for every later call in the session.
+A script's first invocation warms **its own** environment, so later calls to *that* script are silent. Each script warms separately — uv keys the environment per script, so warming `jira-issue.py` does not silence `jira-search.py` even though their PEP 723 dependency lists are byte-identical. The warm state lives in the uv cache, not the shell session, so it also survives across sessions.
 
 ### "Configuration errors: Missing required"
 
@@ -137,16 +137,19 @@ uv run scripts/core/jira-issue.py get PROJ-123 --json
 uv run scripts/core/jira-issue.py --json get PROJ-123
 ```
 
-### `jq: Cannot index array with string "issues"` (`--json` payload shape)
+### "Cannot index array with string" (`--json` payload shape)
 
-**Cause**: the flag placement above is right but the jq path is wrong. `--json` emits a **bare array** for list-style subcommands, never an `{"issues": [...]}` envelope. `jira-search.py` unwraps the API response itself — `results.get("issues", [])` — and hands the plain list to `format_output(..., as_json=True)`, which dumps it as-is.
+**Cause**: the flag placement above is right but the jq path is wrong. `--json` emits a **bare array** for list-style subcommands — there is no `{"issues": [...]}` envelope to index. `jira-search.py` unwraps the API response itself — `results.get("issues", [])` — and hands the plain list to `format_output(..., as_json=True)`, which dumps it as-is.
 
-The rule across the scripts:
+Shapes across the scripts (verify with `| jq -r 'type'` rather than assuming):
 
-| Subcommand shape | Top-level JSON | jq path |
+| Subcommand | Top-level JSON | jq path |
 |---|---|---|
-| `search query`, `comment list`, `version list`, `board list` | array | `.[]` |
-| `issue get`, `issue work / qa / qa-fail / act` | object | `.key`, `.comments[]` |
+| `search query`, `comment list`, `version list`, `board list`, `transition list`, `link list`, `weblink list`, `sprint list`, `fields search`, `user search` | array | `.[]` |
+| `issue get` | object | `.key`, `.fields.…` (comments live at `.fields.comment.comments`) |
+| `issue work / qa / qa-fail` | object | `.key`, `.comments[]` |
+| `issue act` | object | `.key`, `.transitions[]` |
+| `watchers list` | object (**the one envelope**) | `.watchers[]`, `.watchCount` |
 
 **Fix**: index the array directly.
 

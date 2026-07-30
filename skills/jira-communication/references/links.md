@@ -163,7 +163,9 @@ This is the one-shot fix when `--dry-run` shows you a backwards sentence after a
 
 ## Real-world reference
 
-The `netresearch-jira` skill bundles a linking-conventions reference with concrete `CHILD`/`PARENT` examples for the Netresearch Jira instance, at `skills/netresearch-jira/references/_global/linking-conventions.md`. That skill is hosted on Netresearch's internal GitLab ([`coding-ai/netresearch-jira-skill`](https://git.netresearch.de/coding-ai/netresearch-jira-skill/-/blob/main/skills/netresearch-jira/references/_global/linking-conventions.md), reachable on the corporate network only), so read it from your local plugin install if you are outside it. The direction semantics there agree with this document and serve as a sanity check before you call `create`.
+The `netresearch-jira` skill bundles a linking-conventions reference at `skills/netresearch-jira/references/_global/linking-conventions.md`, with per-link-type direction examples (`Cause`, `Blockade`, `Deploy`, `QA`, …) for the Netresearch Jira instance, plus a section separating true issue links from hierarchy fields (Epic Link, sub-task `parent`). The direction semantics there agree with this document and serve as a sanity check before you call `create`.
+
+That skill is an internal Netresearch skill and is not publicly available; if you have it installed, read the file from your plugin install.
 
 ## Web links (links to external URLs)
 

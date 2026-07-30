@@ -7,20 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Documentation
 
-- `jira-communication`: `references/watchers.md` documented a broken bulk-watch pipeline (`jq -r '.issues[].key'`) — `--json` emits a bare array, so the correct path is `.[].key`. The old form exits 5 with `Cannot index array with string "issues"`.
-- `jira-communication`: `references/links.md` pointed at a dead GitHub URL for the `netresearch-jira` linking-conventions reference. That skill lives on internal GitLab and the file moved to `references/_global/linking-conventions.md`.
-
-### Changed
-
-- `jira-communication`: the `--resolution` rule is no longer unconditional. Workflows whose terminal transition screens omit the resolution field reject `--resolution` with "Field 'resolution' cannot be set", and a follow-up `--fields-json` update fails identically; the documented handling is to retry without it and let a workflow post-function apply the resolution downstream. Covered in `SKILL.md`, `references/intent-verbs.md`, and cross-linked from the generic "Field 'xyz' cannot be set" section in `references/troubleshooting.md`.
-- `jira-communication`: `references/issue-editing.md`'s labels section generalised to all array-valued fields. `fixVersions`, `versions` and `components` are replaced wholesale by `--fields-json` — adding one entry requires sending the existing IDs plus the new one — and only `labels` has incremental `--add-label` / `--remove-label` flags.
-
-### Added
-
-- `jira-communication`: `references/troubleshooting.md` covers the two `--json | jq` failure modes. `jq: parse error: Invalid numeric literal at line 1, column 10` comes from `uv run`'s cold-cache `Installed N packages` notice reaching `jq` once stderr is folded into the pipe (uv writes it to stderr, so only merged streams break). `Cannot index array with string "issues"` comes from the payload being a bare array for list-style subcommands, with a table of which subcommands return arrays vs objects.
-- `jira-communication`: `references/versions.md` documents that renaming a version propagates to every issue carrying it — issues store a reference by ID, so no per-issue `fixVersions` edit is needed after a rolling-placeholder rename.
+- `jira-communication`: `references/troubleshooting.md` documents both `--json | jq` failure modes. `jq: parse error: Invalid numeric literal at line 1, column 10` is `uv run`'s cold-cache `Installed N packages` notice reaching `jq` — uv writes it to stderr, so only a merged pipe (`2>&1`, a wrapper, or a harness capturing combined output) breaks, with `grep -v '^Installed'` as the fallback. `Cannot index array with string` is the payload shape: list-style subcommands emit a bare array, so the path is `.[]`, never `.issues[]`. Includes a per-subcommand array-vs-object table (`watchers list` is the sole envelope).
+- `jira-communication`: `references/watchers.md` shipped a broken bulk-watch pipeline (`jq -r '.issues[].key'`), which exits 5 against a bare array. Corrected to `.[].key`.
+- `jira-communication`: the `--resolution` rule is no longer unconditional. Workflows whose terminal transition screens omit the field reject `--resolution` outright, and a follow-up `--fields-json` update fails on the edit screen for the same reason. Documented handling: prefer another terminal transition whose screen carries the field, otherwise transition without `--resolution` and verify with `resolution is EMPTY` rather than assuming the workflow post-function fired. Covered in `SKILL.md` and `references/intent-verbs.md`, cross-linked from the generic "Field 'xyz' cannot be set" section in `references/troubleshooting.md`.
+- `jira-communication`: `references/versions.md` records that renaming a version propagates to every issue carrying it — issues hold a reference by numeric ID — so the rolling-placeholder release pattern needs no per-issue `fixVersions` pass.
+- `jira-communication`: `references/issue-editing.md`'s labels section generalised to all array-valued fields. `jira-issue.py update` has no append path (Jira's `update` verb with `add`/`remove` is not exposed), so `fixVersions`, `versions` and `components` are replaced wholesale by `--fields-json`; only `labels` has incremental `--add-label` / `--remove-label`.
+- `jira-communication`: `references/links.md` repointed the `netresearch-jira` linking-conventions reference, which named a GitHub URL for an internal-GitLab-hosted skill and a path that had since moved to `references/_global/`.
 
 ## [3.23.0] - 2026-07-27
 
