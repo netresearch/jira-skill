@@ -223,9 +223,9 @@ def project(
 ):
     """Create a new Jira project by copying configuration from an existing project.
 
-    KEY: The new project's key (e.g., LSB)
+    KEY: The new project's key (e.g., NEWP)
 
-    NAME: The new project's display name (e.g., "Landessportbund Sachsen")
+    NAME: The new project's display name (e.g., "Example Customer GmbH")
 
     Uses Jira's "shared configuration" mechanism (the same one behind the UI's
     "Share settings with an existing project" option) to copy the permission,
@@ -241,9 +241,9 @@ def project(
 
     Examples:
 
-      jira-create project LSB "Landessportbund Sachsen" --from-project OPSFX --lead thomas.wilhelm
+      jira-create project NEWP "Example Customer GmbH" --from-project TMPL --lead jane.doe
 
-      jira-create project OPSLSB "OPS Landessportbund Sachsen" --from-project OPS --lead tobias.hein --bootstrap-issues
+      jira-create project OPSNEWP "OPS Example Customer GmbH" --from-project OPS --lead jane.doe --bootstrap-issues
     """
     client = ctx.obj["client"]
 

@@ -101,7 +101,7 @@ Setting it afterwards via `jira-issue.py update KEY --fields-json '{"resolution"
 The transition itself is atomic — the whole POST is rejected, so nothing half-applies and the issue keeps its previous status. Work through the options in order:
 
 1. **Check whether another transition carries the field.** `jira-transition.py list KEY` may offer a different terminal transition whose screen does include `resolution`; prefer that one.
-2. **Otherwise retry without `--resolution`** and let the ticket land with an empty resolution. On workflows built this way (deployment pipelines with several terminal-looking gates, e.g. HMKG/HMPM) the resolution is applied by a workflow post-function at a later step, not by the transition you are running.
+2. **Otherwise retry without `--resolution`** and let the ticket land with an empty resolution. On workflows built this way (deployment pipelines with several terminal-looking gates) the resolution is applied by a workflow post-function at a later step, not by the transition you are running.
 3. **Verify rather than assume.** Once the workflow has reached its true terminal status, confirm the post-function actually fired:
 
    ```bash

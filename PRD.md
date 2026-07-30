@@ -299,7 +299,7 @@ Commands:
 
 Examples:
   jira-validate
-  jira-validate --verbose --project HMKG
+  jira-validate --verbose --project PROJ
 ```
 
 #### TR3.2: Workflow Scripts (P1 - Phase 2)
