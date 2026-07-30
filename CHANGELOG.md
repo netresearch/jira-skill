@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.23.1] - 2026-07-30
+
 ### Fixed
 
 - `jira-communication`: `jira-create.py project --bootstrap-issues` printed its `✓ Created KEY-1: Projektmanagement` line to stdout even under `--json` / `--quiet`, so the JSON payload failed to parse (`json.loads` → "Extra data") and `--quiet` emitted two lines instead of the project key. `_create_bootstrap_issues` accepted the context dict but never consulted it; it now suppresses the line in both modes. Covered by two regression tests.
@@ -726,7 +728,19 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.17.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.23.1...HEAD
+[3.23.1]: https://github.com/netresearch/jira-skill/compare/v3.23.0...v3.23.1
+[3.23.0]: https://github.com/netresearch/jira-skill/compare/v3.22.1...v3.23.0
+[3.22.1]: https://github.com/netresearch/jira-skill/compare/v3.22.0...v3.22.1
+[3.22.0]: https://github.com/netresearch/jira-skill/compare/v3.21.1...v3.22.0
+[3.21.1]: https://github.com/netresearch/jira-skill/compare/v3.21.0...v3.21.1
+[3.21.0]: https://github.com/netresearch/jira-skill/compare/v3.20.0...v3.21.0
+[3.20.0]: https://github.com/netresearch/jira-skill/compare/v3.19.0...v3.20.0
+[3.19.0]: https://github.com/netresearch/jira-skill/compare/v3.18.3...v3.19.0
+[3.18.3]: https://github.com/netresearch/jira-skill/compare/v3.18.2...v3.18.3
+[3.18.2]: https://github.com/netresearch/jira-skill/compare/v3.18.1...v3.18.2
+[3.18.1]: https://github.com/netresearch/jira-skill/compare/v3.18.0...v3.18.1
+[3.18.0]: https://github.com/netresearch/jira-skill/compare/v3.17.0...v3.18.0
 [3.17.0]: https://github.com/netresearch/jira-skill/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/netresearch/jira-skill/compare/v3.15.0...v3.16.0
 [3.15.0]: https://github.com/netresearch/jira-skill/compare/v3.14.0...v3.15.0
