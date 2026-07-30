@@ -43,35 +43,35 @@ class TestProjectCreate:
                 _create_mod.cli,
                 [
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
-                    "OPSFX",
+                    "TMPL",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--dry-run",
                 ],
             )
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
-        mock_client.project.assert_called_once_with("OPSFX")
+        mock_client.project.assert_called_once_with("TMPL")
         mock_client.create_project_from_shared_template.assert_not_called()
 
     def test_project_create_success(self):
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
-        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(
                 _create_mod.cli,
-                ["project", "LSB", "Landessportbund Sachsen", "--from-project", "OPSFX", "--lead", "tobias.hein"],
+                ["project", "NEWP", "Example Customer GmbH", "--from-project", "TMPL", "--lead", "jane.doe"],
             )
         assert result.exit_code == 0, result.output
         mock_client.create_project_from_shared_template.assert_called_once_with(
-            10101, "LSB", "Landessportbund Sachsen", "tobias.hein"
+            10101, "NEWP", "Example Customer GmbH", "jane.doe"
         )
-        assert "LSB" in result.output
+        assert "NEWP" in result.output
 
     def test_project_create_unresolvable_source_errors_out(self):
         mock_client = _make_mock_client()
@@ -82,12 +82,12 @@ class TestProjectCreate:
                 _create_mod.cli,
                 [
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
                     "DOES-NOT-EXIST",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                 ],
             )
         assert result.exit_code != 0
@@ -96,9 +96,9 @@ class TestProjectCreate:
     def test_project_create_with_bootstrap_issues(self):
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
-        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
         mock_client.create_issue.side_effect = [
-            {"key": "LSB-1"},
+            {"key": "NEWP-1"},
         ]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
@@ -106,19 +106,19 @@ class TestProjectCreate:
                 _create_mod.cli,
                 [
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
-                    "OPSFX",
+                    "TMPL",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--bootstrap-issues",
                 ],
             )
         assert result.exit_code == 0, result.output
         assert mock_client.create_issue.call_count == 1
         call = mock_client.create_issue.call_args_list[0]
-        assert call.kwargs["fields"]["project"] == {"key": "LSB"}
+        assert call.kwargs["fields"]["project"] == {"key": "NEWP"}
         assert call.kwargs["fields"]["issuetype"] == {"name": "Issue Number One"}
         assert call.kwargs["fields"]["summary"] == "Projektmanagement"
 
@@ -127,10 +127,10 @@ class TestProjectCreate:
         type scheme, retries once with Task rather than losing the issue."""
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
-        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
         mock_client.create_issue.side_effect = [
             Exception("issue type Issue Number One not available"),
-            {"key": "LSB-1"},
+            {"key": "NEWP-1"},
         ]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
@@ -138,12 +138,12 @@ class TestProjectCreate:
                 _create_mod.cli,
                 [
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
-                    "OPSFX",
+                    "TMPL",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--bootstrap-issues",
                 ],
             )
@@ -159,7 +159,7 @@ class TestProjectCreate:
         warns — the project creation that already succeeded is unaffected."""
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
-        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
+        mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
         mock_client.create_issue.side_effect = [
             Exception("issue type Issue Number One not available"),
             Exception("issue type Task not available either"),
@@ -170,12 +170,12 @@ class TestProjectCreate:
                 _create_mod.cli,
                 [
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
-                    "OPSFX",
+                    "TMPL",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--bootstrap-issues",
                 ],
             )
@@ -191,8 +191,8 @@ class TestProjectCreate:
         """
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
-        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
-        mock_client.create_issue.side_effect = [{"key": "LSB-1"}]
+        mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
+        mock_client.create_issue.side_effect = [{"key": "NEWP-1"}]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(
@@ -200,12 +200,12 @@ class TestProjectCreate:
                 [
                     "--json",
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
-                    "OPSFX",
+                    "TMPL",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--bootstrap-issues",
                 ],
             )
@@ -213,15 +213,15 @@ class TestProjectCreate:
         assert mock_client.create_issue.call_count == 1
         # Fails with "Extra data" if the ✓ line leaks into stdout.
         payload = json.loads(result.output)
-        assert payload["key"] == "LSB"
+        assert payload["key"] == "NEWP"
         assert "Projektmanagement" not in result.output
 
     def test_project_create_bootstrap_quiet_prints_only_the_key(self):
         """`--quiet` contracts to just the project key — no bootstrap ✓ line."""
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
-        mock_client.create_project_from_shared_template.return_value = {"key": "LSB", "id": 20202}
-        mock_client.create_issue.side_effect = [{"key": "LSB-1"}]
+        mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
+        mock_client.create_issue.side_effect = [{"key": "NEWP-1"}]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(
@@ -229,18 +229,18 @@ class TestProjectCreate:
                 [
                     "--quiet",
                     "project",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--from-project",
-                    "OPSFX",
+                    "TMPL",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--bootstrap-issues",
                 ],
             )
         assert result.exit_code == 0, result.output
         assert mock_client.create_issue.call_count == 1
-        assert result.output.strip() == "LSB"
+        assert result.output.strip() == "NEWP"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -254,7 +254,7 @@ class TestTempoCustomerCreate:
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(
-                _tempo_mod.cli, ["customer", "create", "LSB", "Landessportbund Sachsen", "--dry-run"]
+                _tempo_mod.cli, ["customer", "create", "NEWP", "Example Customer GmbH", "--dry-run"]
             )
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
@@ -262,12 +262,12 @@ class TestTempoCustomerCreate:
 
     def test_customer_create_success(self):
         mock_client = _make_mock_client()
-        mock_client.tempo_account_add_new_customer.return_value = {"key": "LSB", "id": 55}
+        mock_client.tempo_account_add_new_customer.return_value = {"key": "NEWP", "id": 55}
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
-            result = runner.invoke(_tempo_mod.cli, ["customer", "create", "LSB", "Landessportbund Sachsen"])
+            result = runner.invoke(_tempo_mod.cli, ["customer", "create", "NEWP", "Example Customer GmbH"])
         assert result.exit_code == 0, result.output
-        mock_client.tempo_account_add_new_customer.assert_called_once_with("LSB", "Landessportbund Sachsen")
+        mock_client.tempo_account_add_new_customer.assert_called_once_with("NEWP", "Example Customer GmbH")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -285,12 +285,12 @@ class TestTempoAccountCreate:
                 [
                     "account",
                     "create",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--customer-key",
-                    "LSB",
+                    "NEWP",
                     "--dry-run",
                 ],
             )
@@ -300,7 +300,7 @@ class TestTempoAccountCreate:
 
     def test_account_create_success_payload_shape(self):
         mock_client = _make_mock_client()
-        mock_client.tempo_account_add_account.return_value = {"id": 42, "key": "LSB"}
+        mock_client.tempo_account_add_account.return_value = {"id": 42, "key": "NEWP"}
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(
@@ -308,21 +308,21 @@ class TestTempoAccountCreate:
                 [
                     "account",
                     "create",
-                    "LSB",
-                    "Landessportbund Sachsen",
+                    "NEWP",
+                    "Example Customer GmbH",
                     "--lead",
-                    "tobias.hein",
+                    "jane.doe",
                     "--customer-key",
-                    "LSB",
+                    "NEWP",
                 ],
             )
         assert result.exit_code == 0, result.output
         mock_client.tempo_account_add_account.assert_called_once_with(
             {
-                "key": "LSB",
-                "name": "Landessportbund Sachsen",
-                "lead": {"name": "tobias.hein"},
-                "customer": {"key": "LSB"},
+                "key": "NEWP",
+                "name": "Example Customer GmbH",
+                "lead": {"name": "jane.doe"},
+                "customer": {"key": "NEWP"},
             }
         )
         assert "42" in result.output
@@ -332,7 +332,7 @@ class TestTempoAccountCreate:
         mock_client.project.return_value = {"id": 10101}
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
-            result = runner.invoke(_tempo_mod.cli, ["account", "link", "42", "LSB", "--dry-run"])
+            result = runner.invoke(_tempo_mod.cli, ["account", "link", "42", "NEWP", "--dry-run"])
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
         mock_client.tempo_account_associate_with_jira_project.assert_not_called()
@@ -343,7 +343,7 @@ class TestTempoAccountCreate:
         mock_client.tempo_account_associate_with_jira_project.return_value = {"id": 999}
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
-            result = runner.invoke(_tempo_mod.cli, ["account", "link", "42", "LSB", "--default"])
+            result = runner.invoke(_tempo_mod.cli, ["account", "link", "42", "NEWP", "--default"])
         assert result.exit_code == 0, result.output
         mock_client.tempo_account_associate_with_jira_project.assert_called_once_with(42, 10101, default_account=True)
 

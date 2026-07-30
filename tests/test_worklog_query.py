@@ -19,24 +19,24 @@ class TestBuildJql:
         assert 'worklogDate <= "2026-04-02"' in jql
 
     def test_with_user(self):
-        jql = _mod.build_jql("2026-03-30", "2026-04-02", user="psiedler")
-        assert 'worklogAuthor = "psiedler"' in jql
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", user="asmith")
+        assert 'worklogAuthor = "asmith"' in jql
 
     def test_with_project(self):
-        jql = _mod.build_jql("2026-03-30", "2026-04-02", project="HMKG")
-        assert 'project = "HMKG"' in jql
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", project="PROJ")
+        assert 'project = "PROJ"' in jql
 
     def test_with_single_issue(self):
-        jql = _mod.build_jql("2026-03-30", "2026-04-02", issues=["HMKG-123"])
-        assert 'issueKey in ("HMKG-123")' in jql
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", issues=["PROJ-123"])
+        assert 'issueKey in ("PROJ-123")' in jql
 
     def test_with_multiple_issues(self):
-        jql = _mod.build_jql("2026-03-30", "2026-04-02", issues=["HMKG-123", "HMKG-456"])
-        assert 'issueKey in ("HMKG-123", "HMKG-456")' in jql
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", issues=["PROJ-123", "PROJ-456"])
+        assert 'issueKey in ("PROJ-123", "PROJ-456")' in jql
 
     def test_with_epic(self):
-        jql = _mod.build_jql("2026-03-30", "2026-04-02", epic="HMKG-1940")
-        assert '"Epic Link" = "HMKG-1940"' in jql
+        jql = _mod.build_jql("2026-03-30", "2026-04-02", epic="PROJ-1940")
+        assert '"Epic Link" = "PROJ-1940"' in jql
 
     def test_with_sprint(self):
         jql = _mod.build_jql("2026-03-30", "2026-04-02", sprint="Sprint 42")
@@ -51,10 +51,10 @@ class TestBuildJql:
         jql = _mod.build_jql(
             "2026-03-30",
             "2026-04-02",
-            user="psiedler",
-            project="HMKG",
-            issues=["HMKG-123"],
-            epic="HMKG-1940",
+            user="asmith",
+            project="PROJ",
+            issues=["PROJ-123"],
+            epic="PROJ-1940",
             sprint="Sprint 42",
         )
         assert "worklogDate" in jql
@@ -106,13 +106,13 @@ class TestSecondsToHuman:
 # Test fixture data
 SAMPLE_WORKLOGS = [
     {
-        "author": {"displayName": "Paul Siedler", "name": "psiedler", "accountId": "abc123"},
+        "author": {"displayName": "Alice Smith", "name": "asmith", "accountId": "abc123"},
         "started": "2026-03-30T09:00:00.000+0200",
         "timeSpentSeconds": 3600,
         "timeSpent": "1h",
         "comment": "Code review",
         "id": "1001",
-        "_issue_key": "HMKG-100",
+        "_issue_key": "PROJ-100",
     },
     {
         "author": {"displayName": "Jane Doe", "name": "jdoe", "accountId": "def456"},
@@ -121,32 +121,32 @@ SAMPLE_WORKLOGS = [
         "timeSpent": "2h",
         "comment": "Implementation",
         "id": "1002",
-        "_issue_key": "HMKG-100",
+        "_issue_key": "PROJ-100",
     },
     {
-        "author": {"displayName": "Paul Siedler", "name": "psiedler", "accountId": "abc123"},
+        "author": {"displayName": "Alice Smith", "name": "asmith", "accountId": "abc123"},
         "started": "2026-04-01T14:00:00.000+0200",
         "timeSpentSeconds": 5400,
         "timeSpent": "1h 30m",
         "comment": "Testing",
         "id": "1003",
-        "_issue_key": "HMKG-200",
+        "_issue_key": "PROJ-200",
     },
     {
-        "author": {"displayName": "Paul Siedler", "name": "psiedler", "accountId": "abc123"},
+        "author": {"displayName": "Alice Smith", "name": "asmith", "accountId": "abc123"},
         "started": "2026-04-10T09:00:00.000+0200",
         "timeSpentSeconds": 1800,
         "timeSpent": "30m",
         "comment": "Outside date range",
         "id": "1004",
-        "_issue_key": "HMKG-300",
+        "_issue_key": "PROJ-300",
     },
 ]
 
 
 ISSUE_MAP = {
-    "HMKG-100": "Fix login validation",
-    "HMKG-200": "Update API docs",
+    "PROJ-100": "Fix login validation",
+    "PROJ-200": "Update API docs",
 }
 
 
@@ -156,14 +156,14 @@ class TestFormatSummary:
     def test_groups_by_issue(self):
         wls = SAMPLE_WORKLOGS[:3]  # exclude the out-of-range one
         output = _mod.format_summary(wls, ISSUE_MAP)
-        assert "HMKG-100" in output
-        assert "HMKG-200" in output
+        assert "PROJ-100" in output
+        assert "PROJ-200" in output
         assert "Fix login validation" in output
 
     def test_shows_total_per_issue(self):
         wls = SAMPLE_WORKLOGS[:3]
         output = _mod.format_summary(wls, ISSUE_MAP)
-        # HMKG-100 has 1h + 2h = 3h
+        # PROJ-100 has 1h + 2h = 3h
         assert "3h" in output
 
     def test_shows_grand_total(self):
@@ -191,12 +191,12 @@ class TestFormatDetail:
         wls = SAMPLE_WORKLOGS[:1]
         output = _mod.format_detail(wls)
         assert "2026-03-30" in output
-        assert "Paul Siedler" in output
+        assert "Alice Smith" in output
 
     def test_shows_issue_key(self):
         wls = SAMPLE_WORKLOGS[:1]
         output = _mod.format_detail(wls)
-        assert "HMKG-100" in output
+        assert "PROJ-100" in output
 
     def test_empty_worklogs(self):
         output = _mod.format_detail([])
@@ -211,9 +211,9 @@ class TestFilterWorklogs:
         assert len(result) == 4
 
     def test_filter_by_user_name(self):
-        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="psiedler")
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="asmith")
         assert len(result) == 3
-        assert all(w["author"]["name"] == "psiedler" for w in result)
+        assert all(w["author"]["name"] == "asmith" for w in result)
 
     def test_filter_by_account_id(self):
         result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="abc123")
@@ -229,9 +229,9 @@ class TestFilterWorklogs:
         assert "1004" not in [w["id"] for w in result]
 
     def test_filter_by_user_and_date(self):
-        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="psiedler", from_date="2026-03-30", to_date="2026-04-01")
+        result = _mod.filter_worklogs(SAMPLE_WORKLOGS, user="asmith", from_date="2026-03-30", to_date="2026-04-01")
         assert len(result) == 2
-        assert all(w["author"]["name"] == "psiedler" for w in result)
+        assert all(w["author"]["name"] == "asmith" for w in result)
 
     def test_empty_list(self):
         result = _mod.filter_worklogs([])
@@ -339,42 +339,42 @@ class TestNormalizeTempoWorklog:
 
     def test_string_author_coerced_to_dict(self):
         # A truthy non-dict author must not leak downstream where .get() is called.
-        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "author": "psiedler"})
-        assert result["author"] == {"name": "psiedler", "displayName": "psiedler"}
+        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "author": "asmith"})
+        assert result["author"] == {"name": "asmith", "displayName": "asmith"}
 
     def test_worker_object_mapped_to_author(self):
         # /worklogs/search returns "worker"; map it to an author dict.
         result = _mod.normalize_tempo_worklog(
-            {"issue": {"key": "X-1"}, "worker": {"name": "psiedler", "displayName": "Paul Siedler"}}
+            {"issue": {"key": "X-1"}, "worker": {"name": "asmith", "displayName": "Alice Smith"}}
         )
-        assert result["author"]["name"] == "psiedler"
-        assert result["author"]["displayName"] == "Paul Siedler"
+        assert result["author"]["name"] == "asmith"
+        assert result["author"]["displayName"] == "Alice Smith"
 
     def test_worker_string_mapped_to_author(self):
-        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "worker": "psiedler"})
-        assert result["author"] == {"name": "psiedler", "displayName": "psiedler"}
+        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "worker": "asmith"})
+        assert result["author"] == {"name": "asmith", "displayName": "asmith"}
 
     def test_author_missing_displayname_falls_back_to_name(self):
-        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "author": {"name": "psiedler"}})
-        assert result["author"]["displayName"] == "psiedler"
+        result = _mod.normalize_tempo_worklog({"issue": {"key": "X-1"}, "author": {"name": "asmith"}})
+        assert result["author"]["displayName"] == "asmith"
 
 
 SAMPLE_TEMPO_RESPONSE = [
     {
         "tempoWorklogId": 101,
-        "issue": {"key": "HMKG-100", "id": 10001},
+        "issue": {"key": "PROJ-100", "id": 10001},
         "timeSpentSeconds": 3600,
         "started": "2026-04-01",
         "comment": "Feature work",
-        "author": {"name": "psiedler", "displayName": "Paul Siedler"},
+        "author": {"name": "asmith", "displayName": "Alice Smith"},
     },
     {
         "tempoWorklogId": 102,
-        "issue": {"key": "HMKG-200", "id": 10002},
+        "issue": {"key": "PROJ-200", "id": 10002},
         "timeSpentSeconds": 5400,
         "started": "2026-04-02",
         "comment": "Code review",
-        "author": {"name": "psiedler", "displayName": "Paul Siedler"},
+        "author": {"name": "asmith", "displayName": "Alice Smith"},
     },
 ]
 
@@ -392,20 +392,20 @@ class TestFetchWorklogsTempo:
 
         mock_client.jql.return_value = {
             "issues": [
-                {"key": "HMKG-100", "fields": {"summary": "Fix login"}},
-                {"key": "HMKG-200", "fields": {"summary": "Update docs"}},
+                {"key": "PROJ-100", "fields": {"summary": "Fix login"}},
+                {"key": "PROJ-200", "fields": {"summary": "Update docs"}},
             ],
             "total": 2,
             "startAt": 0,
             "maxResults": 50,
         }
 
-        worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02", user="psiedler")
+        worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02", user="asmith")
         assert len(worklogs) == 2
-        assert worklogs[0]["_issue_key"] == "HMKG-100"
+        assert worklogs[0]["_issue_key"] == "PROJ-100"
         assert worklogs[0]["timeSpentSeconds"] == 3600
-        assert issue_map["HMKG-100"] == "Fix login"
-        assert issue_map["HMKG-200"] == "Update docs"
+        assert issue_map["PROJ-100"] == "Fix login"
+        assert issue_map["PROJ-200"] == "Update docs"
 
     def test_passes_filters_to_api(self):
         mock_client = mock.MagicMock()
@@ -414,13 +414,13 @@ class TestFetchWorklogsTempo:
         mock_response.json.return_value = []
         mock_client._session.get.return_value = mock_response
 
-        _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30", user="psiedler", project="HMKG")
+        _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30", user="asmith", project="PROJ")
 
         params = mock_client._session.get.call_args.kwargs["params"]
         assert params["dateFrom"] == "2026-04-01"
         assert params["dateTo"] == "2026-04-30"
-        assert params["worker"] == "psiedler"
-        assert params["projectKey"] == "HMKG"
+        assert params["worker"] == "asmith"
+        assert params["projectKey"] == "PROJ"
 
     def test_paginated_response(self):
         mock_client = mock.MagicMock()
@@ -439,8 +439,8 @@ class TestFetchWorklogsTempo:
         mock_client._session.get.side_effect = [page1_response, page2_response]
         mock_client.jql.return_value = {
             "issues": [
-                {"key": "HMKG-100", "fields": {"summary": "Issue"}},
-                {"key": "HMKG-200", "fields": {"summary": "Issue"}},
+                {"key": "PROJ-100", "fields": {"summary": "Issue"}},
+                {"key": "PROJ-200", "fields": {"summary": "Issue"}},
             ],
             "total": 2,
             "startAt": 0,
@@ -487,8 +487,8 @@ class TestFetchWorklogsTempo:
         mock_client._session.get.return_value = mock_response
         mock_client.jql.return_value = {
             "issues": [
-                {"key": "HMKG-100", "fields": {"summary": "Test"}},
-                {"key": "HMKG-200", "fields": {"summary": "Test"}},
+                {"key": "PROJ-100", "fields": {"summary": "Test"}},
+                {"key": "PROJ-200", "fields": {"summary": "Test"}},
             ],
             "total": 2,
             "startAt": 0,
@@ -498,13 +498,13 @@ class TestFetchWorklogsTempo:
         worklogs, _ = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
 
         # Should work with filter_worklogs
-        filtered = _mod.filter_worklogs(worklogs, user="psiedler")
+        filtered = _mod.filter_worklogs(worklogs, user="asmith")
         assert len(filtered) == 2
 
         # Should work with format_detail
         output = _mod.format_detail(worklogs)
-        assert "HMKG-100" in output
-        assert "Paul Siedler" in output
+        assert "PROJ-100" in output
+        assert "Alice Smith" in output
 
 
 class TestFetchWorklogsTempoAccount:
@@ -518,8 +518,8 @@ class TestFetchWorklogsTempoAccount:
         mock_client._session.post.return_value = post_response
         mock_client.jql.return_value = {
             "issues": [
-                {"key": "HMKG-100", "fields": {"summary": "Fix login"}},
-                {"key": "HMKG-200", "fields": {"summary": "Review"}},
+                {"key": "PROJ-100", "fields": {"summary": "Fix login"}},
+                {"key": "PROJ-200", "fields": {"summary": "Review"}},
             ],
             "total": 2,
             "startAt": 0,
@@ -528,7 +528,7 @@ class TestFetchWorklogsTempoAccount:
 
         worklogs, issue_map = _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
         assert len(worklogs) == 2
-        assert issue_map["HMKG-100"] == "Fix login"
+        assert issue_map["PROJ-100"] == "Fix login"
         # POST body carries the accountKey array and date range
         payload = mock_client._session.post.call_args.kwargs["json"]
         assert payload["accountKey"] == ["ACME"]
@@ -569,8 +569,8 @@ class TestSearchIssues:
         mock_client = mock.MagicMock()
         mock_client.jql.return_value = {
             "issues": [
-                {"key": "HMKG-100", "fields": {"summary": "Fix login"}},
-                {"key": "HMKG-200", "fields": {"summary": "Update docs"}},
+                {"key": "PROJ-100", "fields": {"summary": "Fix login"}},
+                {"key": "PROJ-200", "fields": {"summary": "Update docs"}},
             ],
             "total": 2,
             "startAt": 0,
@@ -578,20 +578,20 @@ class TestSearchIssues:
         }
         result = _mod.search_issues(mock_client, 'worklogDate >= "2026-03-30"')
         assert len(result) == 2
-        assert result[0]["key"] == "HMKG-100"
+        assert result[0]["key"] == "PROJ-100"
         assert result[0]["summary"] == "Fix login"
 
     def test_pagination(self):
         mock_client = mock.MagicMock()
         mock_client.jql.side_effect = [
             {
-                "issues": [{"key": f"HMKG-{i}", "fields": {"summary": f"Issue {i}"}} for i in range(50)],
+                "issues": [{"key": f"PROJ-{i}", "fields": {"summary": f"Issue {i}"}} for i in range(50)],
                 "total": 75,
                 "startAt": 0,
                 "maxResults": 50,
             },
             {
-                "issues": [{"key": f"HMKG-{i}", "fields": {"summary": f"Issue {i}"}} for i in range(50, 75)],
+                "issues": [{"key": f"PROJ-{i}", "fields": {"summary": f"Issue {i}"}} for i in range(50, 75)],
                 "total": 75,
                 "startAt": 50,
                 "maxResults": 50,
@@ -618,15 +618,15 @@ class TestFetchWorklogs:
                     "id": "1001",
                     "started": "2026-03-30T09:00:00.000+0200",
                     "timeSpentSeconds": 3600,
-                    "author": {"displayName": "Paul", "name": "psiedler"},
+                    "author": {"displayName": "Alice Smith", "name": "asmith"},
                 },
             ],
             "total": 1,
             "maxResults": 1048576,
         }
-        result = _mod.fetch_worklogs(mock_client, "HMKG-100")
+        result = _mod.fetch_worklogs(mock_client, "PROJ-100")
         assert len(result) == 1
-        assert result[0]["_issue_key"] == "HMKG-100"
+        assert result[0]["_issue_key"] == "PROJ-100"
 
     def test_adds_issue_key_to_worklogs(self):
         mock_client = mock.MagicMock()
@@ -635,8 +635,8 @@ class TestFetchWorklogs:
             "total": 1,
             "maxResults": 1048576,
         }
-        result = _mod.fetch_worklogs(mock_client, "HMKG-999")
-        assert result[0]["_issue_key"] == "HMKG-999"
+        result = _mod.fetch_worklogs(mock_client, "PROJ-999")
+        assert result[0]["_issue_key"] == "PROJ-999"
 
 
 class TestCli:
@@ -644,9 +644,9 @@ class TestCli:
 
     def test_default_query(self):
         mock_client = mock.MagicMock()
-        mock_client.myself.return_value = {"name": "psiedler", "displayName": "Paul Siedler"}
+        mock_client.myself.return_value = {"name": "asmith", "displayName": "Alice Smith"}
         mock_client.jql.return_value = {
-            "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
+            "issues": [{"key": "PROJ-100", "fields": {"summary": "Fix login"}}],
             "total": 1,
             "startAt": 0,
             "maxResults": 50,
@@ -658,7 +658,7 @@ class TestCli:
                     "started": "2026-04-01T09:00:00.000+0200",
                     "timeSpentSeconds": 3600,
                     "timeSpent": "1h",
-                    "author": {"displayName": "Paul Siedler", "name": "psiedler"},
+                    "author": {"displayName": "Alice Smith", "name": "asmith"},
                     "comment": "Work done",
                 }
             ],
@@ -674,11 +674,11 @@ class TestCli:
             runner = click.testing.CliRunner()
             result = runner.invoke(_mod.cli, ["--from", "2026-04-01", "--to", "2026-04-01"])
             assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
-            assert "HMKG-100" in result.output
+            assert "PROJ-100" in result.output
 
     def test_json_output(self):
         mock_client = mock.MagicMock()
-        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_client.myself.return_value = {"name": "asmith"}
         mock_client.jql.return_value = {"issues": [], "total": 0, "startAt": 0, "maxResults": 50}
         # No Tempo plugin installed → default (auto) backend resolves to JQL.
         no_tempo = mock.MagicMock()
@@ -699,22 +699,22 @@ class TestCliTempo:
     def _make_tempo_client(self, mock_client):
         """Set up mock client for Tempo path."""
         mock_client.url = "https://jira.example.com"
-        mock_client.myself.return_value = {"name": "psiedler", "displayName": "Paul Siedler"}
+        mock_client.myself.return_value = {"name": "asmith", "displayName": "Alice Smith"}
         mock_response = mock.MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = [
             {
                 "tempoWorklogId": 101,
-                "issue": {"key": "HMKG-100", "id": 10001},
+                "issue": {"key": "PROJ-100", "id": 10001},
                 "timeSpentSeconds": 3600,
                 "started": "2026-04-01",
                 "comment": "Feature work",
-                "author": {"name": "psiedler", "displayName": "Paul Siedler"},
+                "author": {"name": "asmith", "displayName": "Alice Smith"},
             },
         ]
         mock_client._session.get.return_value = mock_response
         mock_client.jql.return_value = {
-            "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
+            "issues": [{"key": "PROJ-100", "fields": {"summary": "Fix login"}}],
             "total": 1,
             "startAt": 0,
             "maxResults": 50,
@@ -729,7 +729,7 @@ class TestCliTempo:
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--backend", "tempo", "--from", "2026-04-01", "--to", "2026-04-01"])
         assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
-        assert "HMKG-100" in result.output
+        assert "PROJ-100" in result.output
         assert "via Tempo" in result.output
 
     @mock.patch.object(_mod, "LazyJiraClient")
@@ -742,15 +742,15 @@ class TestCliTempo:
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--backend", "auto", "--from", "2026-04-01", "--to", "2026-04-01"])
         assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
-        assert "HMKG-100" in result.output
+        assert "PROJ-100" in result.output
 
     @mock.patch.object(_mod, "LazyJiraClient")
     def test_jira_backend_flag_skips_tempo(self, mock_client_cls):
         mock_client = mock.MagicMock()
         mock_client_cls.return_value = mock_client
-        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_client.myself.return_value = {"name": "asmith"}
         mock_client.jql.return_value = {
-            "issues": [{"key": "HMKG-100", "fields": {"summary": "Fix login"}}],
+            "issues": [{"key": "PROJ-100", "fields": {"summary": "Fix login"}}],
             "total": 1,
             "startAt": 0,
             "maxResults": 50,
@@ -761,7 +761,7 @@ class TestCliTempo:
                     "id": "1001",
                     "started": "2026-04-01T09:00:00.000+0200",
                     "timeSpentSeconds": 3600,
-                    "author": {"displayName": "Paul Siedler", "name": "psiedler"},
+                    "author": {"displayName": "Alice Smith", "name": "asmith"},
                     "comment": "Work done",
                 }
             ],
@@ -772,7 +772,7 @@ class TestCliTempo:
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--backend", "jira", "--from", "2026-04-01", "--to", "2026-04-01"])
         assert result.exit_code == 0
-        assert "HMKG-100" in result.output
+        assert "PROJ-100" in result.output
         assert "via Tempo" not in result.output
 
     @mock.patch.object(_mod, "LazyJiraClient")
@@ -780,7 +780,7 @@ class TestCliTempo:
         mock_client = mock.MagicMock()
         mock_client_cls.return_value = mock_client
         mock_client.url = "https://jira.example.com"
-        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_client.myself.return_value = {"name": "asmith"}
         mock_response = mock.MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = []
@@ -804,7 +804,7 @@ class TestCliTempo:
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--tempo-account", "ACME", "--from", "2026-04-01", "--to", "2026-04-30"])
         assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
-        assert "HMKG-100" in result.output
+        assert "PROJ-100" in result.output
         assert "via Tempo" in result.output
         payload = mock_client._session.post.call_args.kwargs["json"]
         assert payload["accountKey"] == ["ACME"]
@@ -826,7 +826,7 @@ class TestCliTempo:
         mock_client = mock.MagicMock()
         mock_client_cls.return_value = mock_client
         mock_client.url = "https://jira.example.com"
-        mock_client.myself.return_value = {"name": "psiedler"}
+        mock_client.myself.return_value = {"name": "asmith"}
         no_tempo = mock.MagicMock()
         no_tempo.status_code = 404
         mock_client._session.get.return_value = no_tempo
