@@ -61,9 +61,13 @@ Look up custom field IDs with `jira-fields.py` — see `fields-and-users.md`.
 
 **Epic Link is edit-screen-only.** On Jira Server/DC the Epic Link field (look it up with `jira-fields.py search epic`, e.g. `customfield_10580`) is usually **not on the create screen** — passing it to `jira-create.py … --fields-json` fails with *"Field … cannot be set. It is not on the appropriate screen, or unknown."* Create the issue first, then set the epic with `jira-issue.py update KEY --fields-json '{"customfield_10580": "PROJ-1"}'`.
 
-## Labels: replace vs incremental updates
+## Array-valued fields: replace vs incremental updates
 
-`jira-issue.py update` supports three modes:
+Every array-valued field — `labels`, `fixVersions`, `versions` (Affects Version/s), `components` — is **replaced wholesale** by whatever you send. Jira's edit endpoint has no append semantics for them, so a payload carrying one entry leaves the issue with exactly that one entry.
+
+### Labels — the one field with incremental flags
+
+`jira-issue.py update` supports three modes for labels:
 
 - `--labels a,b,c` replaces the full label set.
 - `--add-label` / `--remove-label` incrementally update labels without wiping unrelated tags.
@@ -75,6 +79,29 @@ Each `--add-label` / `--remove-label` may be repeated and may contain comma-sepa
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
   --add-label backend --add-label urgent,frontend --remove-label stale
 ```
+
+### `fixVersions` / `versions` / `components` — read, extend, send whole
+
+These have **no** `--add-*` / `--remove-*` equivalent; they are only reachable through `--fields-json`, which is a plain replace. Adding one version therefore means sending the existing entries *plus* the new one:
+
+```bash
+# Wrong — clobbers every fix version already on the issue, silently and with ✓ exit 0
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
+    --fields-json '{"fixVersions": [{"id": "10123"}]}'
+
+# Correct — read the current ids first
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123 --fields fixVersions \
+  | jq -r '.fields.fixVersions[].id'
+# → 10098
+
+# …then send the union
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 \
+    --fields-json '{"fixVersions": [{"id": "10098"}, {"id": "10123"}]}'
+```
+
+The failure is silent — the call reports `✓` because the write succeeded; only the *intent* (add, not replace) was lost. Re-read the field afterwards when it matters.
+
+`{"name": "1.4.0"}` works in place of `{"id": ...}`, but IDs survive a version rename and names do not (see `versions.md`). To move many issues onto a different version at once, prefer `jira-version.py merge` / `delete --move-fix-to` over per-issue `--fields-json` edits.
 
 ## Setting a custom reporter
 

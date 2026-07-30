@@ -64,7 +64,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-watchers.py --json remove PROJ-1
 ```bash
 # Watch every child of an epic
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query '"Epic Link" = PROJ-789' \
-  | jq -r '.issues[].key' \
+  | jq -r '.[].key' \
   | xargs -I{} uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-watchers.py add {}
 ```
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-communication`: `references/watchers.md` documented a broken bulk-watch pipeline (`jq -r '.issues[].key'`) — `--json` emits a bare array, so the correct path is `.[].key`. The old form exits 5 with `Cannot index array with string "issues"`.
+- `jira-communication`: `references/links.md` pointed at a dead GitHub URL for the `netresearch-jira` linking-conventions reference. That skill lives on internal GitLab and the file moved to `references/_global/linking-conventions.md`.
+
+### Changed
+
+- `jira-communication`: the `--resolution` rule is no longer unconditional. Workflows whose terminal transition screens omit the resolution field reject `--resolution` with "Field 'resolution' cannot be set", and a follow-up `--fields-json` update fails identically; the documented handling is to retry without it and let a workflow post-function apply the resolution downstream. Covered in `SKILL.md`, `references/intent-verbs.md`, and cross-linked from the generic "Field 'xyz' cannot be set" section in `references/troubleshooting.md`.
+- `jira-communication`: `references/issue-editing.md`'s labels section generalised to all array-valued fields. `fixVersions`, `versions` and `components` are replaced wholesale by `--fields-json` — adding one entry requires sending the existing IDs plus the new one — and only `labels` has incremental `--add-label` / `--remove-label` flags.
+
+### Added
+
+- `jira-communication`: `references/troubleshooting.md` covers the two `--json | jq` failure modes. `jq: parse error: Invalid numeric literal at line 1, column 10` comes from `uv run`'s cold-cache `Installed N packages` notice reaching `jq` once stderr is folded into the pipe (uv writes it to stderr, so only merged streams break). `Cannot index array with string "issues"` comes from the payload being a bare array for list-style subcommands, with a table of which subcommands return arrays vs objects.
+- `jira-communication`: `references/versions.md` documents that renaming a version propagates to every issue carrying it — issues store a reference by ID, so no per-issue `fixVersions` edit is needed after a rolling-placeholder rename.
+
 ## [3.23.0] - 2026-07-27
 
 ### Changed

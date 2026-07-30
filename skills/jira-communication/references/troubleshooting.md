@@ -2,7 +2,7 @@
 
 ## When to load
 
-Load this reference whenever any script returns a non-zero exit code related to authentication, SSL, connectivity, or environment configuration — typically surfaced as HTTP 401/403, certificate errors, or `JIRA_URL` not set.
+Load this reference whenever any script returns a non-zero exit code related to authentication, SSL, connectivity, or environment configuration — typically surfaced as HTTP 401/403, certificate errors, or `JIRA_URL` not set. Also load it before building a `--json | jq` pipeline: the two most common failures there (stream pollution and payload shape) are documented below.
 
 ## Setup Validation
 
@@ -63,6 +63,26 @@ export JIRA_PERSONAL_TOKEN=your-personal-access-token
 
 ## Common Errors
 
+### "jq: parse error: Invalid numeric literal at line 1, column 10"
+
+**Cause**: `uv run` prints `Installed N packages in Xms` on a cold cache. uv writes that notice to **stderr**, so a plain `--json | jq` pipeline is unaffected — the line only reaches `jq` when stderr has been folded into the pipe: an explicit `2>&1 |`, a wrapper or CI step that combines streams, or an agent harness that captures merged output. Column 10 is the character after `Installed`, which is the fingerprint of this specific cause; the scripts themselves never write anything but JSON to stdout in `--json` mode (warnings go through `output.py:warning()` → stderr).
+
+**Fix**: keep stderr out of a JSON pipe. Where the streams must stay merged, filter the notice:
+
+```bash
+# Wrong — merged streams put uv's install notice on jq's stdin
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py --json list --project PROJ 2>&1 | jq -c '.[]'
+
+# Correct — leave stderr on the terminal
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py --json list --project PROJ | jq -c '.[]'
+
+# Correct — merged output is unavoidable, so drop the notice
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-board.py --json list --project PROJ 2>&1 \
+  | grep -v '^Installed' | jq -c '.[]'
+```
+
+One warm-up call (`… --help`) also silences the notice for every later call in the session.
+
 ### "Configuration errors: Missing required"
 
 **Cause**: Required variables not found in file or environment.
@@ -117,6 +137,29 @@ uv run scripts/core/jira-issue.py get PROJ-123 --json
 uv run scripts/core/jira-issue.py --json get PROJ-123
 ```
 
+### `jq: Cannot index array with string "issues"` (`--json` payload shape)
+
+**Cause**: the flag placement above is right but the jq path is wrong. `--json` emits a **bare array** for list-style subcommands, never an `{"issues": [...]}` envelope. `jira-search.py` unwraps the API response itself — `results.get("issues", [])` — and hands the plain list to `format_output(..., as_json=True)`, which dumps it as-is.
+
+The rule across the scripts:
+
+| Subcommand shape | Top-level JSON | jq path |
+|---|---|---|
+| `search query`, `comment list`, `version list`, `board list` | array | `.[]` |
+| `issue get`, `issue work / qa / qa-fail / act` | object | `.key`, `.comments[]` |
+
+**Fix**: index the array directly.
+
+```bash
+# Wrong — exits 5 with: Cannot index array with string "issues"
+uv run scripts/core/jira-search.py --json query "project = OPS" | jq -r '.issues[].key'
+
+# Correct
+uv run scripts/core/jira-search.py --json query "project = OPS" | jq -r '.[].key'
+```
+
+Confirm any shape you are unsure of with `… --json <cmd> | jq -r 'type'` before building the pipeline on top of it.
+
 ### "No such option: -f" / "-n" (query options before the subcommand)
 
 **Cause**: The inverse of the error above — a *subcommand* option placed before the subcommand. `-f/--fields`, `-n/--max-results`, and `--order-by` belong to `query`, so they must come **after** the `query` token (before or after the positional JQL is fine), never before it. Global options (`--json`, `-q`) go before the subcommand. A stub that ignores argument order hides this — verify the ordering against the live tool.
@@ -163,6 +206,8 @@ When two transitions share a name but differ by icon (e.g. "✅ QA" → Resolved
 1. Use `jira-fields.py search xyz` to find correct field ID
 2. Check field is on the edit screen for that issue type
 3. Verify field format (some need `{"name": "value"}`)
+
+**`resolution` is the common special case.** On workflows whose terminal transition screens omit the field, both `jira-transition.py do KEY "…" --resolution Done` and a follow-up `jira-issue.py update --fields-json '{"resolution": {"name": "Done"}}'` fail with this error. Retry the transition without `--resolution` — see *"When the screen rejects `--resolution`"* in `intent-verbs.md`.
 
 ## Debug Mode
 

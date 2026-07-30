@@ -60,7 +60,7 @@ A transition is classified as:
 - `into_qa` — `from ∉ qa AND to ∈ qa` (handover)
 - `reject` — `from ∈ qa AND to ∈ working` (fail)
 - `forward` — `from ∈ qa AND to ∈ qa AND from ≠ to` (multi-stage progression: `QA→QA2`, `Review→UAT`, `QA→Acceptance` — **NOT** a fail)
-- `resolved` — `to ∈ resolved` — **always pass `--resolution <value>`** when executing this transition (see below)
+- `resolved` — `to ∈ resolved` — **pass `--resolution <value>`** when executing this transition, unless the screen rejects it (see below)
 - `out` — `from ∈ qa AND to ∉ qa` (uncategorised QA exit)
 - `other` — neither side touches QA
 
@@ -70,7 +70,7 @@ Forward-progression detection is what lets a multi-stage QA workflow (Review →
 
 When a transition lands in a resolved status, Jira stores two separate things: the **status** (visible in the badge) and the **resolution** (the green checkmark, JQL `resolution is not EMPTY`). The transition API sets the status but leaves the resolution field empty unless you pass it explicitly. An empty resolution means the ticket appears unresolved in filters and dashboards even though the status reads "Resolved".
 
-Always pass `--resolution` with the value that matches the outcome:
+Pass `--resolution` with the value that matches the outcome wherever the transition screen accepts it:
 
 | Outcome | `--resolution` value |
 |---|---|
@@ -86,6 +86,19 @@ jira-transition.py do PROJ-123 "Resolved" --resolution Done
 jira-transition.py do PROJ-123 "Resolved" --resolution "Won't do"
 jira-transition.py do PROJ-123 "Resolved" --resolution Duplicate
 ```
+
+#### When the screen rejects `--resolution`
+
+Not every workflow puts the resolution field on its terminal transition screens. Where it is absent the transition fails outright:
+
+```
+jira-transition.py do KEY "Deployed to PROD" --resolution Done
+→ Field 'resolution' cannot be set. It is not on the appropriate screen, or unknown.
+```
+
+Setting it afterwards via `jira-issue.py update KEY --fields-json '{"resolution": {"name": "Done"}}'` fails the same way, for the same reason — see *"Field 'xyz' cannot be set"* in `troubleshooting.md`.
+
+**Do not treat this as a blocker.** Retry the transition **without** `--resolution` and let the ticket land with an empty resolution. On workflows built this way (deployment pipelines with several terminal-looking gates, e.g. HMKG/HMPM) the resolution is applied by a workflow post-function at a later step, not by the transition you are running. Check the following steps before reporting the ticket as unresolved — and only flag it to the user if the resolution is still empty once the workflow has reached its true terminal status.
 
 Available resolution names vary by Jira instance. Query yours with:
 ```bash
