@@ -1,8 +1,9 @@
 name: Security
 
-# Aggregated security scans for skill repos: secret scanning (gitleaks),
-# dependency review on PRs, and a composer audit (every skill repo ships a
-# composer.json for split-licensing / Packagist distribution).
+# Aggregated security scans for skill repos: secret scanning (betterleaks),
+# workflow static analysis (zizmor), dependency review on PRs, and a composer
+# audit (every skill repo ships a composer.json for split-licensing /
+# Packagist distribution).
 #
 # Top-level `permissions: {}` denies everything by default; each reusable
 # caller job re-declares the exact union its reusable's jobs require, so the
@@ -24,8 +25,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    secrets:
-      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   zizmor:
     uses: netresearch/.github/.github/workflows/zizmor.yml@main
