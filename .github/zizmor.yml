@@ -1,0 +1,13 @@
+# zizmor (https://zizmor.sh) configuration
+#
+# Tunes zizmor to Netresearch conventions so the audit reports only
+# actionable findings. Third-party actions remain hash-pin enforced.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # First-party reusable workflows track @main by policy and are
+        # never SHA-pinned, so fixes propagate to all consumers.
+        "netresearch/*": ref-pin
+        # Everything else must be pinned to a full commit SHA.
+        "*": hash-pin

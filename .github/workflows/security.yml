@@ -27,6 +27,12 @@ jobs:
     secrets:
       GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
+  zizmor:
+    uses: netresearch/.github/.github/workflows/zizmor.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
   dependency-review:
     if: github.event_name == 'pull_request'
     uses: netresearch/.github/.github/workflows/dependency-review.yml@main
