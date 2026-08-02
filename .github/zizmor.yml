@@ -6,8 +6,9 @@ rules:
   unpinned-uses:
     config:
       policies:
-        # First-party reusable workflows track @main by policy and are
-        # never SHA-pinned, so fixes propagate to all consumers.
+        # First-party `uses:` — reusable workflows AND composite actions —
+        # track @main by policy and are never SHA-pinned, so a fix propagates
+        # to every consumer without a bump in dozens of repos.
         "netresearch/*": ref-pin
         # Everything else must be pinned to a full commit SHA.
         "*": hash-pin

@@ -1,9 +1,15 @@
 name: Security
 
-# Aggregated security scans for skill repos: secret scanning (betterleaks),
-# workflow static analysis (zizmor), dependency review on PRs, and a composer
-# audit (every skill repo ships a composer.json for split-licensing /
-# Packagist distribution).
+# Aggregated security scans for skill repos:
+#   gitleaks         — secret scanning. The job and the reusable keep the
+#                      historical `gitleaks` name; the scan itself runs
+#                      betterleaks, which is OSS and needs no license.
+#   zizmor           — static analysis of this repo's own workflows.
+#   dependency-review — on pull requests only.
+#   composer-audit   — `composer audit` AND an Opengrep SAST scan; the called
+#                      reusable runs both unless skip-opengrep is set. Every
+#                      skill repo ships a composer.json for split-licensing /
+#                      Packagist distribution.
 #
 # Top-level `permissions: {}` denies everything by default; each reusable
 # caller job re-declares the exact union its reusable's jobs require, so the
