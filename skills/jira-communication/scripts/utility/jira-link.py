@@ -50,25 +50,58 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
 
 
+def _fuzzy_type_match(entries: list[dict], link_type: str) -> tuple[dict | None, list[str]]:
+    """Second-chance match when no link type ``name`` equals the input.
+
+    Server/DC instances name their types freely (netresearch: ``Relation``,
+    not Cloud's ``Relates``), so an exact-name miss is common. Try, in order:
+    exact match on the outward/inward VERB (``relates to``, ``blocks``), then
+    a unique case-insensitive substring across name + both verbs (``relates``
+    -> ``Relation`` via ``relates to``). Returns (match, candidate_names);
+    match is None when nothing or more than one candidate matched.
+    """
+    target = link_type.casefold()
+    for e in entries:
+        if target in (e["outward"].casefold(), e["inward"].casefold()):
+            return e, [e["name"]]
+    hits = [
+        e
+        for e in entries
+        if target in e["name"].casefold() or target in e["outward"].casefold() or target in e["inward"].casefold()
+    ]
+    if len(hits) == 1:
+        return hits[0], [hits[0]["name"]]
+    return None, sorted(e["name"] for e in hits)
+
+
 def _resolve_link_type_verbs(client, link_type: str) -> dict:
     """Look up the canonical name + outward/inward verbs for a link type.
 
     Match is case-insensitive against the link type's ``name`` so users can
-    pass e.g. ``blocks`` or ``Blocks``. Raises ValueError if the type is
-    unknown, with a helpful list of available names.
+    pass e.g. ``blocks`` or ``Blocks``; a miss falls back to
+    ``_fuzzy_type_match`` (verbs, unique substring). Raises ValueError if the
+    type is unknown or ambiguous, with a helpful list of names.
     """
     types = client.get_issue_link_types() or []
     target = link_type.casefold()
+    entries = []
     for entry in types:
-        if not isinstance(entry, dict):
+        if not isinstance(entry, dict) or not (entry.get("name") or "").strip():
             continue
-        if (entry.get("name") or "").casefold() == target:
-            return {
-                "name": entry.get("name") or link_type,
-                "outward": entry.get("outward") or "links to",
-                "inward": entry.get("inward") or "is linked from",
-            }
-    available = ", ".join(sorted({(e.get("name") or "").strip() for e in types if isinstance(e, dict)} - {""}))
+        verbs = {
+            "name": (entry.get("name") or "").strip(),
+            "outward": entry.get("outward") or "links to",
+            "inward": entry.get("inward") or "is linked from",
+        }
+        if verbs["name"].casefold() == target:
+            return verbs
+        entries.append(verbs)
+    match, candidates = _fuzzy_type_match(entries, link_type)
+    if match:
+        return match
+    available = ", ".join(sorted(e["name"] for e in entries))
+    if len(candidates) > 1:
+        raise ValueError(f"Ambiguous link type {link_type!r}: matches {', '.join(candidates)}. Available: {available}")
     raise ValueError(f"Unknown link type {link_type!r}. Available: {available or '(none returned by Jira)'}")
 
 
@@ -523,12 +556,21 @@ def _build_link_type_cache(client) -> dict:
 
 
 def _resolve_type_from_cache(cache: dict, link_type: str) -> dict:
-    """Look up a verbs dict from the cache. Raise ValueError if unknown."""
+    """Look up a verbs dict from the cache. Raise ValueError if unknown.
+
+    Same resolution order as ``_resolve_link_type_verbs``: exact name, then
+    the ``_fuzzy_type_match`` fallback (verbs, unique substring).
+    """
     verbs = cache.get(link_type.casefold())
-    if verbs is None:
-        available = ", ".join(sorted(v["name"] for v in cache.values()))
-        raise ValueError(f"Unknown link type {link_type!r}. Available: {available or '(none returned by Jira)'}")
-    return verbs
+    if verbs is not None:
+        return verbs
+    match, candidates = _fuzzy_type_match(list(cache.values()), link_type)
+    if match:
+        return match
+    available = ", ".join(sorted(v["name"] for v in cache.values()))
+    if len(candidates) > 1:
+        raise ValueError(f"Ambiguous link type {link_type!r}: matches {', '.join(candidates)}. Available: {available}")
+    raise ValueError(f"Unknown link type {link_type!r}. Available: {available or '(none returned by Jira)'}")
 
 
 def _existing_link_between(
