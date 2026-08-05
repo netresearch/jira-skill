@@ -228,3 +228,7 @@ Scripts auto-detect auth mode:
 - URL containing `.atlassian.net` → Cloud mode
 
 Override with `JIRA_CLOUD=true` or `JIRA_CLOUD=false`.
+
+## `{task}` inline checkboxes cannot be ticked via API
+
+The `{task:id=NN}…{task}` checkboxes in Jira Server descriptions (maintenance tickets) store their state in a plugin database, not in the description text. The endpoint (`/rest/inline-tasks/1.0/task/<id>`) rejects PAT/Bearer auth — it redirects to `login.jsp` (session cookie required); PUT returns 405. When closing such a ticket, never leave the boxes silently unticked: hand the one-click UI step to the human explicitly ("please tick the checkboxes in the browser") as a fixed part of the closing checklist, alongside the worklog booking.

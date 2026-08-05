@@ -68,3 +68,13 @@ Prints every issue type the project accepts, including sub-task types. Issue typ
 | UAT / Test instructions | text | QA hand-off notes |
 
 Always confirm the `id` with `jira-fields.py search` on the target instance — custom-field numbering is not portable.
+
+## Jira Server config reads: three access tiers — "no REST to SET" does not mean "no way to READ"
+
+For scheme assignments, mail handlers, components, categories on Jira Server, try in order:
+
+1. **REST with PAT** — workflow/notification/permission/issue-type schemes + associations, components, versions, watchers, role actors, category, lead (`/rest/api/2/project/<KEY>/<resource>`, `/rest/api/2/<scheme>/<id>/associations`).
+2. **Project-level admin HTML with PAT** — screen scheme, issue type screen scheme, anything on `/plugins/servlet/project-config/<KEY>/…`; scheme names are extractable from the returned HTML.
+3. **Site-level admin HTML** (`/secure/admin/…`) — WebSudo-gated: PAT alone gets a 200 with `<title>Administrator Access…</title>` and a password form. Genuinely needs a human. **Detection rule:** a body containing "Administrator Access" means you hit WebSudo, not the data — never trust byte count alone.
+
+Only declare "manual UI check needed" after tiers 1 AND 2 both failed.
