@@ -58,3 +58,11 @@ Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
 ## Markup lint
 
 `add` and `edit` lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose) and unbalanced tag counts abort with an error. Escape literal mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
+
+## Comment verbosity: depth for the failing path only
+
+Working-path checks get ONE summary line at most; the non-working path gets the depth; obvious/derivable steps are cut entirely. A human reader cannot filter long tables that mostly say "this works" — verbose investigation comments cause overload and force the reader to re-derive what mattered.
+
+## Consolidate progress updates — edit, don't append
+
+When iterative work on one issue produces multiple status updates, edit the prior comment instead of adding a new one. Watchers and QA reviewers are notified per comment and must wade through progress chatter to find the current state. Reserve new comments for genuinely separate story beats that build on (not restate) earlier ones.
