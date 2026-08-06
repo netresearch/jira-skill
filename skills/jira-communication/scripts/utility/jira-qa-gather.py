@@ -207,6 +207,12 @@ def cli(
     summary = fields.get("summary", "") or ""
     project_key = (fields.get("project") or {}).get("key", "") or issue_key.split("-")[0]
     status = (fields.get("status") or {}).get("name", "")
+    # Reviewers decide whether to claim a QA ticket by comparing the current
+    # assignee against themselves, so the bundle has to carry it. `None` is a
+    # meaningful value here (unclaimed team queue), not a missing one.
+    assignee_field = fields.get("assignee") or {}
+    assignee_name = assignee_field.get("name") or assignee_field.get("accountId") or ""
+    assignee_display = assignee_field.get("displayName") or ""
     description = fields.get("description", "") or ""
     if isinstance(description, dict):
         description_text = extract_adf_text(description) or ""
@@ -229,6 +235,9 @@ def cli(
         warning(f"Failed to fetch worklog: {_safe_message(exc)}")
     bundle["worklogs"] = worklogs
     bundle["worklog_total_seconds"] = sum(int(w.get("timeSpentSeconds") or 0) for w in worklogs)
+
+    bundle["assignee"] = assignee_name or None
+    bundle["assignee_display"] = assignee_display or None
 
     # Structured issue links + web/remote links
     bundle["issue_links"] = fields.get("issuelinks", []) or []
@@ -276,12 +285,16 @@ def cli(
 
     # Human-readable summary
     print(f"{issue_key}: {summary}")
+    assignee_label = f"{assignee_display} ({assignee_name})" if assignee_name else "Unassigned"
     print(
-        f"Status: {status} | Comments: {len(comments)} | "
+        f"Status: {status} | Assignee: {assignee_label} | Comments: {len(comments)} | "
         f"Worklog entries: {len(worklogs)} "
         f"({bundle['worklog_total_seconds'] // 60} min total)"
     )
 
+    # Printed unconditionally: "none" is a finding (an unlinked related ticket
+    # is a QA check in its own right), whereas an omitted section reads as
+    # "not checked" and invites the reader to assume links exist.
     if bundle["issue_links"]:
         print(f"\nIssue links ({len(bundle['issue_links'])}):")
         for link in bundle["issue_links"]:
@@ -291,12 +304,16 @@ def cli(
             other_summary = ((other.get("fields") or {}).get("summary") or "").strip()
             direction = "→" if "outwardIssue" in link else "←"
             print(f"  {link_type} {direction} {other_key}: {other_summary}")
+    else:
+        print("\nIssue links: none")
 
     if web_links:
         print(f"\nWeb/remote links ({len(web_links)}):")
         for wl in web_links:
             obj = wl.get("object") or {}
             print(f"  - {obj.get('title', '?')}: {obj.get('url', '?')}")
+    else:
+        print("\nWeb/remote links: none")
 
     if extracted:
         print("\nURLs extracted from description + comments:")
