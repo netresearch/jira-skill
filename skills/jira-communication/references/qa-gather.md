@@ -31,9 +31,13 @@ Read-only. No `--dry-run` needed.
 Human-readable sections, in order:
 
 1. Issue key + summary
-2. Status, comment count, worklog count + total minutes
-3. Structured issue links (`<type> → <key>: <summary>` for outward, `←` for inward)
-4. Web/remote links (`title: url`)
+2. Status, **current assignee** (or `Unassigned`), comment count, worklog count + total minutes
+3. Structured issue links (`<type> → <key>: <summary>` for outward, `←` for inward), or `Issue links: none`
+4. Web/remote links (`title: url`), or `Web/remote links: none`
+
+Sections 3 and 4 always print, including when empty. "None" is a reviewable fact — a related ticket mentioned in prose but never linked, or a merged MR with no web link, is a finding in its own right — whereas an omitted section reads as "not checked" and invites the reader to assume the links exist.
+
+The assignee is section 2 because claiming a ticket off a team queue depends on it: unassigned means claimable, someone else means it is already in flight, and yourself means you may be about to review your own work.
 5. URLs extracted from prose, grouped by category: `merge_request`, `pull_request`, `pipeline`, `commit`, `tag`, `release`, `issue_link`
 6. Sibling tickets in the same project, sorted by `updated DESC`
 
@@ -46,6 +50,8 @@ Top-level keys (stable):
 - `comments` — list of comment dicts (extracted from the issue payload, no second API call)
 - `worklogs` — list of worklog dicts
 - `worklog_total_seconds` — int
+- `assignee` — string account name, or `null` when unassigned (`null` is meaningful: an unclaimed queue ticket)
+- `assignee_display` — string display name, or `null`
 - `issue_links` — list (raw `issuelinks` from the issue)
 - `web_links` — list (from `get_issue_remote_links`)
 - `extracted_urls` — `{category: [url, ...]}` deduplicated, order-preserved

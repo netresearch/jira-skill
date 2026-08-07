@@ -196,9 +196,10 @@ def list_worklogs(ctx, issue_key: str, limit: int, truncate: int | None):
                     author = wl.get("author", {}).get("displayName", "Unknown")
                     time_spent = wl.get("timeSpent", "N/A")
                     started = wl.get("started", "N/A")[:10] if wl.get("started") else "N/A"
+                    worklog_id = wl.get("id", "N/A")
                     comment = comment_to_text(wl.get("comment"))
 
-                    print(f"  [{started}] {author}: {time_spent}")
+                    print(f"  [{started}] {author}: {time_spent}  (id {worklog_id})")
                     if comment:
                         # Truncate if requested
                         if truncate and len(comment) > truncate:
@@ -209,6 +210,66 @@ def list_worklogs(ctx, issue_key: str, limit: int, truncate: int | None):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to get worklogs for {issue_key}: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issue_key")
+@click.argument("worklog_id")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
+@click.pass_context
+def delete(ctx, issue_key: str, worklog_id: str, dry_run: bool):
+    """Delete a worklog entry from an issue.
+
+    ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
+
+    WORKLOG_ID: The numeric worklog id, as printed by `add` and `list`
+
+    Use this to undo a booking made against the wrong issue, the wrong
+    duration, or the wrong system — e.g. when the team's system of record is a
+    separate time tracker that syncs its own entries into Jira, and a direct
+    Jira worklog would double-book.
+
+    Deleting another user's worklog requires the "Delete All Worklogs"
+    permission; your own needs "Delete Own Worklogs".
+
+    Examples:
+
+      jira-worklog delete PROJ-123 409062 --dry-run
+
+      jira-worklog delete PROJ-123 409062
+    """
+    ctx.obj["client"].with_context(issue_key=issue_key)
+    client = ctx.obj["client"]
+
+    try:
+        # Fetch the entry first so the operator sees which booking is going
+        # away — a bare numeric id is easy to mistype and impossible to sanity
+        # check after the fact.
+        existing = client.get(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}") or {}
+        author = existing.get("author", {}).get("displayName", "Unknown")
+        time_spent = existing.get("timeSpent", "N/A")
+        started = existing.get("started", "N/A")[:10] if existing.get("started") else "N/A"
+
+        if dry_run:
+            print(f"Would delete worklog {worklog_id} from {issue_key}:")
+            print(f"  [{started}] {author}: {time_spent}")
+            return
+
+        client.delete(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}")
+
+        if ctx.obj["quiet"]:
+            print(worklog_id)
+        elif ctx.obj["json"]:
+            format_output({"deleted": worklog_id, "issue": issue_key}, as_json=True)
+        else:
+            success(f"Deleted worklog {worklog_id} from {issue_key}")
+            print(f"  [{started}] {author}: {time_spent}")
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to delete worklog {worklog_id} from {issue_key}: {e}")
         sys.exit(1)
 
 
