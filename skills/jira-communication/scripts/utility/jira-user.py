@@ -224,7 +224,7 @@ def search(ctx, query: str, limit: int):
         # Fallback to Cloud user search
         if not users:
             try:
-                results = client.user_find_by_user_string(query=query, maxResults=limit)
+                results = client.user_find_by_user_string(query=query, limit=limit)
                 if results and isinstance(results, list):
                     for r in results:
                         if isinstance(r, dict):
