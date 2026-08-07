@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "jira",
+  "version": "3.24.0",
+  "description": "Comprehensive Jira integration with auto-detection of issue keys",
+  "author": {
+    "name": "Netresearch DTT GmbH",
+    "url": "https://www.netresearch.de/"
+  },
+  "repository": "https://github.com/netresearch/jira-skill",
+  "license": "MIT",
+  "keywords": [
+    "jira",
+    "atlassian",
+    "issue-tracking",
+    "project-management",
+    "wiki-markup",
+    "syntax-validation",
+    "templates"
+  ]
+}
