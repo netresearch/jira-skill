@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.25.0] - 2026-08-08
+
+### Added
+- Add delete subcommand; report assignee and empty link sets in qa-gather (worklog)
+- Add Agent Plugins 1.0.0 portable manifest (manifest)
+
+### Fixed
+- Pass limit= to user_find_by_user_string (jira-user)
+- Declare the split license in both manifests (license)
+
 ## [3.23.1] - 2026-07-30
 
 ### Fixed
