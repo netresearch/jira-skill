@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.25.1] - 2026-08-12
+
+### Fixed
+- List jira-create.py in the detected-issue reminder (hook)
+
 ## [3.25.0] - 2026-08-08
 
 ### Added
@@ -738,7 +743,9 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.23.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.25.1...HEAD
+[3.25.1]: https://github.com/netresearch/jira-skill/compare/v3.25.0...v3.25.1
+[3.25.0]: https://github.com/netresearch/jira-skill/compare/v3.23.1...v3.25.0
 [3.23.1]: https://github.com/netresearch/jira-skill/compare/v3.23.0...v3.23.1
 [3.23.0]: https://github.com/netresearch/jira-skill/compare/v3.22.1...v3.23.0
 [3.22.1]: https://github.com/netresearch/jira-skill/compare/v3.22.0...v3.22.1
