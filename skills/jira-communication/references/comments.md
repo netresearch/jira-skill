@@ -57,7 +57,7 @@ Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
 
 ## Markup lint
 
-`add` and `edit` lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose) and unbalanced tag counts abort with an error. Escape literal mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
+`add` and `edit` lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose), unbalanced tag counts, and flag-like tokens (`--strict`) outside code blocks abort with an error — Jira parses `-text-` as strikethrough, even inside `{{...}}` monospace, so a pair of CLI flags strikes through everything between them; escape every dash (`{{\-\-strict}}`). Escape literal tag mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
 
 ## Comment verbosity: depth for the failing path only
 

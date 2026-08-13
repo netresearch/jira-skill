@@ -25,6 +25,13 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   Content inside ``{{monospace}}`` and ``[links]`` is ignored. Known blind spot:
   a bare trailing-underscore prefix (``tx_news_``) is flagged like broken
   emphasis - wrap identifiers in ``{{monospace}}`` to silence it.
+- Flag-like tokens (``--strict``) outside code blocks. Jira parses
+  ``-text-`` as strikethrough; the opening ``-`` needs only whitespace (or a
+  ``{{`` monospace opener - text effects apply INSIDE ``{{...}}``, verified
+  against Jira Server 9.12) before it and a non-space after it, so a pair of
+  CLI flags strikes through everything between them. Escaped dashes (``\\-``)
+  are literal and pass; em/en-dash typography (``---``, ``--`` before a
+  non-letter) never matches.
 
 Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
 *other* tags inside an open block are ignored. An occurrence of the
@@ -70,6 +77,13 @@ _MIDWORD_EMPHASIS_RES = {
     "_": re.compile(r"(?<=\w)_[^\s_]+_" + _EMPH_CLOSE),
     "*": re.compile(r"(?<=\w)\*[^\s*]+\*" + _EMPH_CLOSE),
 }
+
+# Flag-like token Jira strikes through. Scanned on the RAW line (not the
+# monospace-blanked copy): text effects apply INSIDE {{...}}, so {{--strict}}
+# is just as broken as bare --strict. The caller strips \- escapes before
+# matching (an escaped dash is a literal); requiring a letter after the second
+# dash keeps em/en-dash typography (---, `-- `) out of scope.
+_FLAG_DASH_RE = re.compile(r"(?:^|\s|\{\{)--[A-Za-z]")
 
 
 def lint_wiki_markup(text: str) -> list[str]:
@@ -121,6 +135,16 @@ def lint_wiki_markup(text: str) -> list[str]:
                     f"boundary (e.g. '{marker}Wort{marker}', not "
                     f"'Prefix{marker}Wort{marker}'): {stripped[:80]!r}"
                 )
+
+        # CLI flags render struck through, even inside {{monospace}} - scan the
+        # raw line with \- escapes removed (an escaped dash is a literal).
+        if _FLAG_DASH_RE.search(line.replace("\\-", "")):
+            findings.append(
+                f"line {lineno}: flag-like token (--foo) - Jira parses -text- as "
+                f"strikethrough, even inside {{{{...}}}} monospace, so a pair of "
+                f"flags strikes through everything between them; escape every "
+                f"dash as \\-\\-foo (e.g. {{{{\\-\\-strict}}}}): {stripped[:80]!r}"
+            )
 
         if not matches:
             continue

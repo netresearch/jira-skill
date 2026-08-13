@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-syntax`: `validate-jira-syntax.sh` no longer fails wholesale on the hybrid template files (#190). Files containing Markdown code fences are wrappers around a Jira-markup payload: the untagged fences are now extracted and validated as Jira markup, while language-tagged fences (bash usage examples) and wrapper prose are skipped. Draft files without fences keep the full strict treatment, so `templates/*.md` validate their actual payload and the documented build check exits 0.
+
 ### Added
+
+- `jira-communication`: the pre-post markup lint (`lib/markup.py`, used by `jira-comment.py add`/`edit`) flags flag-like tokens (`--strict`) outside code blocks (#189) — Jira parses `-text-` as strikethrough, even inside `{{...}}` monospace, so a pair of CLI flags strikes through everything between them. Escaped dashes (`\-`) pass; em/en-dash typography and single-dash options stay out of scope. Same rule as the `jira-syntax` shell validator; `--force` semantics unchanged.
 
 - `jira-syntax`: `validate-jira-syntax.sh` warns on flag-like tokens (`--strict`) outside `{code}`/`{noformat}` blocks. Jira parses `-text-` as strikethrough, the opening dash needs only whitespace (or a `{{` monospace opener) before it, and text effects apply inside `{{...}}` monospace, so a pair of CLI flags in prose strikes through everything between them. Backslash-escaped dashes (`\-`) pass.
 

@@ -170,3 +170,36 @@ class TestInlineEmphasis:
         assert any("starts mid-word" in f for f in lint_wiki_markup('Das Label "Konzept_qualitaet_" ist falsch.'))
         german = "Im Feld " + chr(0x201E) + "Anmelden_jetzt_" + chr(0x201C) + " fehlt."
         assert any("starts mid-word" in f for f in lint_wiki_markup(german))
+
+
+class TestFlagDash:
+    """Flag-like tokens (--foo) render struck through outside code blocks."""
+
+    def test_flags_in_prose_flagged(self):
+        assert any("flag-like token" in f for f in lint_wiki_markup("checked with --strict and --no-global"))
+
+    def test_flag_inside_monospace_flagged(self):
+        # Text effects apply INSIDE {{...}} - {{--strict}} is just as broken.
+        assert any("flag-like token" in f for f in lint_wiki_markup("green under {{--strict}} today"))
+
+    def test_escaped_flag_is_clean(self):
+        assert lint_wiki_markup("green under {{\\-\\-strict}} and \\-\\-no-global today") == []
+
+    def test_dash_typography_is_clean(self):
+        # Em/en-dash typography: no letter after the second dash.
+        assert lint_wiki_markup("a --- b and c -- d stay prose") == []
+
+    def test_single_dash_flag_is_clean(self):
+        # Deliberately out of scope: `-v` needs a closing dash to strike; only
+        # the high-signal double-dash shape is flagged.
+        assert lint_wiki_markup("run it with -v for verbose output") == []
+
+    def test_flags_inside_code_block_clean(self):
+        assert lint_wiki_markup("{code:bash}\nvalidator --strict --no-global *.json\n{code}") == []
+
+    def test_flags_inside_noformat_block_clean(self):
+        assert lint_wiki_markup("{noformat}\ncmd --strict\n{noformat}") == []
+
+    def test_midword_double_dash_is_clean(self):
+        # No whitespace/{{ before the dashes: a mid-token -- is not a flag.
+        assert lint_wiki_markup("the range a--b stays prose") == []
