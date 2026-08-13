@@ -47,8 +47,8 @@ validate_file() {
         return
     fi
 
-    local content=$(cat "$file")
-    local line_num=0
+    local content
+    content=$(cat "$file")
 
     # Check for Markdown-style headings (## instead of h2.)
     if echo "$content" | grep -qE "^##+ "; then
@@ -105,6 +105,35 @@ validate_file() {
         warning "Found unescaped * inside {{...}} monospace block — renders as bold mid-token. Escape as \\* (e.g. {{jira-\\*backup-\\*}})."
         echo "   Lines with issue:"
         grep -nE "$star_re" <<< "$content" | head -3
+    fi
+
+    # Check for flag-like tokens (--strict, --no-global) that Jira renders as
+    # strikethrough. `-text-` is strikethrough; the opening `-` needs only
+    # whitespace (or a {{ monospace opener — text effects apply INSIDE {{...}}
+    # too) before it and a non-space after it, so a pair of CLI flags strikes
+    # through everything between them. Escape every dash: {{\-\-strict}}.
+    # Dashes inside {code}/{noformat} blocks render literally — skip those
+    # lines via open/close toggling. Markdown ``` fences are skipped the same
+    # way: they are flagged as an error by their own check above, and fenced
+    # content is code either way, so warning on it here would be noise on top.
+    # Escaped dashes (\-) are stripped first so they don't false-positive;
+    # `--` followed by a non-letter (em-dash typography `---`, `-- `) is not a
+    # flag and stays exempt.
+    local dash_hits
+    dash_hits=$(awk '
+        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { inblock = !inblock; next }
+        /^[[:space:]]*```/ { infence = !infence; next }
+        inblock || infence { next }
+        {
+            line = $0
+            gsub(/\\-/, "", line)
+            if (line ~ /(^|[[:space:]]|\{\{)--[A-Za-z]/)
+                printf "%d:%s\n", NR, $0
+        }' <<< "$content" | head -3)
+    if [ -n "$dash_hits" ]; then
+        warning "Found flag-like token (--foo) outside a code block — Jira strikes through -text- spans, even inside {{...}}. Escape every dash: \\-\\-foo (e.g. {{\\-\\-strict}})."
+        echo "   Lines with issue:"
+        echo "$dash_hits"
     fi
 
     # Check for Markdown-style links ([text](url) instead of [text|url])
@@ -197,7 +226,8 @@ validate_file() {
     fi
 
     # Check for unclosed {color} blocks
-    local color_count=$(echo "$content" | grep -o "{color" | wc -l)
+    local color_count
+    color_count=$(echo "$content" | grep -o "{color" | wc -l)
     if [ $((color_count % 2)) -ne 0 ]; then
         warning "Potential unclosed {color} tag (odd number of occurrences)"
     fi
