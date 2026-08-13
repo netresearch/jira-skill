@@ -47,8 +47,26 @@ validate_file() {
         return
     fi
 
+    # Hybrid template files (templates/*.md) are a Markdown wrapper carrying
+    # the Jira markup inside ``` fences. For those, validate the fenced
+    # payload: untagged ``` fences hold Jira markup to be copy-pasted;
+    # language-tagged fences (```bash) are foreign code and are skipped, as is
+    # the wrapper prose. Files without fences — drafts about to be posted —
+    # keep the full strict treatment.
     local content
-    content=$(cat "$file")
+    if grep -qE '^[[:space:]]*```' "$file"; then
+        echo "   (hybrid file: validating untagged \`\`\` fenced payload as Jira markup)"
+        content=$(awk '
+            /^[[:space:]]*```/ {
+                if (infence) { infence = 0 }
+                else { infence = 1; tagged = ($0 ~ /^[[:space:]]*```./) }
+                next
+            }
+            infence && !tagged { print }
+        ' "$file")
+    else
+        content=$(cat "$file")
+    fi
 
     # Check for Markdown-style headings (## instead of h2.)
     if echo "$content" | grep -qE "^##+ "; then
