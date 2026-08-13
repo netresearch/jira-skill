@@ -59,6 +59,17 @@ Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
 
 `add` and `edit` lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose), unbalanced tag counts, and flag-like tokens (`--strict`) outside code blocks abort with an error — Jira parses `-text-` as strikethrough, even inside `{{...}}` monospace, so a pair of CLI flags strikes through everything between them; escape every dash (`{{\-\-strict}}`). Escape literal tag mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
 
+## Verify rendering after posting
+
+A 2xx on `add`/`edit` proves the write landed, not that the markup renders as intended — Jira renders wiki markup server-side. The rendered HTML is the only proof:
+
+```bash
+curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" \
+  "$JIRA_URL/rest/api/2/issue/<KEY>/comment/<id>?expand=renderedBody" | jq -r '.renderedBody'
+```
+
+Grep it for what you fear: `<del>` means something parsed as strikethrough (the dash trap — see the lint above), a literal `\` means a backslash escape reached the reader, and `&#45;` is a correctly escaped dash. Run this after editing any markup-sensitive comment; verified against Jira Server 9.12.
+
 ## Comment verbosity: depth for the failing path only
 
 Working-path checks get ONE summary line at most; the non-working path gets the depth; obvious/derivable steps are cut entirely. A human reader cannot filter long tables that mostly say "this works" — verbose investigation comments cause overload and force the reader to re-derive what mattered.
