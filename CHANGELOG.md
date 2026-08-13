@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-syntax`: `validate-jira-syntax.sh` warns on flag-like tokens (`--strict`) outside `{code}`/`{noformat}` blocks. Jira parses `-text-` as strikethrough, the opening dash needs only whitespace (or a `{{` monospace opener) before it, and text effects apply inside `{{...}}` monospace, so a pair of CLI flags in prose strikes through everything between them. Backslash-escaped dashes (`\-`) pass.
+
+### Documentation
+
+- `jira-syntax`: `references/jira-syntax-quick-reference.md` documents the dash-strikethrough trap for CLI flags and the escape — `{{\-\-strict}}` renders as literal `--strict`, each `\-` reaching the rendered HTML as a `&#45;` entity (verified against the Jira Server 9.12 wiki renderer).
+
 ## [3.25.1] - 2026-08-12
 
 ### Fixed
