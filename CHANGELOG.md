@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- `AGENTS.md`: the release workflow goes through a release PR now — `main` requires pull requests, so the old direct-push flow only worked via owner bypass. The steps also name all four version surfaces (`.claude-plugin/plugin.json`, `plugin.json`, both `SKILL.md`), require the signed annotated tag on the verified merge commit (the old step 7 showed a lightweight tag), and describe the actual release artifacts (zip + tar.gz per package, checksums with Sigstore signature, SLSA provenance).
+
 ## [3.26.0] - 2026-08-13
 
 ### Fixed

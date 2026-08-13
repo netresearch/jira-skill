@@ -12,7 +12,7 @@ Claude Code plugin with two skills. See SKILL.md in each skill directory for usa
 
 - Keep PRs small (~300 net LOC)
 - Conventional Commits: `type(scope): subject`
-- Version managed ONLY in `.claude-plugin/plugin.json`
+- Version source of truth: `.claude-plugin/plugin.json`; `plugin.json` and both `skills/*/SKILL.md` `metadata.version` must match (parity enforced by pre-commit and CI)
 - Update SKILL.md when changing user-facing behavior
 
 ## Dependencies
@@ -47,7 +47,7 @@ than trusting this block if CI disagrees. Note `Skill Validation` can report
 
 ## Release workflow
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On tag push, it creates 3 packages:
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On tag push, it publishes three package families (zip + tar.gz each, plus `SHA256SUMS.txt` with a Sigstore signature and SLSA provenance):
 
 | Package | Description |
 |---------|-------------|
@@ -55,17 +55,17 @@ Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On 
 | `jira-communication-skill-vX.X.X.zip` | Standalone skill (Claude Desktop compatible) |
 | `jira-syntax-skill-vX.X.X.zip` | Standalone skill (Claude Desktop compatible) |
 
-**Steps:**
+**Steps (release PR — `main` requires pull requests; do not push it directly, that only works via owner bypass and rings the ruleset alarm):**
 1. Check commits since last release: `git log --oneline v<last>..HEAD`
-2. Backfill any missing CHANGELOG entries
-3. Update CHANGELOG.md with new version entry
-4. Bump version in `.claude-plugin/plugin.json`
-5. Bump `metadata.version` in **both** `skills/*/SKILL.md` to match (CI validates consistency)
-6. Commit: `git commit -m "chore: release v<version>"`
-7. Tag: `git tag v<version>`
-8. Push: `git push origin main --tags`
+2. Backfill any missing CHANGELOG entries, rename `[Unreleased]` to `[<version>] - <today>`, add a fresh empty `[Unreleased]` above it
+3. Bump the version in `.claude-plugin/plugin.json` **and** `plugin.json`
+4. Bump `metadata.version` in **both** `skills/*/SKILL.md` to match (CI and the pre-commit parity hook validate consistency)
+5. Branch `release/v<version>`, commit `chore: release v<version>` (signed, as always), push, open a PR with the same title
+6. Merge the PR once CI is green — plain merge, no bypass
+7. Tag the merge commit: `git fetch origin main`, assert local HEAD equals the remote `main` tip, then `git tag -s v<version> -m "v<version>"` (signed annotated — never lightweight)
+8. Push the tag: `git push origin v<version>`
 
-The GitHub Action automatically creates the release with all 3 download packages.
+The GitHub Action on the tag push creates the release with all packages, checksums and SLSA provenance. Never `gh release create`. Write the narrative release notes before tagging and apply them with `gh release edit v<version> --notes-file …` once the Action has published.
 
 ## Index of scoped AGENTS.md
 
@@ -97,4 +97,3 @@ bash evals/run-evals.sh my-iteration --results-json evals/results/my-iteration.j
 ## When instructions conflict
 
 Nearest AGENTS.md wins. User prompts override files.
-
