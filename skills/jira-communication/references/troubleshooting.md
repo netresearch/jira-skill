@@ -229,6 +229,15 @@ Scripts auto-detect auth mode:
 
 Override with `JIRA_CLOUD=true` or `JIRA_CLOUD=false`.
 
-## `{task}` inline checkboxes cannot be ticked via API
+## `{task}` inline checkboxes CAN be ticked via API — use the tasklist endpoint
 
-The `{task:id=NN}…{task}` checkboxes in Jira Server descriptions (maintenance tickets) store their state in a plugin database, not in the description text. The endpoint (`/rest/inline-tasks/1.0/task/<id>`) rejects PAT/Bearer auth — it redirects to `login.jsp` (session cookie required); PUT returns 405. When closing such a ticket, never leave the boxes silently unticked: hand the one-click UI step to the human explicitly ("please tick the checkboxes in the browser") as a fixed part of the closing checklist, alongside the worklog booking.
+The `{task:id=NN}…{task}` checkboxes in Jira Server descriptions (maintenance tickets) store their state in a plugin database, not in the description text. They toggle fine with a PAT — but only via the **Task List** REST API:
+
+| Method | Path | Body | Result |
+| ------ | ---- | ---- | ------ |
+| `GET` | `/rest/tasklist/1.0/tasks/<id>` | (none) | XML `<checked>true\|false</checked>` |
+| `POST` | `/rest/tasklist/1.0/tasks/<id>/updateselection` | form `checked=true\|false` | HTTP 204 |
+
+An earlier version of this section claimed the boxes need a browser session. That conclusion came from probing the WRONG endpoint: `/rest/inline-tasks/1.0/task/<id>` does 302-redirect PATs to `login.jsp` — but that is a different plugin's route, not the one these checkboxes use (re-confirmed 2026-08-12: inline-tasks 302s while the tasklist POST answers 204 with the same PAT). Curl gotchas: a JSON body returns 415 and a `?checked=` query param is ignored — the form body (`--data-urlencode checked=true`) is authoritative, and `curl` exits 0 even on a 4xx, so judge success by `-w %{http_code}` == 204, not the exit code.
+
+Tick a box only when its work is verifiably done — the checkboxes are a progress signal, not a close-everything button.
