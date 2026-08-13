@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.27.0] - 2026-08-13
+
 ### Documentation
 
 - `jira-communication`: `references/comments.md` documents how to verify a comment actually renders as intended — `GET .../comment/<id>?expand=renderedBody` and what to grep for (`<del>` = strikethrough trap fired, literal backslash = escape leaked, `&#45;` = correctly escaped dash). A 2xx on add/edit proves the write, not the rendering.
