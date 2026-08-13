@@ -22,6 +22,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient, resolve_assignee, resolve_subtask_type
+from lib.input import read_stdin_utf8
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -52,7 +53,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("project_key")
 @click.argument("summary")
 @click.option("--type", "-t", "issue_type", required=True, help="Issue type (Task, Bug, Story, Epic, etc.)")
-@click.option("--description", "-d", help="Issue description (Jira wiki markup)")
+@click.option("--description", "-d", help="Issue description (Jira wiki markup; '-' reads from stdin)")
 @click.option("--priority", "-p", help="Priority name (High, Medium, Low, etc.)")
 @click.option("--labels", "-l", help="Comma-separated labels")
 @click.option("--assignee", "-a", help="Assignee username or email")
@@ -105,6 +106,34 @@ def issue(
         "summary": summary,
         "issuetype": {"name": issue_type},
     }
+
+    if description == "-":
+        # Same convention as `jira-issue update`. Without this, "-" was stored
+        # verbatim and the issue was created with a one-character description —
+        # the create call still reported success, so the loss surfaced only when
+        # someone opened the ticket.
+        if sys.stdin.isatty():
+            error(
+                "'-' requires piped input but stdin is a terminal",
+                suggestion="Usage: cat body.txt | jira-create issue PROJ 'Summary' --description -",
+            )
+            sys.exit(1)
+        max_size = 256 * 1024  # 256KB, above Jira's description limit
+        try:
+            description = read_stdin_utf8(max_size + 1)
+        except UnicodeDecodeError:
+            error(
+                "stdin contains invalid text encoding (expected UTF-8)",
+                suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
+            )
+            sys.exit(1)
+        if len(description) > max_size:
+            error(
+                f"description from stdin exceeds {max_size} bytes",
+                suggestion="Truncate the input or split it across a create plus an update.",
+            )
+            sys.exit(1)
+        description = description.rstrip("\n")
 
     if description:
         fields["description"] = description
