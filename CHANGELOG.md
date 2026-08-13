@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.26.0] - 2026-08-13
+
 ### Fixed
 
 - `jira-syntax`: `validate-jira-syntax.sh` no longer fails wholesale on the hybrid template files (#190). Files containing Markdown code fences are wrappers around a Jira-markup payload: the untagged fences are now extracted and validated as Jira markup, while language-tagged fences (bash usage examples) and wrapper prose are skipped. Draft files without fences keep the full strict treatment, so `templates/*.md` validate their actual payload and the documented build check exits 0.
@@ -20,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - `jira-syntax`: `references/jira-syntax-quick-reference.md` documents the dash-strikethrough trap for CLI flags and the escape — `{{\-\-strict}}` renders as literal `--strict`, each `\-` reaching the rendered HTML as a `&#45;` entity (verified against the Jira Server 9.12 wiki renderer).
+- `jira-communication`: `references/troubleshooting.md` corrects the task-checkbox claim — inline `{task}` checkboxes ARE toggleable via the API; the old claim had probed the wrong endpoint (#187).
+- `jira-communication`: `references/troubleshooting.md` drops its internal-skill pointer (public repo), inlines the curl gotchas, and makes the 204 wording precise.
 
 ## [3.25.1] - 2026-08-12
 
