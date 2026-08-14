@@ -74,10 +74,14 @@ def verify_mentions(client, text: str) -> dict[str, list[dict]]:
             if isinstance(user, dict) and (user.get("name") or user.get("key")):
                 continue
         except Exception:
+            # 404/permission error on exact lookup — the mention is unknown;
+            # fall through to the suggestion search below.
             pass
         try:
             suggestions = find_users(client, ident, limit=5)
         except Exception:
+            # Suggestions are best-effort; report the mention as unknown
+            # without candidates rather than failing the whole check.
             suggestions = []
         unknown[ident] = suggestions
     return unknown
