@@ -55,7 +55,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" 
 
 > **Terminal transitions**: pass `--resolution <value>` (`Done`, `Won't do`); if rejected ("cannot be set"),
 > retry without it — `references/intent-verbs.md`. **Versions**: read `references/versions.md` before `jira-version.py`.
-> **Mentions**: `add`/`edit` verify `[~username]` (miss → suggestions); `get`/`work` print usernames (`references/fields-and-users.md`).
+> **Mentions**: posting commands verify `[~username]` (miss → suggestions); `get`/`work` print usernames (`references/fields-and-users.md`).
 
 ## Related Skills
 

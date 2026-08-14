@@ -25,6 +25,7 @@ import re
 import click
 from lib.client import LazyJiraClient
 from lib.output import comment_to_text, error, format_output, success
+from lib.users import check_mentions_cli, person_label
 
 
 def normalize_iso_timestamp(timestamp: str) -> str:
@@ -104,8 +105,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option(
     "--started", help="Start time (ISO format: YYYY-MM-DD, YYYY-MM-DDTHH:MM, or YYYY-MM-DDTHH:MM:SS; default: now)"
 )
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
 @click.pass_context
-def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str | None):
+def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str | None, no_verify_mentions: bool):
     """Add worklog entry to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -120,6 +122,9 @@ def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str 
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
+
+    # A worklog comment renders wiki markup — same mention gate as jira-comment add
+    check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
         # Build worklog data for JSON API
@@ -193,7 +198,7 @@ def list_worklogs(ctx, issue_key: str, limit: int, truncate: int | None):
             else:
                 print(f"Worklogs for {issue_key} ({len(worklogs)} shown):\n")
                 for wl in worklogs:
-                    author = wl.get("author", {}).get("displayName", "Unknown")
+                    author = person_label(wl.get("author"))
                     time_spent = wl.get("timeSpent", "N/A")
                     started = wl.get("started", "N/A")[:10] if wl.get("started") else "N/A"
                     worklog_id = wl.get("id", "N/A")
@@ -247,7 +252,7 @@ def delete(ctx, issue_key: str, worklog_id: str, dry_run: bool):
         # away — a bare numeric id is easy to mistype and impossible to sanity
         # check after the fact.
         existing = client.get(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}") or {}
-        author = existing.get("author", {}).get("displayName", "Unknown")
+        author = person_label(existing.get("author"))
         time_spent = existing.get("timeSpent", "N/A")
         started = existing.get("started", "N/A")[:10] if existing.get("started") else "N/A"
 

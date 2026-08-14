@@ -24,6 +24,7 @@ import click
 from lib.client import LazyJiraClient, resolve_assignee, resolve_subtask_type
 from lib.input import read_stdin_utf8
 from lib.output import error, format_output, success, warning
+from lib.users import check_mentions_cli
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -61,6 +62,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--parent", help="Parent issue key (creates a subtask)")
 @click.option("--components", help="Comma-separated component names")
 @click.option("--fields-json", help="JSON string of additional fields")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
 @click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
 @click.pass_context
 def issue(
@@ -76,6 +78,7 @@ def issue(
     parent: str | None,
     components: str | None,
     fields_json: str | None,
+    no_verify_mentions: bool,
     dry_run: bool,
 ):
     """Create a new Jira issue.
@@ -136,6 +139,8 @@ def issue(
         description = description.rstrip("\n")
 
     if description:
+        # A description renders wiki markup — same mention gate as jira-comment add
+        check_mentions_cli(client, description, skip=no_verify_mentions)
         fields["description"] = description
 
     if priority:

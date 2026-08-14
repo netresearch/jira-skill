@@ -35,7 +35,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.config import load_status_sets
 from lib.input import read_stdin_utf8
 from lib.output import comment_to_text, compact_json, error, extract_adf_text, format_output, success, warning
-from lib.users import person_label
+from lib.users import check_mentions_cli, person_label
 
 
 def _expand_label_args(raw: tuple[str, ...]) -> list[str]:
@@ -593,6 +593,7 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 )
 @click.option("--assignee", "-a", help="Assignee username or email")
 @click.option("--fields-json", help="JSON string of additional fields to update")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
 @click.option("--dry-run", is_flag=True, help="Show what would be updated without making changes")
 @click.pass_context
 def update(
@@ -606,6 +607,7 @@ def update(
     remove_label: tuple[str, ...],
     assignee: str | None,
     fields_json: str | None,
+    no_verify_mentions: bool,
     dry_run: bool,
 ):
     """Update issue fields.
@@ -659,6 +661,8 @@ def update(
                 )
                 sys.exit(1)
             description = description.rstrip("\n")
+        # A description renders wiki markup — same mention gate as jira-comment add
+        check_mentions_cli(client, description, skip=no_verify_mentions)
         update_fields["description"] = description
 
     if priority:

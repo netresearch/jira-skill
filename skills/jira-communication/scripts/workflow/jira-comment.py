@@ -24,32 +24,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup import lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
-from lib.users import person_label, verify_mentions
-
-
-def _check_mentions(client, comment_text: str, skip: bool) -> None:
-    """Verify [~username] mentions resolve to real users; abort with suggestions if not.
-
-    An unverified mention posts as dead text (no notification), so the check
-    runs inside the posting call — no separate lookup invocation needed.
-    """
-    if skip or "[~" not in comment_text:
-        return
-    unknown = verify_mentions(client, comment_text)
-    if not unknown:
-        return
-    lines = []
-    for ident, suggestions in unknown.items():
-        line = f"[~{ident}] does not match any Jira user"
-        if suggestions:
-            candidates = ", ".join(f"[~{u.get('name', u.get('key', '?'))}] ({person_label(u)})" for u in suggestions)
-            line += f" — did you mean: {candidates}"
-        lines.append(line)
-    error(
-        "Unverified mention(s):\n  " + "\n  ".join(lines),
-        suggestion="Use an exact username from the suggestions, or re-run with --no-verify-mentions to post as-is.",
-    )
-    sys.exit(1)
+from lib.users import check_mentions_cli, person_label
 
 
 def _check_markup(comment_text: str, force: bool) -> None:
@@ -174,7 +149,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions:
             sys.exit(1)
 
     _check_markup(comment_text, force)
-    _check_mentions(client, comment_text, no_verify_mentions)
+    check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
         result = client.issue_add_comment(issue_key, comment_text)
@@ -259,7 +234,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, n
             sys.exit(1)
 
     _check_markup(comment_text, force)
-    _check_mentions(client, comment_text, no_verify_mentions)
+    check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
         result = client.issue_edit_comment(issue_key, comment_id, comment_text)

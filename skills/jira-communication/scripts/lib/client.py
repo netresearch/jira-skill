@@ -9,7 +9,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, is_cloud_url, load_config, validate_config
-from .users import find_users
+from .users import find_users, is_cloud_client
 
 # Default timeout for all Jira API requests (seconds)
 JIRA_TIMEOUT = 30
@@ -56,12 +56,31 @@ def resolve_assignee(client, identifier: str) -> dict:
     if is_account_id(identifier):
         return {"accountId": identifier}
 
-    # Cloud-aware search: Server/DC needs username=, Cloud needs query=.
-    # (The previous unconditional query= silently found nothing on Server/DC,
-    # so email identifiers only ever worked through the raw fallback.)
-    users = find_users(client, identifier, limit=1)
-    if users:
-        found = users[0]
+    # Exact username lookup first (Server/DC) — a fragment search must never
+    # silently pick a user when the identifier already names one exactly.
+    if not is_cloud_client(client):
+        try:
+            user = client.user(username=identifier)
+            if isinstance(user, dict) and user.get("name"):
+                return {"name": user["name"]}
+        except Exception:
+            # Not an exact username — resolve via search below.
+            pass
+
+    # Cloud-aware fragment search (Server/DC needs username=, Cloud query=).
+    # Accept an exact field match, or a single unambiguous candidate; with
+    # several fuzzy candidates fall back to the raw identifier so Jira
+    # rejects it visibly instead of us silently assigning an arbitrary user.
+    users = find_users(client, identifier, limit=10)
+    ident_cf = identifier.casefold()
+    exact = [
+        u
+        for u in users
+        if any(str(u.get(k) or "").casefold() == ident_cf for k in ("name", "key", "emailAddress", "displayName"))
+    ]
+    candidates = exact if exact else (users if len(users) == 1 else [])
+    if candidates:
+        found = candidates[0]
         if "accountId" in found:
             return {"accountId": found["accountId"]}
         return {"name": found.get("name", found.get("key", identifier))}

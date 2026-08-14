@@ -22,6 +22,7 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient
 from lib.output import error, format_output, format_table
+from lib.users import person_label
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -168,7 +169,7 @@ def issues(ctx, board_id: int, jql: str | None, max_results: int):
                     fields = issue.get("fields", {})
                     status = fields.get("status", {}).get("name", "-")
                     assignee = fields.get("assignee", {})
-                    assignee_name = assignee.get("displayName", "-") if assignee else "-"
+                    assignee_name = person_label(assignee, fallback="-") if assignee else "-"
                     summary = fields.get("summary", "")
                     if len(summary) > 40:
                         summary = summary[:37] + "..."
