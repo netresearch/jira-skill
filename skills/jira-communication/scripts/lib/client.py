@@ -9,6 +9,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, is_cloud_url, load_config, validate_config
+from .users import find_users
 
 # Default timeout for all Jira API requests (seconds)
 JIRA_TIMEOUT = 30
@@ -55,13 +56,15 @@ def resolve_assignee(client, identifier: str) -> dict:
     if is_account_id(identifier):
         return {"accountId": identifier}
 
-    users = client.user_find_by_user_string(query=identifier)
-    if users and isinstance(users, list) and len(users) > 0:
+    # Cloud-aware search: Server/DC needs username=, Cloud needs query=.
+    # (The previous unconditional query= silently found nothing on Server/DC,
+    # so email identifiers only ever worked through the raw fallback.)
+    users = find_users(client, identifier, limit=1)
+    if users:
         found = users[0]
-        if isinstance(found, dict):
-            if "accountId" in found:
-                return {"accountId": found["accountId"]}
-            return {"name": found.get("name", found.get("key", identifier))}
+        if "accountId" in found:
+            return {"accountId": found["accountId"]}
+        return {"name": found.get("name", found.get("key", identifier))}
     # Fall back to raw identifier — let Jira validate
     return {"name": identifier}
 

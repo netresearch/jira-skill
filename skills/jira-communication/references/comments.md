@@ -59,6 +59,8 @@ Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
 
 `add` and `edit` lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose), unbalanced tag counts, and flag-like tokens (`--strict`) outside code blocks abort with an error — Jira parses `-text-` as strikethrough, even inside `{{...}}` monospace, so a pair of CLI flags strikes through everything between them; escape every dash (`{{\-\-strict}}`). Escape literal tag mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
 
+`add` and `edit` also verify every `[~username]` mention against Jira before posting (an unverified mention renders as dead text and notifies nobody). An unknown username aborts with candidate suggestions from user search; `[~accountid:...]` (Cloud) passes through unchecked. Skip with `--no-verify-mentions`.
+
 ## Verify rendering after posting
 
 A 2xx on `add`/`edit` proves the write landed, not that the markup renders as intended — Jira renders wiki markup server-side. The rendered HTML is the only proof:

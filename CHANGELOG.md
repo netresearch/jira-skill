@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-comment add`/`edit` verify `[~username]` mentions against Jira before posting — an unknown username aborts with candidate suggestions instead of posting a dead, non-notifying mention; skip with `--no-verify-mentions` (#199)
+- `jira-issue get`/`work`/`qa` and `jira-comment list` print the technical username next to each display name (assignee, reporter, comment authors), so ticket participants can be mentioned or assigned without a separate user lookup (#199)
+
+### Fixed
+
+- `lib.client.resolve_assignee` and the new `lib.users.find_users` search users with `username=` on Server/DC (`query=` only on Cloud) — the previous unconditional `query=` silently returned nothing on Server/DC, so email identifiers only ever resolved through the raw fallback (#199)
+
 ## [3.27.1] - 2026-08-14
 
 ### Fixed

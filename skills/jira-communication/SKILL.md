@@ -27,7 +27,7 @@ On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
 | change status | `jira-issue.py act KEY` → `jira-transition.py do` |
 | audit / sibling discovery | `jira-qa-gather.py KEY` |
 
-Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — use the matching verb. See `references/intent-verbs.md`.
+Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — use the matching verb.
 
 ## Scripts
 
@@ -51,11 +51,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Commen
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
-uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screenshot.png
 ```
 
 > **Terminal transitions**: pass `--resolution <value>` (`Done`, `Won't do`); if rejected ("cannot be set"),
 > retry without it — `references/intent-verbs.md`. **Versions**: read `references/versions.md` before `jira-version.py`.
+> **Mentions**: `add`/`edit` verify `[~username]` (miss → suggestions); `get`/`work` print usernames (`references/fields-and-users.md`).
 
 ## Related Skills
 
@@ -63,7 +63,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 
 ## No editorializing
 
-In tickets, comments and worklog notes, state what happened, not how good it is. See `references/no-editorializing.md`.
+State what happened, not how good it is — `references/no-editorializing.md`.
 
 ## References
 

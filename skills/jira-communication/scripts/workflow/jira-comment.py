@@ -24,6 +24,32 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup import lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
+from lib.users import person_label, verify_mentions
+
+
+def _check_mentions(client, comment_text: str, skip: bool) -> None:
+    """Verify [~username] mentions resolve to real users; abort with suggestions if not.
+
+    An unverified mention posts as dead text (no notification), so the check
+    runs inside the posting call — no separate lookup invocation needed.
+    """
+    if skip or "[~" not in comment_text:
+        return
+    unknown = verify_mentions(client, comment_text)
+    if not unknown:
+        return
+    lines = []
+    for ident, suggestions in unknown.items():
+        line = f"[~{ident}] does not match any Jira user"
+        if suggestions:
+            candidates = ", ".join(f"[~{u.get('name', u.get('key', '?'))}] ({person_label(u)})" for u in suggestions)
+            line += f" — did you mean: {candidates}"
+        lines.append(line)
+    error(
+        "Unverified mention(s):\n  " + "\n  ".join(lines),
+        suggestion="Use an exact username from the suggestions, or re-run with --no-verify-mentions to post as-is.",
+    )
+    sys.exit(1)
 
 
 def _check_markup(comment_text: str, force: bool) -> None:
@@ -75,8 +101,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("issue_key")
 @click.argument("comment_text")
 @click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def add(ctx, issue_key: str, comment_text: str, force: bool):
+def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions: bool):
     """Add a comment to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -94,11 +121,17 @@ def add(ctx, issue_key: str, comment_text: str, force: bool):
     their own line; literal mentions in prose must be escaped (\\{code\\}).
     The comment is linted for this before posting (override with --force).
 
+    [~username] mentions are verified against Jira before posting, so no
+    separate user lookup is needed; an unknown username aborts with
+    suggestions (skip with --no-verify-mentions).
+
     Examples:
 
       jira-comment add PROJ-123 "Fixed in commit abc123"
 
       jira-comment add PROJ-123 "See {{config.py}} for details"
+
+      jira-comment add PROJ-123 "[~jane.doe] please review"
 
       cat comment.txt | jira-comment add PROJ-123 -
     """
@@ -141,6 +174,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool):
             sys.exit(1)
 
     _check_markup(comment_text, force)
+    _check_mentions(client, comment_text, no_verify_mentions)
 
     try:
         result = client.issue_add_comment(issue_key, comment_text)
@@ -165,8 +199,9 @@ def add(ctx, issue_key: str, comment_text: str, force: bool):
 @click.argument("comment_id")
 @click.argument("comment_text")
 @click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool):
+def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, no_verify_mentions: bool):
     """Edit an existing comment on an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -224,6 +259,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool):
             sys.exit(1)
 
     _check_markup(comment_text, force)
+    _check_mentions(client, comment_text, no_verify_mentions)
 
     try:
         result = client.issue_edit_comment(issue_key, comment_id, comment_text)
@@ -343,7 +379,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
                 else:
                     print(f"Comments on {issue_key} ({len(shown)} shown):\n")
                 for c in shown:
-                    author = c.get("author", {}).get("displayName", "Unknown")
+                    author = person_label(c.get("author"))
                     created = c.get("created", "")[:16].replace("T", " ") if c.get("created") else "N/A"
                     body = c.get("body", "")
 
