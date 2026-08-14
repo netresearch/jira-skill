@@ -194,6 +194,7 @@ The jira-communication skill can help. Use the Skill tool to invoke it,
 or run scripts directly via uv run (NOT python3):
 
 - Fetch issue details: uv run {scripts_dir}/core/jira-issue.py get KEY
+- Full context (description + all comments): uv run {scripts_dir}/core/jira-issue.py work KEY
 - Search issues: uv run {scripts_dir}/core/jira-search.py query "JQL"
 - Create an issue: uv run {scripts_dir}/workflow/jira-create.py issue PROJ "Summary" --type Task
 - Transition status: uv run {scripts_dir}/workflow/jira-transition.py do KEY "Status"
