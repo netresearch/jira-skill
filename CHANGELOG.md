@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.27.1] - 2026-08-14
+
+### Fixed
+
+- `jira-create` accepts `-` for `--description` to read the description from stdin, matching `jira-issue update` (#196)
+
 ## [3.27.0] - 2026-08-13
 
 ### Documentation
@@ -771,7 +777,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.25.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.27.1...HEAD
+[3.27.1]: https://github.com/netresearch/jira-skill/compare/v3.27.0...v3.27.1
 [3.25.1]: https://github.com/netresearch/jira-skill/compare/v3.25.0...v3.25.1
 [3.25.0]: https://github.com/netresearch/jira-skill/compare/v3.23.1...v3.25.0
 [3.23.1]: https://github.com/netresearch/jira-skill/compare/v3.23.0...v3.23.1
