@@ -9,6 +9,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, is_cloud_url, load_config, validate_config
+from .errors import AuthenticationError, CaptchaError, _sanitize_error  # noqa: F401  (re-exported)
+from .users import find_users, is_cloud_client
 
 # Default timeout for all Jira API requests (seconds)
 JIRA_TIMEOUT = 30
@@ -55,13 +57,34 @@ def resolve_assignee(client, identifier: str) -> dict:
     if is_account_id(identifier):
         return {"accountId": identifier}
 
-    users = client.user_find_by_user_string(query=identifier)
-    if users and isinstance(users, list) and len(users) > 0:
-        found = users[0]
-        if isinstance(found, dict):
-            if "accountId" in found:
-                return {"accountId": found["accountId"]}
-            return {"name": found.get("name", found.get("key", identifier))}
+    # Exact username lookup first (Server/DC) — a fragment search must never
+    # silently pick a user when the identifier already names one exactly.
+    if not is_cloud_client(client):
+        try:
+            user = client.user(username=identifier)
+            if isinstance(user, dict) and user.get("name"):
+                return {"name": user["name"]}
+        except Exception:
+            # Not an exact username — resolve via search below.
+            pass
+
+    # Cloud-aware fragment search (Server/DC needs username=, Cloud query=).
+    # Accept an exact field match, or a single unambiguous candidate; with
+    # several fuzzy candidates fall back to the raw identifier so Jira
+    # rejects it visibly instead of us silently assigning an arbitrary user.
+    users = find_users(client, identifier, limit=10)
+    ident_cf = identifier.casefold()
+    exact = [
+        u
+        for u in users
+        if any(str(u.get(k) or "").casefold() == ident_cf for k in ("name", "key", "emailAddress", "displayName"))
+    ]
+    candidates = exact if exact else (users if len(users) == 1 else [])
+    if candidates:
+        found = candidates[0]
+        if "accountId" in found:
+            return {"accountId": found["accountId"]}
+        return {"name": found.get("name", found.get("key", identifier))}
     # Fall back to raw identifier — let Jira validate
     return {"name": identifier}
 
@@ -220,18 +243,6 @@ def resolve_subtask_type(client, project_key: str, requested_type: str) -> str |
 # === INLINE_START: client ===
 
 
-class CaptchaError(Exception):
-    """Error raised when Jira requires CAPTCHA resolution.
-
-    This happens when Jira Server/DC detects suspicious login activity
-    and requires the user to complete a CAPTCHA challenge in the web UI.
-    """
-
-    def __init__(self, message: str, login_url: str):
-        super().__init__(message)
-        self.login_url = login_url
-
-
 class SessionExpiredError(Exception):
     """Raised when a 200 OK response carries an HTML session-expiry or login page.
 
@@ -239,14 +250,6 @@ class SessionExpiredError(Exception):
     200 OK with Content-Type: text/html and no Content-Disposition: attachment.
     Without this check the HTML body would be silently written to disk as if it
     were the requested file.
-    """
-
-
-class AuthenticationError(Exception):
-    """Raised when Jira returns 401 or 403 on an authenticated request.
-
-    Provides a typed alternative to inspecting raw HTTP status codes or
-    string-matching error messages for authentication failures.
     """
 
 
@@ -673,29 +676,6 @@ def get_jira_client(
                 f"    - JIRA_USERNAME is your email (Cloud) or username (Server/DC)\n"
                 f"    - JIRA_API_TOKEN is valid\n"
             ) from e
-
-
-def _sanitize_error(message: str) -> str:
-    """Remove potential credential fragments from error messages.
-
-    Uses regex to redact values after sensitive keys, rather than a simple
-    denylist check that discards the entire message.
-    """
-    # Redact values following sensitive keys (e.g., "token=abc123" → "token=***")
-    # First handle "Authorization: <scheme> <token>" as a single unit
-    sanitized = re.sub(
-        r"(authorization:\s*)\S+(?:\s+\S+)?",
-        r"\1***",
-        message,
-        flags=re.IGNORECASE,
-    )
-    sanitized = re.sub(
-        r"(bearer |basic |token=|password=|api_token=|api_key=|secret=|access_token=|private_token=|apikey=|auth_token=)\S+",
-        r"\1***",
-        sanitized,
-        flags=re.IGNORECASE,
-    )
-    return sanitized
 
 
 # === INLINE_END: client ===

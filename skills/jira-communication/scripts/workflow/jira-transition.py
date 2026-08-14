@@ -23,6 +23,7 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient
 from lib.output import error, format_output, format_table, success, warning
+from lib.users import check_mentions_cli
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helper Functions
@@ -167,9 +168,18 @@ def list_transitions(ctx, issue_key: str):
 @click.argument("status_name")
 @click.option("--comment", "-c", help="Comment to add during transition")
 @click.option("--resolution", "-r", help="Resolution name (for closing transitions)")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
-def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, resolution: str | None, dry_run: bool):
+def do_transition(
+    ctx,
+    issue_key: str,
+    status_name: str,
+    comment: str | None,
+    resolution: str | None,
+    no_verify_mentions: bool,
+    dry_run: bool,
+):
     """Transition an issue to a new status.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -188,6 +198,10 @@ def do_transition(ctx, issue_key: str, status_name: str, comment: str | None, re
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
+
+    # A transition comment is a real issue comment — same mention gate as jira-comment add
+    if not dry_run:
+        check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
         # Get available transitions

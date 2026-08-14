@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every command that posts mention-capable wiki markup verifies `[~username]` mentions against Jira inside the posting call — `jira-comment add`/`edit`, `jira-transition do --comment`, `jira-worklog add --comment`, and the `--description` of `jira-create issue`/`jira-issue update`. An unknown username aborts with candidate suggestions in the form that actually notifies (`[~name]` on Server/DC, `[~accountid:...]` on Cloud, where a plain username mention can never notify and is always flagged); mentions inside `{code}`/`{noformat}` blocks and backslash-escaped literals are ignored; auth/transport failures surface as themselves, never as "unknown user". Skip with `--no-verify-mentions` (#199)
+- `jira-issue get`/`work`/`qa`, `jira-comment list`, `jira-worklog list` and `jira-board` print the technical identifier next to each display name (Server/DC username, `accountid:<id>` on Cloud), so ticket participants can be mentioned or assigned without a separate user lookup (#199)
+
+### Fixed
+
+- `lib.client.resolve_assignee` and the new `lib.users.find_users` (now also used by `jira-user.py`'s fallbacks) search users with `username=` on Server/DC (`query=` only on Cloud) — the previous unconditional `query=` returned the library's error string on Server/DC, so email identifiers only ever resolved through the raw fallback (#199)
+- `resolve_assignee` resolves an exact username first and accepts a search result only on an exact field match or a single unambiguous candidate; with several fuzzy candidates it falls back to the raw identifier so Jira rejects it visibly instead of silently assigning an arbitrary user (#199)
+
 ## [3.27.1] - 2026-08-14
 
 ### Fixed

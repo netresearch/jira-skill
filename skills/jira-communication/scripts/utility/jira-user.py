@@ -22,6 +22,7 @@ if _lib_path.exists():
 import click
 from lib.client import CaptchaError, LazyJiraClient, _sanitize_error, is_account_id
 from lib.output import error, format_output
+from lib.users import find_users
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -133,20 +134,15 @@ def get(ctx, identifier: str):
                 if debug:
                     print(f"  [debug] user/search API failed: {e}", file=sys.stderr)
 
-        # Try user search as fallback (Cloud)
+        # Try cloud-aware user search as fallback (username= on Server/DC, query= on Cloud)
         if not user:
             try:
-                users = client.user_find_by_user_string(query=identifier)
-                if users and isinstance(users, list) and len(users) > 0:
-                    found = users[0]
-                    if isinstance(found, dict):
-                        user = found
-                    elif isinstance(found, str) and not found.startswith("Username"):
-                        # It's a username string, fetch full object
-                        user = client.user(username=found)
+                users = find_users(client, identifier, limit=1)
+                if users:
+                    user = users[0]
             except Exception as e:
                 if debug:
-                    print(f"  [debug] user_find_by_user_string failed: {e}", file=sys.stderr)
+                    print(f"  [debug] find_users failed: {e}", file=sys.stderr)
 
         if not user:
             error(f"User not found: {identifier}")
@@ -221,31 +217,16 @@ def search(ctx, query: str, limit: int):
             if ctx.obj["debug"]:
                 print(f"  [debug] user/search API failed: {e}", file=sys.stderr)
 
-        # Fallback to Cloud user search
+        # Fallback to cloud-aware library search (username= on Server/DC, query= on Cloud)
         if not users:
             try:
-                results = client.user_find_by_user_string(query=query, limit=limit)
-                if results and isinstance(results, list):
-                    for r in results:
-                        if isinstance(r, dict):
-                            users.append(r)
-                        elif isinstance(r, str) and not r.startswith("Username"):
-                            if not ctx.obj["quiet"]:
-                                try:
-                                    users.append(client.user(username=r))
-                                except CaptchaError:
-                                    raise
-                                except Exception as e:
-                                    if ctx.obj["debug"]:
-                                        print(f"  [debug] Failed to resolve user '{r}': {e}", file=sys.stderr)
-                            else:
-                                users.append({"name": r})
+                users = find_users(client, query, limit=limit)
             except CaptchaError:
                 raise
             except Exception as e:
                 api_errors.append(_sanitize_error(str(e)))
                 if ctx.obj["debug"]:
-                    print(f"  [debug] user_find_by_user_string failed: {e}", file=sys.stderr)
+                    print(f"  [debug] find_users failed: {e}", file=sys.stderr)
 
         if not users:
             if api_errors:

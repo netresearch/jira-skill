@@ -24,6 +24,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup import lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
+from lib.users import check_mentions_cli, person_label
 
 
 def _check_markup(comment_text: str, force: bool) -> None:
@@ -75,8 +76,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("issue_key")
 @click.argument("comment_text")
 @click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def add(ctx, issue_key: str, comment_text: str, force: bool):
+def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions: bool):
     """Add a comment to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -94,11 +96,17 @@ def add(ctx, issue_key: str, comment_text: str, force: bool):
     their own line; literal mentions in prose must be escaped (\\{code\\}).
     The comment is linted for this before posting (override with --force).
 
+    [~username] mentions are verified against Jira before posting, so no
+    separate user lookup is needed; an unknown username aborts with
+    suggestions (skip with --no-verify-mentions).
+
     Examples:
 
       jira-comment add PROJ-123 "Fixed in commit abc123"
 
       jira-comment add PROJ-123 "See {{config.py}} for details"
+
+      jira-comment add PROJ-123 "[~jane.doe] please review"
 
       cat comment.txt | jira-comment add PROJ-123 -
     """
@@ -141,6 +149,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool):
             sys.exit(1)
 
     _check_markup(comment_text, force)
+    check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
         result = client.issue_add_comment(issue_key, comment_text)
@@ -165,8 +174,9 @@ def add(ctx, issue_key: str, comment_text: str, force: bool):
 @click.argument("comment_id")
 @click.argument("comment_text")
 @click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool):
+def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, no_verify_mentions: bool):
     """Edit an existing comment on an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -224,6 +234,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool):
             sys.exit(1)
 
     _check_markup(comment_text, force)
+    check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
         result = client.issue_edit_comment(issue_key, comment_id, comment_text)
@@ -343,7 +354,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
                 else:
                     print(f"Comments on {issue_key} ({len(shown)} shown):\n")
                 for c in shown:
-                    author = c.get("author", {}).get("displayName", "Unknown")
+                    author = person_label(c.get("author"))
                     created = c.get("created", "")[:16].replace("T", " ") if c.get("created") else "N/A"
                     body = c.get("body", "")
 

@@ -35,6 +35,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.config import load_status_sets
 from lib.input import read_stdin_utf8
 from lib.output import comment_to_text, compact_json, error, extract_adf_text, format_output, success, warning
+from lib.users import check_mentions_cli, person_label
 
 
 def _expand_label_args(raw: tuple[str, ...]) -> list[str]:
@@ -293,13 +294,9 @@ def _print_issue(
     if show_people_row:
         parts = []
         if should_show("assignee") and field_available("assignee"):
-            assignee = fields.get("assignee", {})
-            assignee_name = assignee.get("displayName", "Unassigned") if assignee else "Unassigned"
-            parts.append(f"Assignee: {assignee_name}")
+            parts.append(f"Assignee: {person_label(fields.get('assignee'), fallback='Unassigned')}")
         if should_show("reporter") and field_available("reporter"):
-            reporter = fields.get("reporter", {})
-            reporter_name = reporter.get("displayName", "Unknown") if reporter else "Unknown"
-            parts.append(f"Reporter: {reporter_name}")
+            parts.append(f"Reporter: {person_label(fields.get('reporter'))}")
         if parts:
             print(" | ".join(parts))
 
@@ -596,6 +593,7 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 )
 @click.option("--assignee", "-a", help="Assignee username or email")
 @click.option("--fields-json", help="JSON string of additional fields to update")
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
 @click.option("--dry-run", is_flag=True, help="Show what would be updated without making changes")
 @click.pass_context
 def update(
@@ -609,6 +607,7 @@ def update(
     remove_label: tuple[str, ...],
     assignee: str | None,
     fields_json: str | None,
+    no_verify_mentions: bool,
     dry_run: bool,
 ):
     """Update issue fields.
@@ -662,6 +661,8 @@ def update(
                 )
                 sys.exit(1)
             description = description.rstrip("\n")
+        # A description renders wiki markup — same mention gate as jira-comment add
+        check_mentions_cli(client, description, skip=no_verify_mentions)
         update_fields["description"] = description
 
     if priority:
@@ -958,7 +959,7 @@ def _truncate_text(text: str, n: int) -> str:
 
 
 def _print_comment(c: dict, *, truncate: int | None = None) -> None:
-    author = (c.get("author") or {}).get("displayName", "Unknown")
+    author = person_label(c.get("author"))
     created = c.get("created", "")[:16].replace("T", " ")
     body = comment_to_text(c.get("body"))
     if truncate:
@@ -972,7 +973,7 @@ def _print_intent_header(issue: dict) -> None:
     fields = issue.get("fields", {})
     summary = fields.get("summary", "")
     status = (fields.get("status") or {}).get("name", "")
-    assignee = (fields.get("assignee") or {}).get("displayName", "Unassigned")
+    assignee = person_label(fields.get("assignee"), fallback="Unassigned")
     print(f"\n{issue['key']}: {summary}")
     print("=" * 60)
     print(f"Status: {status} | Assignee: {assignee}")
