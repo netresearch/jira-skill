@@ -11,6 +11,8 @@ import re
 import sys
 
 from .config import is_cloud_url
+from .errors import AuthenticationError, CaptchaError, _sanitize_error
+from .output import error
 
 # [~username] wiki-markup mention. Cloud emits [~accountid:<id>] instead.
 # A leading backslash escapes the mention into literal text — skip those.
@@ -93,8 +95,6 @@ def find_users(client, query: str, limit: int = 10) -> list[dict]:
 def _infrastructure_error(exc: Exception) -> bool:
     """True for failures that mean 'the lookup could not run', never 'no such user':
     auth/CAPTCHA challenges and any HTTP status other than 404."""
-    from .client import AuthenticationError, CaptchaError  # lazy: client.py imports this module
-
     if isinstance(exc, (AuthenticationError, CaptchaError)):
         return True
     status = getattr(getattr(exc, "response", None), "status_code", None)
@@ -165,9 +165,6 @@ def check_mentions_cli(client, text: str | None, skip: bool = False) -> None:
     """
     if skip or not text or "[~" not in text:
         return
-    from .client import _sanitize_error  # lazy: client.py imports this module
-    from .output import error
-
     try:
         unknown = verify_mentions(client, text)
     except Exception as exc:
