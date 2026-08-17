@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.28.0] - 2026-08-17
+
 ### Added
 
 - Every command that posts mention-capable wiki markup verifies `[~username]` mentions against Jira inside the posting call — `jira-comment add`/`edit`, `jira-transition do --comment`, `jira-worklog add --comment`, and the `--description` of `jira-create issue`/`jira-issue update`. An unknown username aborts with candidate suggestions in the form that actually notifies (`[~name]` on Server/DC, `[~accountid:...]` on Cloud, where a plain username mention can never notify and is always flagged); mentions inside `{code}`/`{noformat}` blocks and backslash-escaped literals are ignored; auth/transport failures surface as themselves, never as "unknown user". Skip with `--no-verify-mentions` (#199)
@@ -787,7 +789,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.27.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.28.0...HEAD
+[3.28.0]: https://github.com/netresearch/jira-skill/compare/v3.27.1...v3.28.0
 [3.27.1]: https://github.com/netresearch/jira-skill/compare/v3.27.0...v3.27.1
 [3.25.1]: https://github.com/netresearch/jira-skill/compare/v3.25.0...v3.25.1
 [3.25.0]: https://github.com/netresearch/jira-skill/compare/v3.23.1...v3.25.0
