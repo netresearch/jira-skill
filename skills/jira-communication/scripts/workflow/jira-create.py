@@ -95,6 +95,8 @@ def issue(
 
       jira-create issue PROJ "API documentation" --type Task -d "Update API docs" -l docs,api
 
+      cat body.txt | jira-create issue PROJ "Long description" --type Task -d -
+
       jira-create issue PROJ "Bug from QA" --type Bug --reporter jane.doe
 
       jira-create issue PROJ "Sprint goal" --type Epic
