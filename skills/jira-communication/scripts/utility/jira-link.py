@@ -110,7 +110,12 @@ def _resolve_link_type_verbs(client, link_type: str) -> dict:
 @click.argument("to_key", required=False)
 @click.option("--source", "source_key", help="Source/active actor (outward verb applies). Alias for TO_KEY.")
 @click.option("--target", "target_key", help="Target/passive recipient (inward verb applies). Alias for FROM_KEY.")
-@click.option("--type", "-t", "link_type", required=True, help='Link type name (e.g., "Blocks", "Relates")')
+@click.option(
+    "--type",
+    "-t",
+    "link_type",
+    help='Link type name (e.g., "Blocks", "Relates"); required. See `list-types` for the names on your Jira.',
+)
 @click.option("--dry-run", is_flag=True, help="Show what would be created")
 @click.pass_context
 def create(
@@ -119,7 +124,7 @@ def create(
     to_key: str | None,
     source_key: str | None,
     target_key: str | None,
-    link_type: str,
+    link_type: str | None,
     dry_run: bool,
 ):
     """Create a link between two issues.
@@ -149,6 +154,13 @@ def create(
 
       jira-link create EFFECT-1 ROOT-2 --type Cause --dry-run
     """
+    # Checked here rather than via required=True so the usage error names the
+    # fix: bare `create A B` used to fail with only "Missing option '--type'".
+    if not link_type:
+        raise click.UsageError(
+            "Missing option '--type' / '-t'. Example: jira-link create FROM TO --type Relates "
+            "(run `jira-link list-types` to see the link type names on your Jira)."
+        )
     from_key, to_key = _resolve_create_args(from_key, to_key, source_key, target_key)
 
     ctx.obj["client"].with_context(issue_key=from_key)

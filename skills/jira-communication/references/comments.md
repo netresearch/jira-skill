@@ -36,7 +36,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 5942
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py delete PROJ-123 594276
 ```
 
-Deleting someone else's comment requires the Delete All Comments permission.
+Non-interactive: no confirmation prompt, no stdin — `--dry-run` is the preview, the real call deletes on the spot (no `echo y |` needed). Deleting someone else's comment requires the Delete All Comments permission.
 
 ## Multi-line comments
 
