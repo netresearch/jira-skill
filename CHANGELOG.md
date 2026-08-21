@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `jira-qa-gather` prints the description and every comment (all pages, chronological, with author and date — the same rendering as `jira-issue work`) in its text output, so a QA reviewer no longer needs a second `jira-issue work KEY` call per ticket; `--no-body` restores the metadata-only shape, and `--json` gains a `description` key. The shared rendering moved to `lib/render.py`
+- `jira-link create FROM TO` without `--type` now fails with a usage error that shows the `--type Relates` example and points to `list-types`, instead of the bare `Missing option '--type' / '-t'`
 
 ## [3.28.0] - 2026-08-17
 

@@ -401,6 +401,16 @@ class TestLinkCreate:
         assert "Would create: INFRA-99 blocks FRONTEND-12" in result.output
         mc.create_issue_link.assert_not_called()
 
+    def test_create_without_type_names_example_and_list_types(self):
+        """Bare `create A B` fails with a usage error that says how to fix it."""
+        mc = _client_with_link_types()
+        result, _ = _run_link(["create", "A-1", "B-2"], mc)
+        assert result.exit_code == 2
+        assert "Missing option '--type' / '-t'" in result.output
+        assert "create FROM TO --type Relates" in result.output
+        assert "jira-link list-types" in result.output
+        mc.create_issue_link.assert_not_called()
+
     def test_create_dry_run_unknown_type_errors(self):
         mc = _client_with_link_types()
         result, _ = _run_link(["create", "A-1", "B-2", "--type", "Bogus", "--dry-run"], mc)
