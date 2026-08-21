@@ -264,6 +264,9 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, n
 def delete(ctx, issue_key: str, comment_id: str, dry_run: bool):
     """Delete a comment from an issue.
 
+    Non-interactive: there is no confirmation prompt, the comment is deleted
+    on the spot. Preview with --dry-run; no stdin is read.
+
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
 
     COMMENT_ID: The ID of the comment to delete (use 'list' to find IDs)
