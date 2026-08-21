@@ -11,7 +11,9 @@
 Aggregates issue + description + comments + worklog + structured issue links +
 web/remote links + URLs extracted from prose (MR/PR/pipeline/commit/tag/release)
 + sibling tickets, so a QA reviewer (or QA-assistant skill) can read context
-without making 5+ separate API calls.
+without making 5+ separate API calls. The description and every comment body
+are printed in full (same rendering as ``jira-issue.py work``); ``--no-body``
+keeps the metadata-only shape.
 
 Designed for the peer-qa-review skill but useful for any review workflow.
 """
@@ -29,9 +31,10 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.client import LazyJiraClient, _sanitize_error
+from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.jql import jql_escape
 from lib.output import error, extract_adf_text, format_output, warning
+from lib.render import print_comment, print_description
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # URL patterns reviewers care about (extracted from description + comments)
@@ -145,6 +148,11 @@ def _safe_message(exc: Exception) -> str:
 @click.option("--debug", is_flag=True, help="Show debug information on errors")
 @click.option("--no-siblings", is_flag=True, help="Skip sibling-ticket search")
 @click.option(
+    "--no-body",
+    is_flag=True,
+    help="Metadata only: omit the description and comment bodies from the text output",
+)
+@click.option(
     "--sibling-window",
     type=click.IntRange(min=1),
     default=60,
@@ -168,18 +176,25 @@ def cli(
     profile: str | None,
     debug: bool,
     no_siblings: bool,
+    no_body: bool,
     sibling_window: int,
     max_siblings: int,
 ):
     """Gather everything a QA reviewer needs about an issue in one call.
 
-    Returns issue + description + comments + worklog + structured issue links +
-    web/remote links + URLs extracted from prose (MR/PR/pipeline/commit/tag/release)
-    + sibling tickets in the same project.
+    Returns issue + description + all comments (chronological, with author and
+    date, rendered like `jira-issue.py work`) + worklog + structured issue links
+    + web/remote links + URLs extracted from prose (MR/PR/pipeline/commit/tag/
+    release) + sibling tickets in the same project. No second call is needed to
+    read the ticket text; --no-body restores the metadata-only output.
 
     ISSUE_KEY: Jira issue key (e.g., NRS-4365)
 
-    Example:
+    Examples:
+
+      jira-qa-gather.py NRS-4365
+
+      jira-qa-gather.py NRS-4365 --no-body
 
       jira-qa-gather.py NRS-4365 --json
     """
@@ -219,9 +234,19 @@ def cli(
     else:
         description_text = str(description)
 
-    # Comments — already returned in the initial issue fetch (no second API call needed).
+    bundle["description"] = fields.get("description")
+
+    # Comments — the embedded block on the issue payload is capped by Jira
+    # (50 on Server/DC), so paginate like `jira-issue.py work` does and fall
+    # back to the embedded block only if that call fails.
     comment_block = fields.get("comment") or {}
     comments: list[dict] = comment_block.get("comments", []) or []
+    try:
+        comments, _ = fetch_comments_paginated(client, issue_key)
+    except Exception as exc:
+        if debug:
+            raise
+        warning(f"Failed to page through comments, using the embedded block: {_safe_message(exc)}")
     bundle["comments"] = comments
 
     # Worklog
@@ -292,6 +317,9 @@ def cli(
         f"({bundle['worklog_total_seconds'] // 60} min total)"
     )
 
+    if not no_body:
+        print_description(issue)
+
     # Printed unconditionally: "none" is a finding (an unlinked related ticket
     # is a QA check in its own right), whereas an omitted section reads as
     # "not checked" and invites the reader to assume links exist.
@@ -330,6 +358,14 @@ def cli(
 
     if not extracted and not siblings and not web_links:
         print("\n(no review-relevant URLs, web links, or sibling tickets found)")
+
+    if comments and not no_body:
+        print("\n" + "=" * 60)
+        print(f"COMMENTS ({len(comments)} total — chronological)")
+        print("=" * 60)
+        for c in comments:
+            print_comment(c)
+        print()
 
 
 if __name__ == "__main__":

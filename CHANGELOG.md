@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `jira-qa-gather` prints the description and every comment (all pages, chronological, with author and date — the same rendering as `jira-issue work`) in its text output, so a QA reviewer no longer needs a second `jira-issue work KEY` call per ticket; `--no-body` restores the metadata-only shape, and `--json` gains a `description` key. The shared rendering moved to `lib/render.py`
+
 ## [3.28.0] - 2026-08-17
 
 ### Added

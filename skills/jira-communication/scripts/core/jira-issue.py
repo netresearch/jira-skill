@@ -34,7 +34,8 @@ from lib.changelog import (
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated, resolve_assignee, resolve_status
 from lib.config import load_status_sets
 from lib.input import read_stdin_utf8
-from lib.output import comment_to_text, compact_json, error, extract_adf_text, format_output, success, warning
+from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
+from lib.render import print_comment, print_description
 from lib.users import check_mentions_cli, person_label
 
 
@@ -952,23 +953,6 @@ def _collect_reject_bundle(issue: dict, comments: list, status_sets: dict) -> di
     }
 
 
-def _truncate_text(text: str, n: int) -> str:
-    if not n or len(text) <= n:
-        return text
-    return text[:n].rsplit(" ", 1)[0] + " …[truncated]"
-
-
-def _print_comment(c: dict, *, truncate: int | None = None) -> None:
-    author = person_label(c.get("author"))
-    created = c.get("created", "")[:16].replace("T", " ")
-    body = comment_to_text(c.get("body"))
-    if truncate:
-        body = _truncate_text(body, truncate)
-    print(f"\n--- [{created}] {author} ---")
-    for line in body.split("\n"):
-        print(line)
-
-
 def _print_intent_header(issue: dict) -> None:
     fields = issue.get("fields", {})
     summary = fields.get("summary", "")
@@ -977,20 +961,6 @@ def _print_intent_header(issue: dict) -> None:
     print(f"\n{issue['key']}: {summary}")
     print("=" * 60)
     print(f"Status: {status} | Assignee: {assignee}")
-
-
-def _print_intent_description(issue: dict, *, truncate: int | None = None) -> None:
-    description = issue.get("fields", {}).get("description")
-    if not description:
-        return
-    if isinstance(description, dict):
-        description = extract_adf_text(description)
-    text = str(description)
-    if truncate:
-        text = _truncate_text(text, truncate)
-    print("\nDescription:")
-    for line in text.split("\n"):
-        print(f"  {line}")
 
 
 def _intent_bundle_payload(issue: dict, comments: list, *, extras: dict | None = None) -> dict:
@@ -1072,7 +1042,7 @@ def work(ctx, issue_key: str, truncate: int | None):
             print(f"COMMENTS ({len(comments)} total — chronological)")
             print("=" * 60)
             for c in comments:
-                _print_comment(c, truncate=truncate)
+                print_comment(c, truncate=truncate)
             print()
     except Exception as e:
         if ctx.obj["debug"]:
@@ -1121,7 +1091,7 @@ def qa(ctx, issue_key: str, truncate: int | None):
             return
 
         _print_intent_header(issue)
-        _print_intent_description(issue, truncate=truncate)
+        print_description(issue, truncate=truncate)
         if bundle["fallback"]:
             print("\n[no INTO-QA transition found — falling back to last 5 comments]")
         else:
@@ -1131,7 +1101,7 @@ def qa(ctx, issue_key: str, truncate: int | None):
         print(f"HANDOVER COMMENTS ({len(bundle['comments'])})")
         print("=" * 60)
         for c in bundle["comments"]:
-            _print_comment(c, truncate=truncate)
+            print_comment(c, truncate=truncate)
         print()
     except Exception as e:
         if ctx.obj["debug"]:
@@ -1182,7 +1152,7 @@ def qa_fail(ctx, issue_key: str, truncate: int | None):
             return
 
         _print_intent_header(issue)
-        _print_intent_description(issue, truncate=truncate)
+        print_description(issue, truncate=truncate)
         if bundle["fallback"]:
             print("\n[no REJECT transition found — falling back to last 5 comments]")
         else:
@@ -1194,7 +1164,7 @@ def qa_fail(ctx, issue_key: str, truncate: int | None):
         print(f"QA-FAIL COMMENTS ({len(bundle['comments'])})")
         print("=" * 60)
         for c in bundle["comments"]:
-            _print_comment(c, truncate=truncate)
+            print_comment(c, truncate=truncate)
         print()
     except Exception as e:
         if ctx.obj["debug"]:
