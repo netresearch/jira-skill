@@ -96,6 +96,8 @@ jira-transition.py do KEY "Deployed to PROD" --resolution Done
 → Field 'resolution' cannot be set. It is not on the appropriate screen, or unknown.
 ```
 
+**Do not pre-screen with `expand=transitions.fields` — it under-reports.** A workflow whose transitions all came back *without* a `resolution` key in `GET /issue/KEY/transitions?expand=transitions.fields` still accepted `--resolution Done` on its Close transition and set the field (measured on Jira DC 9.12, 2026-08: every transition of the workflow reported `resolution` absent, the sibling ticket's history showed resolution set in one Backlog → Closed hop, and passing `--resolution` reproduced exactly that). Absence in the expand is therefore no evidence the transition will reject the field. Attempt the transition **with** `--resolution`; the error message above is the only reliable rejection signal, and only after seeing it fall back to the numbered options below.
+
 Setting it afterwards via `jira-issue.py update KEY --fields-json '{"resolution": {"name": "Done"}}'` fails with the same message — though for a different screen: the transition rejection is about the *transition* screen, this one about the issue's *edit* screen. See *"Field 'xyz' cannot be set"* in `troubleshooting.md`.
 
 The transition itself is atomic — the whole POST is rejected, so nothing half-applies and the issue keeps its previous status. Work through the options in order:
