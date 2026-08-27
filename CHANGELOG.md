@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.29.0] - 2026-08-27
+
 ### Changed
 
 - `jira-qa-gather` prints the description and every comment (all pages, chronological, with author and date — the same rendering as `jira-issue work`) in its text output, so a QA reviewer no longer needs a second `jira-issue work KEY` call per ticket; `--no-body` restores the metadata-only shape, and `--json` gains a `description` key. The shared rendering moved to `lib/render.py`
@@ -794,7 +796,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.28.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.29.0...HEAD
+[3.29.0]: https://github.com/netresearch/jira-skill/compare/v3.28.0...v3.29.0
 [3.28.0]: https://github.com/netresearch/jira-skill/compare/v3.27.1...v3.28.0
 [3.27.1]: https://github.com/netresearch/jira-skill/compare/v3.27.0...v3.27.1
 [3.25.1]: https://github.com/netresearch/jira-skill/compare/v3.25.0...v3.25.1
