@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- `expand=transitions.fields` under-reports the `resolution` field: a transition that reports it absent may still accept `--resolution` and set it. Attempt the transition with `--resolution` and treat only the "cannot be set" error as a rejection (intent-verbs)
+
 ## [3.29.0] - 2026-08-27
 
 ### Changed
