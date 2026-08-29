@@ -8,7 +8,7 @@ Load this reference whenever any script returns a non-zero exit code related to 
 
 Always start with:
 ```bash
-uv run scripts/core/jira-validate.py --verbose
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-validate.py --verbose
 ```
 
 ### Exit Codes
@@ -131,10 +131,10 @@ A script's first invocation warms **its own** environment, so later calls to *th
 **Fix**: Move flags before subcommand:
 ```bash
 # Wrong
-uv run scripts/core/jira-issue.py get PROJ-123 --json
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123 --json
 
 # Correct
-uv run scripts/core/jira-issue.py --json get PROJ-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --json get PROJ-123
 ```
 
 ### "Cannot index array with string" (`--json` payload shape)
@@ -156,10 +156,10 @@ Shapes across the scripts (verify with `| jq -r 'type'` rather than assuming):
 
 ```bash
 # Wrong — exits 5 with: Cannot index array with string "issues"
-uv run scripts/core/jira-search.py --json query "project = OPS" | jq -r '.issues[].key'
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query "project = OPS" | jq -r '.issues[].key'
 
 # Correct
-uv run scripts/core/jira-search.py --json query "project = OPS" | jq -r '.[].key'
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query "project = OPS" | jq -r '.[].key'
 ```
 
 Confirm any shape you are unsure of with `… --json <cmd> | jq -r 'type'` before building the pipeline on top of it.
@@ -171,12 +171,12 @@ Confirm any shape you are unsure of with `… --json <cmd> | jq -r 'type'` befor
 **Fix**: Put query flags after the `query` subcommand:
 ```bash
 # Wrong — -f before the `query` subcommand → "Error: No such option: -f" (exit 2)
-uv run scripts/core/jira-search.py --json -f key,status query "project = OPS"
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json -f key,status query "project = OPS"
 
 # Correct — global flags before `query`; query flags after `query`,
 # either before or after the JQL both work
-uv run scripts/core/jira-search.py --json query "project = OPS" -f key,status -n 500
-uv run scripts/core/jira-search.py --json query -f key,status -n 500 "project = OPS"
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query "project = OPS" -f key,status -n 500
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query -f key,status -n 500 "project = OPS"
 ```
 
 ### "Transition 'X' not available" (passing the transition ID)
@@ -186,10 +186,10 @@ uv run scripts/core/jira-search.py --json query -f key,status -n 500 "project = 
 **Fix**: Pass the destination status, in quotes:
 ```bash
 # Wrong — 311 is the transition ID from `list`
-uv run scripts/workflow/jira-transition.py do PROJ-123 311
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 311
 
 # Correct — the To-Status name
-uv run scripts/workflow/jira-transition.py do PROJ-123 "Resolved"
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "Resolved"
 ```
 When two transitions share a name but differ by icon (e.g. "✅ QA" → Resolved vs "❌ QA" → Reopened), disambiguate by passing the **target status** ("Resolved" / "Reopened"), which is unique.
 
@@ -217,7 +217,7 @@ When two transitions share a name but differ by icon (e.g. "✅ QA" → Resolved
 
 Add `--debug` for full stack traces:
 ```bash
-uv run scripts/core/jira-issue.py --debug get PROJ-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --debug get PROJ-123
 ```
 
 ## Auth Mode Detection

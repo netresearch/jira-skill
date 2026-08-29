@@ -23,8 +23,8 @@ If none of the above match, the script raises an error listing available profile
 All scripts accept `--profile` (or `-P`) to select a profile explicitly:
 
 ```bash
-uv run scripts/core/jira-issue.py --profile cloud get WEB-123
-uv run scripts/core/jira-search.py --profile server query "project = OPS"
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py --profile cloud get WEB-123
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --profile server query "project = OPS"
 ```
 
 ## `~/.jira/profiles.json` Format

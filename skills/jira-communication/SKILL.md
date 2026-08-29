@@ -7,7 +7,7 @@ metadata:
   author: Netresearch DTT GmbH
   version: "3.29.1"
   repository: https://github.com/netresearch/jira-skill
-allowed-tools: Bash(python:*) Bash(uv:*) Read Write
+allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(${CLAUDE_SKILL_DIR}/scripts/*) Read Write
 ---
 
 # Jira Communication
