@@ -177,3 +177,69 @@ def lint_wiki_markup(text: str) -> list[str]:
             )
 
     return findings
+
+
+# Projects whose agent-authored content is English by convention. Team rules
+# live in the consuming skill (netresearch-jira, references/it/language.md);
+# this list only decides where the reminder fires. Matched on the key's
+# project part, `SRV`/`IO` as prefixes because of SRVGL, SRVC, IOS, IOT.
+_ENGLISH_ONLY_EXACT = frozenset({"NRS", "NRT", "LIC", "PO"})
+_ENGLISH_ONLY_PREFIXES = ("SRV", "IO")
+
+# Function words that are common in German and rare-to-absent in English
+# technical prose. Deliberately excludes look-alikes that are ordinary English
+# words on their own (`die`, `war`, `hat`, `bald`, `also`, `fast`, `an`, `in`,
+# `so`, `man`), so an English sentence cannot accumulate hits by accident.
+_GERMAN_MARKERS = frozenset(
+    """
+    aber auch auf aus bei beim bereits bis dabei damit dann dass dem den denn der
+    des deshalb durch ein eine einem einen einer eines erst falls für gegen ist
+    jede jeden jetzt kann kein keine mit nach nicht noch nur oder ohne schon sein
+    seine sich sind soll sollte über und unter vom von vor wenn werden wird wurde
+    wurden während zum zur zwei
+    """.split()
+)
+
+_WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
+
+# How many *distinct* markers must appear before the text is called German. A
+# quoted line or a single loanword must not trip it; five distinct function
+# words effectively require German sentence structure.
+_GERMAN_MARKER_THRESHOLD = 5
+
+
+def looks_german(text: str) -> tuple[bool, list[str]]:
+    """Heuristic: does this text read as German prose? Returns (verdict, markers)."""
+    words = {w.lower() for w in _WORD_RE.findall(text)}
+    hits = sorted(words & _GERMAN_MARKERS)
+    return len(hits) >= _GERMAN_MARKER_THRESHOLD, hits
+
+
+def is_english_only_project(issue_key: str) -> bool:
+    """True when the key belongs to a project whose content is English by convention."""
+    project = issue_key.split("-", 1)[0].upper()
+    return project in _ENGLISH_ONLY_EXACT or project.startswith(_ENGLISH_ONLY_PREFIXES)
+
+
+def lint_ticket_language(text: str, issue_key: str | None) -> list[str]:
+    """Warn when German prose is about to be posted to an English-only project.
+
+    The rule itself is a team convention (see the consuming team skill); what
+    makes it worth a mechanical check is that prose alone has not held. Drift
+    happens mid-session after a run of genuinely German tickets, and it is
+    invisible in review because the ticket often already contains German from
+    quoted mails. Advisory only: quoted customer content is legitimately German,
+    so this never blocks on its own beyond the caller's usual --force gate.
+    """
+    if not issue_key or not is_english_only_project(issue_key):
+        return []
+    german, hits = looks_german(text)
+    if not german:
+        return []
+    project = issue_key.split("-", 1)[0].upper()
+    sample = ", ".join(hits[:6])
+    return [
+        f"text looks German ({sample}...) but {project} content is English by "
+        f"convention - re-resolve the language per ticket; quoted user content "
+        f"stays verbatim, so re-run with --force if that is what this is"
+    ]

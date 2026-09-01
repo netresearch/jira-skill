@@ -22,14 +22,14 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
-from lib.markup import lint_wiki_markup
+from lib.markup import lint_ticket_language, lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
 from lib.users import check_mentions_cli, person_label
 
 
-def _check_markup(comment_text: str, force: bool) -> None:
-    """Lint wiki markup; abort on findings unless --force is given."""
-    findings = lint_wiki_markup(comment_text)
+def _check_markup(comment_text: str, force: bool, issue_key: str | None = None) -> None:
+    """Lint wiki markup and ticket language; abort on findings unless --force is given."""
+    findings = lint_wiki_markup(comment_text) + lint_ticket_language(comment_text, issue_key)
     if not findings:
         return
     if force:
@@ -148,7 +148,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions:
             )
             sys.exit(1)
 
-    _check_markup(comment_text, force)
+    _check_markup(comment_text, force, issue_key)
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
@@ -233,7 +233,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, n
             )
             sys.exit(1)
 
-    _check_markup(comment_text, force)
+    _check_markup(comment_text, force, issue_key)
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
