@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.30.0] - 2026-09-03
+
 ### Added
 
 - `jira-markup`: a warning when German prose is posted to an English-only project
@@ -819,7 +821,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.29.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.30.0...HEAD
+[3.30.0]: https://github.com/netresearch/jira-skill/compare/v3.29.1...v3.30.0
 [3.29.1]: https://github.com/netresearch/jira-skill/compare/v3.29.0...v3.29.1
 [3.29.0]: https://github.com/netresearch/jira-skill/compare/v3.28.0...v3.29.0
 [3.28.0]: https://github.com/netresearch/jira-skill/compare/v3.27.1...v3.28.0
