@@ -257,8 +257,10 @@ def find_matching_transition(transitions: list[dict], status_name: str) -> tuple
     transition listing is the only unambiguous handle, so accept it.
 
     Tier 1 collects *all* exact matches rather than returning the first. Silently
-    picking one of two transitions that lead to different places is how a ticket
-    ends up Reopened when the reviewer meant Resolved.
+    picking one of two is how a ticket ends up Reopened when the reviewer meant
+    Resolved — or Closed by the transition that asks for nothing, when the one
+    that demands a resolution was the point. Both failures are above; the second
+    leaves no trace in the status.
     """
     selector = (status_name or "").strip()
 
@@ -436,7 +438,15 @@ def do_transition(
             if ambiguous:
                 rows = ", ".join(f"{t.get('id')} {t.get('name')} → {_get_to_status(t)}" for t in ambiguous)
                 error(f"Transition '{status_name}' is ambiguous for {issue_key}")
-                print(f"\nMatches: {rows}\nThese lead to different places. Pass the transition ID, not the name.")
+                # Not "these lead to different places": the case that motivated
+                # this is two transitions with the SAME target that differ in
+                # what their screens require. Saying they diverge by destination
+                # sends the reader to compare the one column where they agree.
+                print(
+                    f"\nMatches: {rows}\n"
+                    "These are distinct transitions and may differ in what they require, "
+                    "even where they share a target. Pass the transition ID, not the name."
+                )
             else:
                 available = ", ".join(f"{t.get('id')} {t.get('name')}" for t in transitions)
                 error(f"Transition '{status_name}' not available for {issue_key}")

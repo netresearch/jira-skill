@@ -476,3 +476,47 @@ class TestTransitionFootnotes:
         assert "381" in note
         assert "341" in note
         assert "Select those by ID" in note
+
+
+class TestAmbiguityMessageWording:
+    """The refusal must not claim the candidates differ by destination.
+
+    The case that motivated the branch is two transitions with the SAME target
+    -- `✅ Done → Closed` beside `✖ Close → Closed` -- differing in what their
+    screens require. Telling the reader they "lead to different places" points
+    at the one column where they agree.
+    """
+
+    @staticmethod
+    def _refuse_shared_target():
+        client = make_mock_client()
+        client.get_issue_transitions_full = mock.Mock(
+            return_value={
+                "transitions": [
+                    {"id": "381", "name": "✅ Done", "to": {"name": "Closed"}, "fields": {}},
+                    {
+                        "id": "341",
+                        "name": "✖ Close",
+                        "to": {"name": "Closed"},
+                        "fields": {"resolution": {"required": True}},
+                    },
+                ]
+            }
+        )
+        client.post = mock.Mock(side_effect=AssertionError("must not post an ambiguous selector"))
+        result, _ = run_cli(_mod, ["do", "X-1", "Closed"], client)
+        return result
+
+    def test_it_refuses_rather_than_guessing(self):
+        result = self._refuse_shared_target()
+        assert result.exit_code == 1
+        assert "ambiguous" in result.output
+
+    def test_it_does_not_claim_they_lead_elsewhere(self):
+        assert "different places" not in self._refuse_shared_target().output
+
+    def test_it_names_requirements_as_what_can_differ(self):
+        output = self._refuse_shared_target().output
+        assert "differ in what they require" in output
+        assert "381" in output
+        assert "341" in output
