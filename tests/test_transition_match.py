@@ -182,7 +182,8 @@ class TestReviewFindings:
             _tf("341", "Close", "✖ Closed", required=("resolution",)),
         ]
         match, ambiguous = _mod.find_matching_transition(ts, "Closed")
-        assert match is None and len(ambiguous) == 2
+        assert match is None
+        assert len(ambiguous) == 2
 
         notes = _mod._ambiguous_selectors(ts)
         assert any("381" in n and "341" in n for n in notes), "list must flag what do refuses"
@@ -203,11 +204,13 @@ class TestSecondRoundFindings:
     def test_missing_hint_does_not_point_at_a_flag_that_cannot_help(self):
         hint = _mod._missing_hint(["assignee", "customfield_10881"])
         assert "--resolution" not in hint
-        assert "assignee" in hint and "customfield_10881" in hint
+        assert "assignee" in hint
+        assert "customfield_10881" in hint
 
     def test_missing_hint_covers_a_mixed_set(self):
         hint = _mod._missing_hint(["resolution", "assignee"])
-        assert "--resolution" in hint and "assignee" in hint
+        assert "--resolution" in hint
+        assert "assignee" in hint
 
 
 class TestUnknownSpecInDo:
