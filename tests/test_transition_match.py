@@ -206,3 +206,21 @@ class TestSecondRoundFindings:
     def test_missing_hint_covers_a_mixed_set(self):
         hint = _mod._missing_hint(["resolution", "assignee"])
         assert "--resolution" in hint and "assignee" in hint
+
+
+class TestUnknownSpecInDo:
+    """`do` must not claim a check it could not perform.
+
+    `list` renders `?` where the screen was not returned. `do` printed `-` and
+    silently skipped the required-field pre-check — the same conflation of
+    "requires nothing" with "nobody asked", one command over.
+    """
+
+    def test_required_fields_cannot_speak_for_an_unexpanded_transition(self):
+        unexpanded = {"id": "1", "name": "Go", "to": "Done"}
+        assert "fields" not in unexpanded
+        assert _mod.required_fields(unexpanded) == []
+
+    def test_an_expanded_transition_without_requirements_is_a_real_answer(self):
+        assert "fields" in _tf("2", "Done", "Closed")
+        assert _mod.required_fields(_tf("2", "Done", "Closed")) == []

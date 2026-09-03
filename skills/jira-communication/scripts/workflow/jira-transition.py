@@ -368,9 +368,14 @@ def do_transition(
                 print(f"\nAvailable transitions: {available}")
             sys.exit(1)
 
+        # Without the screen we do not know what this transition wants, and
+        # saying "-" would claim it wants nothing — the same conflation `list`
+        # avoids with `?`. Skip the pre-check and say so, rather than implying a
+        # check happened.
+        spec_known = "fields" in matching
         required = required_fields(matching)
         supplied = {"resolution"} if resolution else set()
-        missing = [f for f in required if f not in supplied]
+        missing = [f for f in required if f not in supplied] if spec_known else []
 
         # Dry run
         if dry_run:
@@ -378,7 +383,13 @@ def do_transition(
             print(f"\nWould transition {issue_key}:")
             print(f"  Transition: {matching['name']} (id {matching.get('id')})")
             print(f"  To status: {_get_to_status(matching)}")
-            print(f"  Requires: {', '.join(required) or '-'}")
+            print(f"  Requires: {(', '.join(required) or '-') if spec_known else '?'}")
+            if not spec_known:
+                print(
+                    "  The field spec was not returned, so required fields were "
+                    "NOT checked — `?` is not `-`. The transition may still be "
+                    "rejected for a field nothing here could see."
+                )
             if comment:
                 print(f"  Comment: {comment}")
             if resolution:
