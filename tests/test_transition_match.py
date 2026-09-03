@@ -13,7 +13,9 @@ _mod = load_script("jira-transition", "workflow")
 
 
 def _t(name: str, to: str):
-    return {"id": name, "name": name, "to": to}
+    """The id is deliberately distinct from the name, so a test asserting one
+    cannot pass on the other."""
+    return {"id": f"id-{name}", "name": name, "to": to}
 
 
 class TestFindMatchingTransition:

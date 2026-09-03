@@ -16,8 +16,13 @@ def _run(args, mock_client=None):
 
 
 def _t(name: str, to: str):
-    """A transition dict in Server/DC shape ({'to': 'Status'})."""
-    return {"id": name, "name": name, "to": to}
+    """A transition dict in Server/DC shape ({'to': 'Status'}).
+
+    The id is deliberately NOT the name. When they were equal, an assertion that
+    `path` posts the id passed just as happily when the implementation posted
+    the name -- it could not fail for the reason it existed.
+    """
+    return {"id": f"id-{name}", "name": name, "to": to}
 
 
 def _client_at(status: str):
@@ -48,7 +53,7 @@ class TestGreedyWalk:
         assert mc.post.call_count == 4
         # Posted by transition id, not by target status name -- `_t` sets id=name.
         final = mc.post.call_args_list[-1]
-        assert final.kwargs["data"]["transition"] == {"id": "Close"}
+        assert final.kwargs["data"]["transition"] == {"id": "id-Close"}
         assert final.kwargs["data"]["fields"] == {"resolution": {"name": "Done"}}
         # Intermediate steps must NOT set a resolution.
         assert "fields" not in mc.post.call_args_list[0].kwargs["data"]
@@ -106,7 +111,7 @@ class TestBackwardDetection:
         result, _ = _run(["path", "ABC-1", "In Progress"], mc)
         assert result.exit_code == 0, result.output
         posted = [c.kwargs["data"]["transition"]["id"] for c in mc.post.call_args_list]
-        assert posted == ["Send to Backlog", "Pick up"]
+        assert posted == ["id-Send to Backlog", "id-Pick up"]
 
 
 class TestMaxStepsValidation:
