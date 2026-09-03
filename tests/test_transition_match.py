@@ -424,3 +424,35 @@ class TestDoHelpNamesTheIdSelector:
         """`path` genuinely walks toward a status -- its metavar stays."""
         usage = self._usage(["path", "--help"])
         assert usage.endswith("ISSUE_KEY TARGET_STATUS"), usage
+
+
+class TestTransitionRows:
+    """The `?` / `-` distinction, now reachable without going through the CLI.
+
+    It is the point of the change and it lived inside the `list` command body,
+    where only a rendered table could exercise it.
+    """
+
+    def test_an_unexpanded_entry_is_unknown_in_both_columns(self):
+        (row,) = _mod._transition_rows([{"id": "1", "name": "Go", "to": "Done"}])
+        assert row["Requires"] == "?"
+        assert row["Also accepts"] == "?"
+
+    def test_an_expanded_entry_with_an_empty_screen_requires_nothing(self):
+        (row,) = _mod._transition_rows([{"id": "1", "name": "Go", "to": "Done", "fields": {}}])
+        assert row["Requires"] == "-"
+        assert row["Also accepts"] == "-"
+
+    def test_required_and_optional_are_separated(self):
+        (row,) = _mod._transition_rows(
+            [
+                {
+                    "id": "341",
+                    "name": "Close",
+                    "to": "Closed",
+                    "fields": {"resolution": {"required": True}, "assignee": {"required": False}},
+                }
+            ]
+        )
+        assert row["Requires"] == "resolution"
+        assert row["Also accepts"] == "assignee"

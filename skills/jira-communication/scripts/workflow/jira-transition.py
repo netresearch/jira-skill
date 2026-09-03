@@ -128,6 +128,37 @@ def _contract_lines(matching: dict, required: list[str], spec_known: bool) -> li
     return lines
 
 
+_TRANSITION_COLUMNS = ["ID", "Name", "To Status", "Requires", "Also accepts"]
+
+
+def _transition_rows(transitions: list[dict]) -> list[dict]:
+    """One table row per transition, with its screen's contract.
+
+    `-` would read as "requires nothing". Without the screen we do not know,
+    and that is a different statement — the exact confusion `required_fields`
+    warns about — so an unexpanded entry gets `?` in both columns.
+    """
+    rows = []
+    for t in transitions:
+        if "fields" in t:
+            req = required_fields(t)
+            optional = [f for f in settable_fields(t) if f not in req]
+            requires = ", ".join(req) or "-"
+            accepts = ", ".join(optional) or "-"
+        else:
+            requires = accepts = "?"
+        rows.append(
+            {
+                "ID": t.get("id", ""),
+                "Name": t.get("name", ""),
+                "To Status": _get_to_status(t),
+                "Requires": requires,
+                "Also accepts": accepts,
+            }
+        )
+    return rows
+
+
 def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
     """Human-readable notes for names or targets shared by >1 transition."""
     notes = []
@@ -315,28 +346,7 @@ def list_transitions(ctx, issue_key: str):
             if not transitions:
                 print("No transitions available from this status")
             else:
-                rows = []
-                for t in transitions:
-                    # "-" would read as "requires nothing". Without the screen
-                    # we do not know, and that is a different statement -- the
-                    # exact confusion required_fields() warns about.
-                    if "fields" not in t:
-                        requires = accepts = "?"
-                    else:
-                        req = required_fields(t)
-                        optional = [f for f in settable_fields(t) if f not in req]
-                        requires = ", ".join(req) or "-"
-                        accepts = ", ".join(optional) or "-"
-                    rows.append(
-                        {
-                            "ID": t.get("id", ""),
-                            "Name": t.get("name", ""),
-                            "To Status": _get_to_status(t),
-                            "Requires": requires,
-                            "Also accepts": accepts,
-                        }
-                    )
-                print(format_table(rows, ["ID", "Name", "To Status", "Requires", "Also accepts"]))
+                print(format_table(_transition_rows(transitions), _TRANSITION_COLUMNS))
                 if any("fields" not in t for t in transitions):
                     print("\n`?` means the field spec was not returned, not that the transition requires nothing.")
                 dupes = _ambiguous_selectors(transitions)
