@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-markup`: a warning when German prose is posted to an English-only project
+
+### Changed
+
+- `jira-communication`: the shipped scripts are declared in `allowed-tools`, not the interpreter
+
+### Fixed
+
+- `jira-comment`: markup findings and language findings are labelled separately
+
+### Documentation
+
+- Corrected the quoted-content claim in the language guard: the guard inspects
+  quoted content too, so a quoted German block is reported like any other
+
 ## [3.29.1] - 2026-08-28
 
 ### Documentation
