@@ -446,13 +446,21 @@ class TestMockedCommands:
     def test_transition_do_dry_run(self):
         """jira-transition do with --dry-run must not call API."""
         mock_client = self._make_mock_client()
-        mock_client.get_issue_transitions.return_value = [{"name": "In Progress", "to": {"name": "In Progress"}}]
+        # With an id, as get_issue_transitions always returns them: it builds
+        # every entry with int(transition["id"]), so an id-less transition is
+        # not a shape a real server can produce.
+        mock_client.get_issue_transitions.return_value = [
+            {"id": "11", "name": "In Progress", "to": {"name": "In Progress"}}
+        ]
         runner = click.testing.CliRunner()
         with mock.patch("lib.client.get_jira_client", return_value=mock_client):
             result = runner.invoke(_transition_mod.cli, ["do", "TEST-1", "In Progress", "--dry-run"])
         assert result.exit_code == 0, result.output
         assert "DRY RUN" in result.output
-        mock_client.set_issue_status.assert_not_called()
+        # The POST is what "must not call API" means here; set_issue_status is
+        # not on this command's path at all, so asserting it went uncalled
+        # asserted nothing.
+        mock_client.post.assert_not_called()
 
     def test_link_create_dry_run(self):
         """jira-link create with --dry-run must not call API."""

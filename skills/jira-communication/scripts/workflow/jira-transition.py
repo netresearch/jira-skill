@@ -54,28 +54,245 @@ def _normalize_transition_name(name: str) -> str:
     return re.sub(r"^\W+", "", name or "", flags=re.UNICODE).strip().casefold()
 
 
-def find_matching_transition(transitions: list[dict], status_name: str) -> tuple[dict | None, list[dict]]:
-    """Resolve a user-supplied name to a transition, tolerating emoji prefixes.
+def fetch_transitions(client, issue_key: str) -> list[dict]:
+    """Available transitions **with their screens**.
 
-    Tiers, first hit wins: (1) exact case-insensitive on transition name or
-    target status; (2) normalized equality (emoji/symbol prefix stripped);
-    (3) unique normalized-substring match. Returns (match, candidates): match is
-    the resolved transition or None; candidates lists the >1 transitions that an
-    ambiguous substring matched (empty otherwise), so the caller can report them.
+    The bare listing answers half the question: which transitions exist. The
+    other half — what each one requires — lives in the screen, and only
+    ``expand=transitions.fields`` returns it. Without the expansion a caller
+    cannot tell "requires nothing" from "nobody asked", which is exactly the
+    confusion that put twelve status changes into two tickets that needed two.
+
+    Falls back to the unexpanded listing if the instance or library version does
+    not support the expansion, so this degrades to the previous behaviour rather
+    than failing.
     """
-    target = status_name.casefold()
+    try:
+        raw = client.get_issue_transitions_full(issue_key, expand="transitions.fields")
+        if isinstance(raw, dict):
+            transitions = raw.get("transitions")
+            # An empty list is a successful answer -- "this issue offers no
+            # transitions" -- not a reason to ask again. Retrying there turns a
+            # legitimate empty result into an error whenever the second call
+            # fails.
+            if isinstance(transitions, list) and all(_usable_transition(t) for t in transitions):
+                return transitions
+    except Exception:  # noqa: BLE001 - any API/library shape problem falls back
+        pass
+    return client.get_issue_transitions(issue_key)
+
+
+def _usable_transition(entry: object) -> bool:
+    """Whether an expanded transition entry can be consumed as-is.
+
+    Every caller does ``entry.get(...)`` and `required_fields` walks the field
+    spec, so a malformed member raises *past* the fallback instead of using it
+    — the failure this module's fetch exists to avoid.
+
+    An absent ``fields`` key stays valid on purpose: that is what an unexpanded
+    answer looks like, and callers already report it as `?`. Only a ``fields``
+    that is present and not a mapping of mappings is rejected.
+
+    The transition id is deliberately not checked here. Rejecting the response
+    over a missing id would fall back to ``get_issue_transitions``, which reads
+    the same endpoint and does ``int(transition["id"])`` — so the id would only
+    move the crash one layer down. `do` guards it where it is actually used.
+    """
+    if not isinstance(entry, dict):
+        return False
+    if "fields" not in entry:
+        return True
+    spec = entry["fields"]
+    return isinstance(spec, dict) and all(isinstance(v, dict) for v in spec.values())
+
+
+def _contract_lines(matching: dict, required: list[str], spec_known: bool) -> list[str]:
+    """What the selector resolved to, for whoever has to read the outcome.
+
+    Both `do` paths render this from here because they drifted once: the caveat
+    below was added to the dry run and not to the real one, so the run that
+    actually changes a ticket was the run that said least about what it was
+    doing.
+    """
+    lines = [
+        f"  Transition: {matching.get('name')} (id {matching.get('id')})",
+        f"  To status: {_get_to_status(matching)}",
+        f"  Requires: {(', '.join(required) or '-') if spec_known else '?'}",
+    ]
+    if not spec_known:
+        lines.append(
+            "  The field spec was not returned, so required fields were NOT "
+            "checked — `?` is not `-`. The transition may still be rejected "
+            "for a field nothing here could see."
+        )
+    return lines
+
+
+_TRANSITION_COLUMNS = ["ID", "Name", "To Status", "Requires", "Also accepts"]
+
+
+def _transition_rows(transitions: list[dict]) -> list[dict]:
+    """One table row per transition, with its screen's contract.
+
+    `-` would read as "requires nothing". Without the screen we do not know,
+    and that is a different statement — the exact confusion `required_fields`
+    warns about — so an unexpanded entry gets `?` in both columns.
+    """
+    rows = []
     for t in transitions:
-        if t.get("name", "").casefold() == target or _get_to_status(t).casefold() == target:
-            return t, []
+        if "fields" in t:
+            req = required_fields(t)
+            optional = [f for f in settable_fields(t) if f not in req]
+            requires = ", ".join(req) or "-"
+            accepts = ", ".join(optional) or "-"
+        else:
+            requires = accepts = "?"
+        rows.append(
+            {
+                "ID": t.get("id", ""),
+                "Name": t.get("name", ""),
+                "To Status": _get_to_status(t),
+                "Requires": requires,
+                "Also accepts": accepts,
+            }
+        )
+    return rows
+
+
+def _transition_footnotes(transitions: list[dict]) -> list[str]:
+    """Notes qualifying the table above them.
+
+    Both say the same kind of thing: read alone, the table looks more definite
+    than it is. `?` is not "requires nothing", and a name or target shared by
+    two transitions identifies neither.
+    """
+    notes = []
+    if any("fields" not in t for t in transitions):
+        notes.append("`?` means the field spec was not returned, not that the transition requires nothing.")
+    dupes = _ambiguous_selectors(transitions)
+    if dupes:
+        notes.append(
+            "Ambiguous by name or target: "
+            + "; ".join(dupes)
+            + ".\nSelect those by ID — the label and the target status do not identify them."
+        )
+    return notes
+
+
+def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
+    """Human-readable notes for names or targets shared by >1 transition."""
+    notes = []
+    for key, label in (("name", "name"), ("to", "target")):
+        seen: dict[str, list[dict]] = {}
+        for t in transitions:
+            # Normalize both sides the way find_matching_transition does.
+            # Case-folding the target only would let `✅ Closed` and `✖ Closed`
+            # be refused by `do` while `list` shows no ambiguity at all — the
+            # reader would then have no way to learn why.
+            raw_value = t.get("name", "") if key == "name" else _get_to_status(t)
+            value = _normalize_transition_name(raw_value)
+            if value:
+                seen.setdefault(value, []).append(t)
+        for value, group in seen.items():
+            if len(group) > 1:
+                ids = ", ".join(f"{t.get('id')} ({t.get('name')})" for t in group)
+                notes.append(f"{label} {value!r} → {ids}")
+    return notes
+
+
+def _missing_hint(missing: list[str]) -> str:
+    """What to do about the fields this transition declares and we did not send.
+
+    Only `resolution` has a flag here. Naming --resolution for an unmet
+    `assignee` or a custom field would send the reader after an option that
+    cannot help them.
+    """
+    flagged = [f for f in missing if f == "resolution"]
+    other = [f for f in missing if f != "resolution"]
+    parts = ["This is the transition's own screen talking, not a convention."]
+    if flagged:
+        parts.append("Pass --resolution <name> for `resolution`.")
+    if other:
+        parts.append(
+            "No flag exists here for "
+            + ", ".join(f"`{f}`" for f in other)
+            + " — POST the transition yourself with those fields, or choose a "
+            "transition that does not ask for them."
+        )
+    parts.append("`list` shows the requirements per transition.")
+    return " ".join(parts)
+
+
+def required_fields(transition: dict) -> list[str]:
+    """Field keys this transition's screen marks required.
+
+    Present only when the transitions were fetched with
+    ``expand=transitions.fields``; an unexpanded transition yields ``[]``, which
+    is indistinguishable from "requires nothing" — so callers that care must ask
+    for the expansion rather than infer from a bare listing.
+    """
+    return sorted(k for k, v in (transition.get("fields") or {}).items() if v.get("required"))
+
+
+def settable_fields(transition: dict) -> list[str]:
+    """Every field key this transition's screen accepts, required or not."""
+    return sorted((transition.get("fields") or {}).keys())
+
+
+def find_matching_transition(transitions: list[dict], status_name: str) -> tuple[dict | None, list[dict]]:
+    """Resolve a user-supplied name or id to a transition, tolerating emoji prefixes.
+
+    Tiers, first hit wins: (0) exact transition **id**; (1) exact
+    case-insensitive on transition name or target status; (2) normalized
+    equality (emoji/symbol prefix stripped); (3) unique normalized-substring
+    match. Returns (match, candidates): match is the resolved transition or
+    None; candidates lists the >1 transitions an ambiguous selector matched
+    (empty otherwise), so the caller can report them.
+
+    Tier 0 exists because a name is not always a usable selector: two
+    transitions from one status can share a target (``✅ Done → Closed`` and
+    ``✖ Close → Closed``, which differ in whether they require a resolution),
+    and two can share a display name up to an emoji (``✅ QA → Resolved`` and
+    ``❌ QA → Reopened``, which are opposite outcomes). The id from the
+    transition listing is the only unambiguous handle, so accept it.
+
+    Tier 1 collects *all* exact matches rather than returning the first. Silently
+    picking one of two is how a ticket ends up Reopened when the reviewer meant
+    Resolved — or Closed by the transition that asks for nothing, when the one
+    that demands a resolution was the point. Both failures are above; the second
+    leaves no trace in the status.
+    """
+    selector = (status_name or "").strip()
+
+    by_id = [t for t in transitions if str(t.get("id", "")) == selector]
+    if by_id:
+        return by_id[0], []
+
+    target = selector.casefold()
+    exact = [t for t in transitions if t.get("name", "").casefold() == target or _get_to_status(t).casefold() == target]
+    if len(exact) == 1:
+        return exact[0], []
+    if len(exact) > 1:
+        return None, exact
 
     norm_target = _normalize_transition_name(status_name)
     if norm_target:
-        for t in transitions:
-            if norm_target in (
+        # Same rule one tier down: `QA` normalizes to the same string for both
+        # `✅ QA → Resolved` and `❌ QA → Reopened`, so collect and report rather
+        # than take the first.
+        norm_exact = [
+            t
+            for t in transitions
+            if norm_target
+            in (
                 _normalize_transition_name(t.get("name", "")),
                 _normalize_transition_name(_get_to_status(t)),
-            ):
-                return t, []
+            )
+        ]
+        if len(norm_exact) == 1:
+            return norm_exact[0], []
+        if len(norm_exact) > 1:
+            return None, norm_exact
 
         substring = [
             t
@@ -133,7 +350,7 @@ def list_transitions(ctx, issue_key: str):
     client = ctx.obj["client"]
 
     try:
-        transitions = client.get_issue_transitions(issue_key)
+        transitions = fetch_transitions(client, issue_key)
 
         if ctx.obj["json"]:
             format_output(transitions, as_json=True)
@@ -151,10 +368,9 @@ def list_transitions(ctx, issue_key: str):
             if not transitions:
                 print("No transitions available from this status")
             else:
-                rows = []
-                for t in transitions:
-                    rows.append({"ID": t.get("id", ""), "Name": t.get("name", ""), "To Status": _get_to_status(t)})
-                print(format_table(rows, ["ID", "Name", "To Status"]))
+                print(format_table(_transition_rows(transitions), _TRANSITION_COLUMNS))
+                for note in _transition_footnotes(transitions):
+                    print("\n" + note)
 
     except Exception as e:
         if ctx.obj["debug"]:
@@ -165,7 +381,7 @@ def list_transitions(ctx, issue_key: str):
 
 @cli.command("do")
 @click.argument("issue_key")
-@click.argument("status_name")
+@click.argument("status_name", metavar="TRANSITION")
 @click.option("--comment", "-c", help="Comment to add during transition")
 @click.option("--resolution", "-r", help="Resolution name (for closing transitions)")
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
@@ -184,9 +400,16 @@ def do_transition(
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
 
-    STATUS_NAME: Target status name (e.g., "In Progress", "Done")
+    TRANSITION: A transition id, a transition name, or a target status name.
+
+    Prefer the id from `list`. A name or a target is not always a unique
+    handle — one status can offer "✅ Done → Closed" beside "✖ Close →
+    Closed", which differ in what they require — and an ambiguous selector is
+    refused with its candidates rather than resolved to a guess.
 
     Examples:
+
+      jira-transition do PROJ-123 341
 
       jira-transition do PROJ-123 "In Progress"
 
@@ -204,50 +427,102 @@ def do_transition(
         check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
-        # Get available transitions
-        transitions = client.get_issue_transitions(issue_key)
+        # With their screens: what each transition requires is half the answer,
+        # and a bare listing cannot express it.
+        transitions = fetch_transitions(client, issue_key)
 
-        # Find matching transition (exact → emoji-tolerant → unique substring)
+        # Find matching transition (id → exact → emoji-tolerant → unique substring)
         matching, ambiguous = find_matching_transition(transitions, status_name)
 
         if not matching:
             if ambiguous:
-                names = [t.get("name", "") for t in ambiguous]
+                rows = ", ".join(f"{t.get('id')} {t.get('name')} → {_get_to_status(t)}" for t in ambiguous)
                 error(f"Transition '{status_name}' is ambiguous for {issue_key}")
-                print(f"\nMatches: {', '.join(names)} — use the exact name")
+                # Not "these lead to different places": the case that motivated
+                # this is two transitions with the SAME target that differ in
+                # what their screens require. Saying they diverge by destination
+                # sends the reader to compare the one column where they agree.
+                print(
+                    f"\nMatches: {rows}\n"
+                    "These are distinct transitions and may differ in what they require, "
+                    "even where they share a target. Pass the transition ID, not the name."
+                )
             else:
-                available = [t.get("name", "") for t in transitions]
+                available = ", ".join(f"{t.get('id')} {t.get('name')}" for t in transitions)
                 error(f"Transition '{status_name}' not available for {issue_key}")
-                print(f"\nAvailable transitions: {', '.join(available)}")
+                print(f"\nAvailable transitions: {available}")
             sys.exit(1)
+
+        # The id is what gets posted, so an entry without one cannot be acted on
+        # by either path. Formatting it anyway sends {"id": "None"} and the API
+        # answers with a rejection that says nothing about where the None came
+        # from -- and a dry run would print `(id None)` and exit 0, which is the
+        # worse of the two: it reports as safe something that cannot run.
+        # Checked before either branch, because putting it in one of them is how
+        # the contract and its caveat came to disagree earlier on this branch.
+        transition_id = matching.get("id")
+        if not transition_id:
+            error(f"Transition '{matching.get('name')}' for {issue_key} has no id")
+            print(
+                "\nThe id is the only handle a transition is posted with, and this entry "
+                "carried none. Run `list` to see what the server offers for this issue."
+            )
+            sys.exit(1)
+
+        # Without the screen we do not know what this transition wants, and
+        # saying "-" would claim it wants nothing — the same conflation `list`
+        # avoids with `?`. Skip the pre-check and say so, rather than implying a
+        # check happened.
+        spec_known = "fields" in matching
+        required = required_fields(matching)
+        supplied = {"resolution"} if resolution else set()
+        missing = [f for f in required if f not in supplied] if spec_known else []
 
         # Dry run
         if dry_run:
             warning("DRY RUN - No transition will be performed")
             print(f"\nWould transition {issue_key}:")
-            print(f"  Transition: {matching['name']}")
-            print(f"  To status: {_get_to_status(matching)}")
+            for line in _contract_lines(matching, required, spec_known):
+                print(line)
             if comment:
                 print(f"  Comment: {comment}")
             if resolution:
                 print(f"  Resolution: {resolution}")
+            if missing:
+                error("Missing required field(s) for this transition: " + ", ".join(missing))
+                print("  " + _missing_hint(missing))
+                sys.exit(1)
             return
+
+        if missing:
+            error(f"Transition '{matching['name']}' requires: {', '.join(missing)}")
+            print("\n" + _missing_hint(missing))
+            sys.exit(1)
+
+        # The contract this resolved to, on the path that actually changes the
+        # ticket -- not only under --dry-run. When the POST is rejected for a
+        # field, this is what tells the reader whether it was even checked.
+        if not ctx.obj["quiet"] and not ctx.obj["json"]:
+            print(f"Transitioning {issue_key}:")
+            for line in _contract_lines(matching, required, spec_known):
+                print(line)
 
         # Build transition payload
         fields = {}
         if resolution:
             fields["resolution"] = {"name": resolution}
 
-        # Perform transition - API uses target status name (not transition name/ID)
-        # set_issue_status handles the transition ID lookup internally
-        target_status = _get_to_status(matching)
-
-        # Build update dict for comment if provided
-        update = None
+        # Post the transition by ID. Going via the target status name would let
+        # the API re-resolve it, and a target is not always unique: one ticket
+        # can offer `✅ Done → Closed` and `✖ Close → Closed`, which differ in
+        # what they require. The ID is the only handle that means one thing.
+        payload: dict = {"transition": {"id": str(transition_id)}}
+        if fields:
+            payload["fields"] = fields
         if comment:
-            update = {"comment": [{"add": {"body": comment}}]}
+            payload["update"] = {"comment": [{"add": {"body": comment}}]}
 
-        client.set_issue_status(issue_key, target_status, fields=fields if fields else None, update=update)
+        client.post(f"rest/api/2/issue/{issue_key}/transitions", data=payload)
 
         if ctx.obj["quiet"]:
             print(issue_key)
@@ -380,7 +655,24 @@ def path_transition(
 
             fields = {"resolution": {"name": resolution}} if (resolution and is_final) else {}
             update = {"comment": [{"add": {"body": comment}}]} if (comment and is_final) else None
-            client.set_issue_status(issue_key, to_status, fields=fields or None, update=update)
+
+            # By id, for the same reason `do` is. set_issue_status() re-resolves
+            # the target through get_transition_id_to_status_name(), which
+            # returns the FIRST transition whose target matches the name -- so
+            # the walker's own choice is discarded wherever two transitions
+            # share a target, which is exactly where the choice mattered. It
+            # also returns None when nothing matches, posting a null id, and
+            # spends an extra round-trip re-fetching what `chosen` already holds.
+            #
+            # No id guard here, unlike `do`: these come from
+            # get_issue_transitions(), which builds every entry with
+            # int(transition["id"]) and so cannot hand out one without an id.
+            payload: dict = {"transition": {"id": str(chosen["id"])}}
+            if fields:
+                payload["fields"] = fields
+            if update:
+                payload["update"] = update
+            client.post(f"rest/api/2/issue/{issue_key}/transitions", data=payload)
 
             chain.append(to_status)
             visited.add(to_status.lower())

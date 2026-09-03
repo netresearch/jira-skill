@@ -16,8 +16,13 @@ def _run(args, mock_client=None):
 
 
 def _t(name: str, to: str):
-    """A transition dict in Server/DC shape ({'to': 'Status'})."""
-    return {"id": name, "name": name, "to": to}
+    """A transition dict in Server/DC shape ({'to': 'Status'}).
+
+    The id is deliberately NOT the name. When they were equal, an assertion that
+    `path` posts the id passed just as happily when the implementation posted
+    the name -- it could not fail for the reason it existed.
+    """
+    return {"id": f"id-{name}", "name": name, "to": to}
 
 
 def _client_at(status: str):
@@ -45,20 +50,21 @@ class TestGreedyWalk:
         result, _ = _run(["path", "NRSIQ-57", "Closed", "--resolution", "Done"], mc)
 
         assert result.exit_code == 0, result.output
-        assert mc.set_issue_status.call_count == 4
-        # Final transition lands on Closed and carries the resolution.
-        final = mc.set_issue_status.call_args_list[-1]
-        assert final.args[1] == "Closed"
-        assert final.kwargs["fields"] == {"resolution": {"name": "Done"}}
+        assert mc.post.call_count == 4
+        # Posted by transition id, not by target status name. `_t` keeps the two
+        # distinct, so this fails if the name is posted instead.
+        final = mc.post.call_args_list[-1]
+        assert final.kwargs["data"]["transition"] == {"id": "id-Close"}
+        assert final.kwargs["data"]["fields"] == {"resolution": {"name": "Done"}}
         # Intermediate steps must NOT set a resolution.
-        assert mc.set_issue_status.call_args_list[0].kwargs["fields"] is None
+        assert "fields" not in mc.post.call_args_list[0].kwargs["data"]
         assert "UAT Stage -> Ready for deployment -> Resolved -> Closed" in result.output
 
     def test_already_at_target_is_noop(self):
         mc = _client_at("Closed")
         result, _ = _run(["path", "NRSIQ-57", "Closed"], mc)
         assert result.exit_code == 0, result.output
-        assert mc.set_issue_status.call_count == 0
+        assert mc.post.call_count == 0
         assert "already in status" in result.output
 
     def test_ambiguous_step_stops_and_lists_options(self):
@@ -69,7 +75,7 @@ class TestGreedyWalk:
         ]
         result, _ = _run(["path", "NRSIQ-57", "Closed"], mc)
         assert result.exit_code == 1, result.output
-        assert mc.set_issue_status.call_count == 0
+        assert mc.post.call_count == 0
         assert "ambiguous next step" in result.output
         assert "In Progress" in result.output and "On Hold" in result.output
 
@@ -78,7 +84,7 @@ class TestGreedyWalk:
         mc.get_issue_transitions.side_effect = _linear_chain()
         result, _ = _run(["path", "NRSIQ-57", "Closed", "--dry-run"], mc)
         assert result.exit_code == 0, result.output
-        assert mc.set_issue_status.call_count == 0
+        assert mc.post.call_count == 0
         assert "DRY RUN" in result.output
         assert "QA passed -> UAT Stage" in result.output
 
@@ -105,7 +111,8 @@ class TestBackwardDetection:
         ]
         result, _ = _run(["path", "ABC-1", "In Progress"], mc)
         assert result.exit_code == 0, result.output
-        assert [c.args[1] for c in mc.set_issue_status.call_args_list] == ["Backlog", "In Progress"]
+        posted = [c.kwargs["data"]["transition"]["id"] for c in mc.post.call_args_list]
+        assert posted == ["id-Send to Backlog", "id-Pick up"]
 
 
 class TestMaxStepsValidation:
