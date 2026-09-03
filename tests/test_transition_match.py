@@ -346,6 +346,18 @@ class TestDoCommandOutput:
         assert "has no id" in result.output
         client.post.assert_not_called()
 
+    def test_the_dry_run_refuses_a_missing_id_too(self):
+        """A dry run that prints `(id None)` and exits 0 reports as safe
+        something that cannot run -- the worse half of the same defect."""
+        client = self._client([{"name": "Go", "to": "Done", "fields": {}}])
+        result = self._run(client, ["do", "X-1", "Go", "--dry-run"])
+        assert result.exit_code == 1
+        assert "has no id" in result.output
+
+    def test_the_dry_run_never_shows_a_none_id(self):
+        client = self._client([{"name": "Go", "to": "Done", "fields": {}}])
+        assert "id None" not in self._run(client, ["do", "X-1", "Go", "--dry-run"]).output
+
     def test_quiet_prints_the_key_alone(self):
         client = self._client([self._DONE])
         result = self._run(client, ["--quiet", "do", "X-1", "Done", "-r", "Fixed"])

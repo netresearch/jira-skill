@@ -453,6 +453,22 @@ def do_transition(
                 print(f"\nAvailable transitions: {available}")
             sys.exit(1)
 
+        # The id is what gets posted, so an entry without one cannot be acted on
+        # by either path. Formatting it anyway sends {"id": "None"} and the API
+        # answers with a rejection that says nothing about where the None came
+        # from -- and a dry run would print `(id None)` and exit 0, which is the
+        # worse of the two: it reports as safe something that cannot run.
+        # Checked before either branch, because putting it in one of them is how
+        # the contract and its caveat came to disagree earlier on this branch.
+        transition_id = matching.get("id")
+        if not transition_id:
+            error(f"Transition '{matching.get('name')}' for {issue_key} has no id")
+            print(
+                "\nThe id is the only handle a transition is posted with, and this entry "
+                "carried none. Run `list` to see what the server offers for this issue."
+            )
+            sys.exit(1)
+
         # Without the screen we do not know what this transition wants, and
         # saying "-" would claim it wants nothing — the same conflation `list`
         # avoids with `?`. Skip the pre-check and say so, rather than implying a
@@ -481,18 +497,6 @@ def do_transition(
         if missing:
             error(f"Transition '{matching['name']}' requires: {', '.join(missing)}")
             print("\n" + _missing_hint(missing))
-            sys.exit(1)
-
-        # The id is what gets posted, so an entry without one cannot be acted
-        # on. Formatting it anyway sends {"id": "None"} and the API answers with
-        # a rejection that says nothing about where the None came from.
-        transition_id = matching.get("id")
-        if not transition_id:
-            error(f"Transition '{matching.get('name')}' for {issue_key} has no id")
-            print(
-                "\nThe id is the only handle a transition is posted with, and this entry "
-                "carried none. Run `list` to see what the server offers for this issue."
-            )
             sys.exit(1)
 
         # The contract this resolved to, on the path that actually changes the
