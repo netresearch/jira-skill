@@ -75,7 +75,11 @@ def fetch_transitions(client, issue_key: str) -> list[dict]:
             # transitions" -- not a reason to ask again. Retrying there turns a
             # legitimate empty result into an error whenever the second call
             # fails.
-            if isinstance(transitions, list):
+            #
+            # Entries still have to be dicts: every caller does t.get(...), so a
+            # malformed member would raise past the fallback instead of using
+            # it, which is the failure this whole function exists to avoid.
+            if isinstance(transitions, list) and all(isinstance(t, dict) for t in transitions):
                 return transitions
     except Exception:  # noqa: BLE001 - any API/library shape problem falls back
         pass
@@ -420,7 +424,7 @@ def do_transition(
         if comment:
             payload["update"] = {"comment": [{"add": {"body": comment}}]}
 
-        client.post(f"rest/api/2/issue/{issue_key}/transitions", json=payload)
+        client.post(f"rest/api/2/issue/{issue_key}/transitions", data=payload)
 
         if ctx.obj["quiet"]:
             print(issue_key)

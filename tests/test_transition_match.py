@@ -224,3 +224,28 @@ class TestUnknownSpecInDo:
     def test_an_expanded_transition_without_requirements_is_a_real_answer(self):
         assert "fields" in _tf("2", "Done", "Closed")
         assert _mod.required_fields(_tf("2", "Done", "Closed")) == []
+
+
+class TestMalformedExpandedResponse:
+    def test_a_non_dict_entry_falls_back_instead_of_raising(self):
+        """Every caller does t.get(...), so a null member must not reach them."""
+
+        class Client:
+            def get_issue_transitions_full(self, key, expand=None):
+                return {"transitions": [None]}
+
+            def get_issue_transitions(self, key):
+                return [{"id": "1", "name": "Go", "to": "Done"}]
+
+        got = _mod.fetch_transitions(Client(), "X-1")
+        assert got == [{"id": "1", "name": "Go", "to": "Done"}]
+
+    def test_a_well_formed_list_is_still_returned_as_is(self):
+        class Client:
+            def get_issue_transitions_full(self, key, expand=None):
+                return {"transitions": [{"id": "9", "name": "Ok", "to": "Done"}]}
+
+            def get_issue_transitions(self, key):
+                raise AssertionError("must not fall back on a well-formed answer")
+
+        assert _mod.fetch_transitions(Client(), "X-1")[0]["id"] == "9"
