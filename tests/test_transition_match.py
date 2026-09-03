@@ -522,3 +522,100 @@ class TestAmbiguityMessageWording:
         assert "differ in what they require" in output
         assert "381" in output
         assert "341" in output
+
+
+class TestPathPostsTheChosenOneNotTheFirst:
+    """Every earlier `path` fixture put the chosen transition at index 0.
+
+    So "posts the chosen id" and "posts transitions[0]" were the same
+    assertion, and substituting one for the other left the whole suite green.
+    These place the choice elsewhere in the list, which is the only arrangement
+    that can tell the two apart.
+    """
+
+    @staticmethod
+    def _client(transitions, status="Open"):
+        client = make_mock_client()
+        client.issue = mock.Mock(return_value={"fields": {"status": {"name": status}}})
+        client.get_issue_transitions = mock.Mock(return_value=transitions)
+        client.set_issue_status = mock.Mock(side_effect=AssertionError("must not resolve by name"))
+        client.post = mock.Mock(return_value={})
+        return client
+
+    def test_a_direct_target_match_that_is_not_first(self):
+        client = self._client(
+            [
+                {"id": 999, "name": "Reopen", "to": "Reopened"},
+                {"id": 341, "name": "Close", "to": "Closed"},
+            ]
+        )
+        result, _ = run_cli(_mod, ["path", "X-1", "Closed"], client)
+        assert result.exit_code == 0, result.output
+        _, kwargs = client.post.call_args
+        assert kwargs["data"]["transition"] == {"id": "341"}
+
+    def test_the_single_forward_step_is_not_the_first_entry(self):
+        """The dangerous shape: `chosen` comes from forward[0], and index 0 is
+        the backward transition that filtering just excluded."""
+        client = self._client(
+            [
+                {"id": 999, "name": "Reopen", "to": "Reopened"},
+                {"id": 500, "name": "Pick up", "to": "Done"},
+            ]
+        )
+        result, _ = run_cli(_mod, ["path", "X-1", "Done"], client)
+        assert result.exit_code == 0, result.output
+        posted = [c.kwargs["data"]["transition"]["id"] for c in client.post.call_args_list]
+        assert posted == ["500"]
+        assert "999" not in posted
+
+
+class TestDoRefusesAMissingRequiredField:
+    """`do` checking required fields before posting is the headline of this
+    branch, and deleting the check outright left every test green: the cases
+    that reach the POST all supply `-r`, and the unexpanded case requires
+    nothing. Nothing drove the command into the refusal."""
+
+    @staticmethod
+    def _client():
+        client = make_mock_client()
+        client.get_issue_transitions_full = mock.Mock(
+            return_value={
+                "transitions": [
+                    {
+                        "id": "341",
+                        "name": "✖ Close",
+                        "to": {"name": "Closed"},
+                        "fields": {"resolution": {"required": True}},
+                    }
+                ]
+            }
+        )
+        client.post = mock.Mock(side_effect=AssertionError("must not post without the required field"))
+        return client
+
+    def test_it_refuses_and_does_not_post(self):
+        client = self._client()
+        result, _ = run_cli(_mod, ["do", "X-1", "341"], client)
+        assert result.exit_code == 1
+        assert "requires: resolution" in result.output
+        client.post.assert_not_called()
+
+    def test_it_says_the_requirement_comes_from_the_screen(self):
+        result, _ = run_cli(_mod, ["do", "X-1", "341"], self._client())
+        assert "transition's own screen" in result.output
+        assert "--resolution" in result.output
+
+    def test_the_dry_run_refuses_too(self):
+        client = self._client()
+        result, _ = run_cli(_mod, ["do", "X-1", "341", "--dry-run"], client)
+        assert result.exit_code == 1
+        assert "Missing required field(s)" in result.output
+
+    def test_supplying_it_clears_the_refusal(self):
+        client = self._client()
+        client.post = mock.Mock(return_value={})
+        result, _ = run_cli(_mod, ["do", "X-1", "341", "-r", "Done"], client)
+        assert result.exit_code == 0, result.output
+        _, kwargs = client.post.call_args
+        assert kwargs["data"]["fields"] == {"resolution": {"name": "Done"}}
