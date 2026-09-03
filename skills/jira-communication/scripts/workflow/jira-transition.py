@@ -76,14 +76,57 @@ def fetch_transitions(client, issue_key: str) -> list[dict]:
             # legitimate empty result into an error whenever the second call
             # fails.
             #
-            # Entries still have to be dicts: every caller does t.get(...), so a
-            # malformed member would raise past the fallback instead of using
-            # it, which is the failure this whole function exists to avoid.
-            if isinstance(transitions, list) and all(isinstance(t, dict) for t in transitions):
+            if isinstance(transitions, list) and all(_usable_transition(t) for t in transitions):
                 return transitions
     except Exception:  # noqa: BLE001 - any API/library shape problem falls back
         pass
     return client.get_issue_transitions(issue_key)
+
+
+def _usable_transition(entry: object) -> bool:
+    """Whether an expanded transition entry can be consumed as-is.
+
+    Every caller does ``entry.get(...)`` and `required_fields` walks the field
+    spec, so a malformed member raises *past* the fallback instead of using it
+    — the failure this module's fetch exists to avoid.
+
+    An absent ``fields`` key stays valid on purpose: that is what an unexpanded
+    answer looks like, and callers already report it as `?`. Only a ``fields``
+    that is present and not a mapping of mappings is rejected.
+
+    The transition id is deliberately not checked here. Rejecting the response
+    over a missing id would fall back to ``get_issue_transitions``, which reads
+    the same endpoint and does ``int(transition["id"])`` — so the id would only
+    move the crash one layer down. `do` guards it where it is actually used.
+    """
+    if not isinstance(entry, dict):
+        return False
+    if "fields" not in entry:
+        return True
+    spec = entry["fields"]
+    return isinstance(spec, dict) and all(isinstance(v, dict) for v in spec.values())
+
+
+def _contract_lines(matching: dict, required: list[str], spec_known: bool) -> list[str]:
+    """What the selector resolved to, for whoever has to read the outcome.
+
+    Both `do` paths render this from here because they drifted once: the caveat
+    below was added to the dry run and not to the real one, so the run that
+    actually changes a ticket was the run that said least about what it was
+    doing.
+    """
+    lines = [
+        f"  Transition: {matching.get('name')} (id {matching.get('id')})",
+        f"  To status: {_get_to_status(matching)}",
+        f"  Requires: {(', '.join(required) or '-') if spec_known else '?'}",
+    ]
+    if not spec_known:
+        lines.append(
+            "  The field spec was not returned, so required fields were NOT "
+            "checked — `?` is not `-`. The transition may still be rejected "
+            "for a field nothing here could see."
+        )
+    return lines
 
 
 def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
@@ -385,15 +428,8 @@ def do_transition(
         if dry_run:
             warning("DRY RUN - No transition will be performed")
             print(f"\nWould transition {issue_key}:")
-            print(f"  Transition: {matching['name']} (id {matching.get('id')})")
-            print(f"  To status: {_get_to_status(matching)}")
-            print(f"  Requires: {(', '.join(required) or '-') if spec_known else '?'}")
-            if not spec_known:
-                print(
-                    "  The field spec was not returned, so required fields were "
-                    "NOT checked — `?` is not `-`. The transition may still be "
-                    "rejected for a field nothing here could see."
-                )
+            for line in _contract_lines(matching, required, spec_known):
+                print(line)
             if comment:
                 print(f"  Comment: {comment}")
             if resolution:
@@ -409,6 +445,26 @@ def do_transition(
             print("\n" + _missing_hint(missing))
             sys.exit(1)
 
+        # The id is what gets posted, so an entry without one cannot be acted
+        # on. Formatting it anyway sends {"id": "None"} and the API answers with
+        # a rejection that says nothing about where the None came from.
+        transition_id = matching.get("id")
+        if not transition_id:
+            error(f"Transition '{matching.get('name')}' for {issue_key} has no id")
+            print(
+                "\nThe id is the only handle a transition is posted with, and this entry "
+                "carried none. Run `list` to see what the server offers for this issue."
+            )
+            sys.exit(1)
+
+        # The contract this resolved to, on the path that actually changes the
+        # ticket -- not only under --dry-run. When the POST is rejected for a
+        # field, this is what tells the reader whether it was even checked.
+        if not ctx.obj["quiet"] and not ctx.obj["json"]:
+            print(f"Transitioning {issue_key}:")
+            for line in _contract_lines(matching, required, spec_known):
+                print(line)
+
         # Build transition payload
         fields = {}
         if resolution:
@@ -418,7 +474,7 @@ def do_transition(
         # the API re-resolve it, and a target is not always unique: one ticket
         # can offer `✅ Done → Closed` and `✖ Close → Closed`, which differ in
         # what they require. The ID is the only handle that means one thing.
-        payload: dict = {"transition": {"id": str(matching.get("id"))}}
+        payload: dict = {"transition": {"id": str(transition_id)}}
         if fields:
             payload["fields"] = fields
         if comment:

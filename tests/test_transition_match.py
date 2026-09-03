@@ -5,7 +5,10 @@ exact-equality matching forces the caller to reproduce the emoji. The resolver
 adds emoji-tolerant and unique-substring fallbacks on top of exact matching.
 """
 
-from conftest import load_script
+from unittest import mock
+
+from click.testing import CliRunner
+from conftest import load_script, make_mock_client
 
 _mod = load_script("jira-transition", "workflow")
 
@@ -249,3 +252,98 @@ class TestMalformedExpandedResponse:
                 raise AssertionError("must not fall back on a well-formed answer")
 
         assert _mod.fetch_transitions(Client(), "X-1")[0]["id"] == "9"
+
+
+class TestMalformedFieldSpec:
+    """`fields` shapes that raise inside required_fields() rather than falling back."""
+
+    @staticmethod
+    def _client(spec):
+        client = make_mock_client()
+        client.get_issue_transitions_full = mock.Mock(
+            return_value={"transitions": [{"id": "1", "name": "Go", "to": "Done", "fields": spec}]}
+        )
+        client.get_issue_transitions = mock.Mock(return_value=[{"id": "1", "name": "Go", "to": "Done"}])
+        return client
+
+    def test_a_non_mapping_spec_falls_back(self):
+        """`fields: [...]` -- .items() would raise past the fallback."""
+        client = self._client(["resolution"])
+        assert _mod.fetch_transitions(client, "X-1") == [{"id": "1", "name": "Go", "to": "Done"}]
+        client.get_issue_transitions.assert_called_once_with("X-1")
+
+    def test_a_null_field_specification_falls_back(self):
+        """`fields: {"resolution": null}` -- v.get() would raise past the fallback."""
+        client = self._client({"resolution": None})
+        assert _mod.fetch_transitions(client, "X-1") == [{"id": "1", "name": "Go", "to": "Done"}]
+        client.get_issue_transitions.assert_called_once_with("X-1")
+
+    def test_an_absent_fields_key_stays_valid(self):
+        """The unexpanded shape is a legitimate answer, reported as `?` -- not a refetch."""
+        client = make_mock_client()
+        client.get_issue_transitions_full = mock.Mock(
+            return_value={"transitions": [{"id": "1", "name": "Go", "to": "Done"}]}
+        )
+        client.get_issue_transitions = mock.Mock()
+        assert _mod.fetch_transitions(client, "X-1")[0]["id"] == "1"
+        client.get_issue_transitions.assert_not_called()
+
+
+class TestDoCommandOutput:
+    """`do` end to end. Until this class existed no test invoked the command at
+    all, which is how the request path shipped unexercised and how the
+    unknown-spec caveat came to sit in the dry-run branch only."""
+
+    @staticmethod
+    def _client(transitions, expanded=True):
+        client = make_mock_client()
+        if expanded:
+            client.get_issue_transitions_full = mock.Mock(return_value={"transitions": transitions})
+            client.get_issue_transitions = mock.Mock(side_effect=AssertionError("must not fall back"))
+        else:
+            client.get_issue_transitions_full = mock.Mock(return_value={"transitions": [None]})
+            client.get_issue_transitions = mock.Mock(return_value=transitions)
+        client.post = mock.Mock(return_value={})
+        return client
+
+    @staticmethod
+    def _run(client, args):
+        with mock.patch.object(_mod, "LazyJiraClient", return_value=client):
+            return CliRunner().invoke(_mod.cli, args)
+
+    _DONE = {"id": "41", "name": "✅ Done", "to": {"name": "Closed"}, "fields": {"resolution": {"required": True}}}
+
+    def test_the_real_run_prints_the_contract_it_resolved(self):
+        client = self._client([self._DONE])
+        result = self._run(client, ["do", "X-1", "Done", "-r", "Fixed"])
+        assert result.exit_code == 0, result.output
+        assert "Transitioning X-1:" in result.output
+        assert "(id 41)" in result.output
+        assert "Requires: resolution" in result.output
+
+    def test_the_real_run_reports_an_unchecked_spec_too(self):
+        """The drift regression: `?` and the caveat existed only under --dry-run."""
+        client = self._client([{"id": "7", "name": "Go", "to": "Done"}], expanded=False)
+        result = self._run(client, ["do", "X-1", "Go"])
+        assert result.exit_code == 0, result.output
+        assert "Requires: ?" in result.output
+        assert "NOT checked" in result.output
+
+    def test_it_posts_the_id_not_the_name(self):
+        client = self._client([self._DONE])
+        self._run(client, ["do", "X-1", "Done", "-r", "Fixed"])
+        _, kwargs = client.post.call_args
+        assert kwargs["data"]["transition"] == {"id": "41"}
+        assert kwargs["data"]["fields"] == {"resolution": {"name": "Fixed"}}
+
+    def test_an_entry_without_an_id_is_refused_before_posting(self):
+        client = self._client([{"name": "Go", "to": "Done", "fields": {}}])
+        result = self._run(client, ["do", "X-1", "Go"])
+        assert result.exit_code == 1
+        assert "has no id" in result.output
+        client.post.assert_not_called()
+
+    def test_quiet_prints_the_key_alone(self):
+        client = self._client([self._DONE])
+        result = self._run(client, ["--quiet", "do", "X-1", "Done", "-r", "Fixed"])
+        assert result.output.strip() == "X-1"
