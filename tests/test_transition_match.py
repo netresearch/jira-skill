@@ -389,3 +389,35 @@ class TestPathPostsById:
         _, kwargs = client.post.call_args
         assert kwargs["data"]["fields"] == {"resolution": {"name": "Fixed"}}
         assert kwargs["data"]["update"]["comment"][0]["add"]["body"] == "done here"
+
+
+class TestDoHelpNamesTheIdSelector:
+    """`do`'s help said "Target status name" while the id is the reliable handle.
+
+    The usage line is the first thing an operator reads, and STATUS_NAME there
+    said ids were not accepted -- in the command whose whole point is that a
+    name is not always a usable selector.
+
+    These assert the *usage line*, not the help text as a whole: a metavar and
+    the prose that explains it both mention the same words, so a whole-output
+    match passes on the prose while the usage line still says the wrong thing.
+    """
+
+    @staticmethod
+    def _usage(args):
+        result, _ = run_cli(_mod, args)
+        return next(ln for ln in result.output.splitlines() if ln.startswith("Usage:"))
+
+    def test_usage_line_offers_a_transition_not_a_status_name(self):
+        usage = self._usage(["do", "--help"])
+        assert usage.endswith("ISSUE_KEY TRANSITION"), usage
+
+    def test_help_says_an_id_is_accepted_and_preferred(self):
+        result, _ = run_cli(_mod, ["do", "--help"])
+        assert "transition id" in result.output
+        assert "Prefer the id" in result.output
+
+    def test_path_still_takes_a_target_status(self):
+        """`path` genuinely walks toward a status -- its metavar stays."""
+        usage = self._usage(["path", "--help"])
+        assert usage.endswith("ISSUE_KEY TARGET_STATUS"), usage

@@ -75,7 +75,6 @@ def fetch_transitions(client, issue_key: str) -> list[dict]:
             # transitions" -- not a reason to ask again. Retrying there turns a
             # legitimate empty result into an error whenever the second call
             # fails.
-            #
             if isinstance(transitions, list) and all(_usable_transition(t) for t in transitions):
                 return transitions
     except Exception:  # noqa: BLE001 - any API/library shape problem falls back
@@ -358,7 +357,7 @@ def list_transitions(ctx, issue_key: str):
 
 @cli.command("do")
 @click.argument("issue_key")
-@click.argument("status_name")
+@click.argument("status_name", metavar="TRANSITION")
 @click.option("--comment", "-c", help="Comment to add during transition")
 @click.option("--resolution", "-r", help="Resolution name (for closing transitions)")
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
@@ -377,9 +376,16 @@ def do_transition(
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
 
-    STATUS_NAME: Target status name (e.g., "In Progress", "Done")
+    TRANSITION: A transition id, a transition name, or a target status name.
+
+    Prefer the id from `list`. A name or a target is not always a unique
+    handle — one status can offer "✅ Done → Closed" beside "✖ Close →
+    Closed", which differ in what they require — and an ambiguous selector is
+    refused with its candidates rather than resolved to a guess.
 
     Examples:
+
+      jira-transition do PROJ-123 341
 
       jira-transition do PROJ-123 "In Progress"
 
