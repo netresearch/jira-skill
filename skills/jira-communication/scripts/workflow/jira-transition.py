@@ -613,7 +613,24 @@ def path_transition(
 
             fields = {"resolution": {"name": resolution}} if (resolution and is_final) else {}
             update = {"comment": [{"add": {"body": comment}}]} if (comment and is_final) else None
-            client.set_issue_status(issue_key, to_status, fields=fields or None, update=update)
+
+            # By id, for the same reason `do` is. set_issue_status() re-resolves
+            # the target through get_transition_id_to_status_name(), which
+            # returns the FIRST transition whose target matches the name -- so
+            # the walker's own choice is discarded wherever two transitions
+            # share a target, which is exactly where the choice mattered. It
+            # also returns None when nothing matches, posting a null id, and
+            # spends an extra round-trip re-fetching what `chosen` already holds.
+            #
+            # No id guard here, unlike `do`: these come from
+            # get_issue_transitions(), which builds every entry with
+            # int(transition["id"]) and so cannot hand out one without an id.
+            payload: dict = {"transition": {"id": str(chosen["id"])}}
+            if fields:
+                payload["fields"] = fields
+            if update:
+                payload["update"] = update
+            client.post(f"rest/api/2/issue/{issue_key}/transitions", data=payload)
 
             chain.append(to_status)
             visited.add(to_status.lower())

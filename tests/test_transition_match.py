@@ -7,8 +7,7 @@ adds emoji-tolerant and unique-substring fallbacks on top of exact matching.
 
 from unittest import mock
 
-from click.testing import CliRunner
-from conftest import load_script, make_mock_client
+from conftest import load_script, make_mock_client, run_cli
 
 _mod = load_script("jira-transition", "workflow")
 
@@ -308,8 +307,7 @@ class TestDoCommandOutput:
 
     @staticmethod
     def _run(client, args):
-        with mock.patch.object(_mod, "LazyJiraClient", return_value=client):
-            return CliRunner().invoke(_mod.cli, args)
+        return run_cli(_mod, args, client)[0]
 
     _DONE = {"id": "41", "name": "✅ Done", "to": {"name": "Closed"}, "fields": {"resolution": {"required": True}}}
 
@@ -347,3 +345,47 @@ class TestDoCommandOutput:
         client = self._client([self._DONE])
         result = self._run(client, ["--quiet", "do", "X-1", "Done", "-r", "Fixed"])
         assert result.output.strip() == "X-1"
+
+
+class TestPathPostsById:
+    """`path` chose a transition and then discarded it.
+
+    It called `set_issue_status(key, to_status)`, whose
+    `get_transition_id_to_status_name` returns the FIRST transition matching the
+    target name -- so wherever two transitions share a target, which is the only
+    case where choosing mattered, the walker's choice was thrown away, and an
+    extra round-trip was spent re-resolving what it already held.
+
+    These use the shape `client.get_issue_transitions()` returns -- `to` is a
+    plain string there, not an object -- because that is what `path` reads.
+    """
+
+    @staticmethod
+    def _client(transitions):
+        client = make_mock_client()
+        client.issue = mock.Mock(return_value={"fields": {"status": {"name": "Open"}}})
+        client.get_issue_transitions = mock.Mock(return_value=transitions)
+        client.set_issue_status = mock.Mock(side_effect=AssertionError("must not resolve by name"))
+        client.post = mock.Mock(return_value={})
+        return client
+
+    def test_it_posts_the_chosen_id_where_two_transitions_share_a_target(self):
+        client = self._client(
+            [
+                {"id": 381, "name": "\u2705 Done", "to": "Closed"},
+                {"id": 341, "name": "\u2716 Close", "to": "Closed"},
+            ]
+        )
+        result, _ = run_cli(_mod, ["path", "X-1", "Closed"], client)
+        assert result.exit_code == 0, result.output
+        client.set_issue_status.assert_not_called()
+        _, kwargs = client.post.call_args
+        assert kwargs["data"]["transition"] == {"id": "381"}
+
+    def test_the_final_hop_carries_resolution_and_comment(self):
+        client = self._client([{"id": 341, "name": "\u2716 Close", "to": "Closed"}])
+        result, _ = run_cli(_mod, ["path", "X-1", "Closed", "-r", "Fixed", "-c", "done here"], client)
+        assert result.exit_code == 0, result.output
+        _, kwargs = client.post.call_args
+        assert kwargs["data"]["fields"] == {"resolution": {"name": "Fixed"}}
+        assert kwargs["data"]["update"]["comment"][0]["add"]["body"] == "done here"
