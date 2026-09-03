@@ -142,3 +142,45 @@ class TestFieldSpec:
     def test_ambiguity_notes_name_both_candidates(self):
         notes = _mod._ambiguous_selectors(TestAmbiguousSelectors.CLOSED_PAIR)
         assert any("381" in n and "341" in n for n in notes)
+
+
+class TestReviewFindings:
+    """Two defects the review caught in the first version of this change."""
+
+    def test_an_empty_expanded_list_is_an_answer_not_a_miss(self):
+        """`{"transitions": []}` means the issue offers none — do not ask again."""
+        calls = {"full": 0, "legacy": 0}
+
+        class Client:
+            def get_issue_transitions_full(self, key, expand=None):
+                calls["full"] += 1
+                return {"transitions": []}
+
+            def get_issue_transitions(self, key):
+                calls["legacy"] += 1
+                raise AssertionError("must not fall back on a valid empty answer")
+
+        assert _mod.fetch_transitions(Client(), "X-1") == []
+        assert calls == {"full": 1, "legacy": 0}
+
+    def test_a_missing_transitions_key_still_falls_back(self):
+        class Client:
+            def get_issue_transitions_full(self, key, expand=None):
+                return {"expand": "transitions"}
+
+            def get_issue_transitions(self, key):
+                return [{"id": "1", "name": "Go", "to": "Done"}]
+
+        assert _mod.fetch_transitions(Client(), "X-1")[0]["id"] == "1"
+
+    def test_ambiguity_notes_normalize_the_target_like_the_matcher(self):
+        """`✅ Closed` and `✖ Closed`: `do` refuses them, so `list` must say why."""
+        ts = [
+            _tf("381", "Done", "✅ Closed"),
+            _tf("341", "Close", "✖ Closed", required=("resolution",)),
+        ]
+        match, ambiguous = _mod.find_matching_transition(ts, "Closed")
+        assert match is None and len(ambiguous) == 2
+
+        notes = _mod._ambiguous_selectors(ts)
+        assert any("381" in n and "341" in n for n in notes), "list must flag what do refuses"

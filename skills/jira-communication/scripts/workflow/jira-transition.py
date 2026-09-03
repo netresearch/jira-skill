@@ -69,9 +69,14 @@ def fetch_transitions(client, issue_key: str) -> list[dict]:
     """
     try:
         raw = client.get_issue_transitions_full(issue_key, expand="transitions.fields")
-        transitions = raw.get("transitions") if isinstance(raw, dict) else None
-        if transitions:
-            return transitions
+        if isinstance(raw, dict):
+            transitions = raw.get("transitions")
+            # An empty list is a successful answer -- "this issue offers no
+            # transitions" -- not a reason to ask again. Retrying there turns a
+            # legitimate empty result into an error whenever the second call
+            # fails.
+            if isinstance(transitions, list):
+                return transitions
     except Exception:  # noqa: BLE001 - any API/library shape problem falls back
         pass
     return client.get_issue_transitions(issue_key)
@@ -83,7 +88,12 @@ def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
     for key, label in (("name", "name"), ("to", "target")):
         seen: dict[str, list[dict]] = {}
         for t in transitions:
-            value = _normalize_transition_name(t.get("name", "")) if key == "name" else _get_to_status(t).casefold()
+            # Normalize both sides the way find_matching_transition does.
+            # Case-folding the target only would let `✅ Closed` and `✖ Closed`
+            # be refused by `do` while `list` shows no ambiguity at all — the
+            # reader would then have no way to learn why.
+            raw_value = t.get("name", "") if key == "name" else _get_to_status(t)
+            value = _normalize_transition_name(raw_value)
             if value:
                 seen.setdefault(value, []).append(t)
         for value, group in seen.items():
