@@ -51,6 +51,15 @@ class TestGermanDetection:
         german, _ = looks_german("The Abnahme is pending and the runner is green.")
         assert not german
 
+    def test_substantial_german_quote_does_trip_it(self):
+        # Documented trade-off: the scan reads the whole body and cannot tell a
+        # quote from authored text, so a long German quote IS reported. --force
+        # is the way to post it verbatim. Pinned so the docs stay honest.
+        quoted = "Forwarded from the customer:\n{quote}\n" + GERMAN + "{quote}\n"
+        german, _ = looks_german(quoted)
+        assert german
+        assert lint_ticket_language(quoted, "NRS-4625") != []
+
     def test_english_lookalikes_do_not_accumulate(self):
         # `die`, `war`, `hat`, `also`, `fast`, `man`, `so`, `an`, `in` are English
         # words too and are deliberately absent from the marker list.

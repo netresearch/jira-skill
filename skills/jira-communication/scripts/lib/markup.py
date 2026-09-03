@@ -202,9 +202,11 @@ _GERMAN_MARKERS = frozenset(
 
 _WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
 
-# How many *distinct* markers must appear before the text is called German. A
-# quoted line or a single loanword must not trip it; five distinct function
-# words effectively require German sentence structure.
+# How many *distinct* markers must appear before the text is called German.
+# Five effectively require German sentence structure, so a loanword or a short
+# quoted fragment stays below it. The scan sees the whole body, quotes
+# included: a substantial German quote does reach five markers and does
+# produce a finding - that case is what --force is for.
 _GERMAN_MARKER_THRESHOLD = 5
 
 
@@ -228,8 +230,12 @@ def lint_ticket_language(text: str, issue_key: str | None) -> list[str]:
     makes it worth a mechanical check is that prose alone has not held. Drift
     happens mid-session after a run of genuinely German tickets, and it is
     invisible in review because the ticket often already contains German from
-    quoted mails. Advisory only: quoted customer content is legitimately German,
-    so this never blocks on its own beyond the caller's usual --force gate.
+    quoted mails.
+
+    The scan reads the whole body, so a comment carrying a substantial German
+    quote is reported like German prose - the check cannot tell a quote from
+    authored text. That is the intended trade-off rather than a gap: posting
+    quoted content verbatim is exactly what the caller's --force is for.
     """
     if not issue_key or not is_english_only_project(issue_key):
         return []
