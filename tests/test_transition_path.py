@@ -51,7 +51,8 @@ class TestGreedyWalk:
 
         assert result.exit_code == 0, result.output
         assert mc.post.call_count == 4
-        # Posted by transition id, not by target status name -- `_t` sets id=name.
+        # Posted by transition id, not by target status name. `_t` keeps the two
+        # distinct, so this fails if the name is posted instead.
         final = mc.post.call_args_list[-1]
         assert final.kwargs["data"]["transition"] == {"id": "id-Close"}
         assert final.kwargs["data"]["fields"] == {"resolution": {"name": "Done"}}
