@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- The quoted-content claim in the language guard corrected
+- Corrected the quoted-content claim in the language guard: the guard inspects
+  quoted content too, so a quoted German block is reported like any other
 
 ## [3.29.1] - 2026-08-28
 
