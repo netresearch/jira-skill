@@ -103,6 +103,29 @@ def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
     return notes
 
 
+def _missing_hint(missing: list[str]) -> str:
+    """What to do about the fields this transition declares and we did not send.
+
+    Only `resolution` has a flag here. Naming --resolution for an unmet
+    `assignee` or a custom field would send the reader after an option that
+    cannot help them.
+    """
+    flagged = [f for f in missing if f == "resolution"]
+    other = [f for f in missing if f != "resolution"]
+    parts = ["This is the transition's own screen talking, not a convention."]
+    if flagged:
+        parts.append("Pass --resolution <name> for `resolution`.")
+    if other:
+        parts.append(
+            "No flag exists here for "
+            + ", ".join(f"`{f}`" for f in other)
+            + " — POST the transition yourself with those fields, or choose a "
+            "transition that does not ask for them."
+        )
+    parts.append("`list` shows the requirements per transition.")
+    return " ".join(parts)
+
+
 def required_fields(transition: dict) -> list[str]:
     """Field keys this transition's screen marks required.
 
@@ -248,18 +271,28 @@ def list_transitions(ctx, issue_key: str):
             else:
                 rows = []
                 for t in transitions:
-                    req = required_fields(t)
-                    optional = [f for f in settable_fields(t) if f not in req]
+                    # "-" would read as "requires nothing". Without the screen
+                    # we do not know, and that is a different statement -- the
+                    # exact confusion required_fields() warns about.
+                    if "fields" not in t:
+                        requires = accepts = "?"
+                    else:
+                        req = required_fields(t)
+                        optional = [f for f in settable_fields(t) if f not in req]
+                        requires = ", ".join(req) or "-"
+                        accepts = ", ".join(optional) or "-"
                     rows.append(
                         {
                             "ID": t.get("id", ""),
                             "Name": t.get("name", ""),
                             "To Status": _get_to_status(t),
-                            "Requires": ", ".join(req) or "-",
-                            "Also accepts": ", ".join(optional) or "-",
+                            "Requires": requires,
+                            "Also accepts": accepts,
                         }
                     )
                 print(format_table(rows, ["ID", "Name", "To Status", "Requires", "Also accepts"]))
+                if any("fields" not in t for t in transitions):
+                    print("\n`?` means the field spec was not returned, not that the transition requires nothing.")
                 dupes = _ambiguous_selectors(transitions)
                 if dupes:
                     print(
@@ -352,20 +385,13 @@ def do_transition(
                 print(f"  Resolution: {resolution}")
             if missing:
                 error("Missing required field(s) for this transition: " + ", ".join(missing))
-                print(
-                    "  The transition's own screen declares them. Supply them "
-                    "(e.g. --resolution) or pick a transition that does not ask."
-                )
+                print("  " + _missing_hint(missing))
                 sys.exit(1)
             return
 
         if missing:
             error(f"Transition '{matching['name']}' requires: {', '.join(missing)}")
-            print(
-                "\nThis is the transition's own screen talking, not a convention — "
-                "supply the field (e.g. --resolution Done), or choose a transition "
-                "that does not require it. `list` shows the requirements per transition."
-            )
+            print("\n" + _missing_hint(missing))
             sys.exit(1)
 
         # Build transition payload

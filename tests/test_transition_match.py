@@ -184,3 +184,25 @@ class TestReviewFindings:
 
         notes = _mod._ambiguous_selectors(ts)
         assert any("381" in n and "341" in n for n in notes), "list must flag what do refuses"
+
+
+class TestSecondRoundFindings:
+    def test_unknown_requirements_are_not_reported_as_none(self):
+        """An unexpanded transition has no screen — that is not 'requires nothing'."""
+        unexpanded = {"id": "1", "name": "Go", "to": "Done"}
+        assert "fields" not in unexpanded
+        expanded = _tf("2", "Close", "Closed", required=("resolution",))
+        assert _mod.required_fields(expanded) == ["resolution"]
+
+    def test_missing_hint_offers_the_flag_only_for_resolution(self):
+        hint = _mod._missing_hint(["resolution"])
+        assert "--resolution" in hint
+
+    def test_missing_hint_does_not_point_at_a_flag_that_cannot_help(self):
+        hint = _mod._missing_hint(["assignee", "customfield_10881"])
+        assert "--resolution" not in hint
+        assert "assignee" in hint and "customfield_10881" in hint
+
+    def test_missing_hint_covers_a_mixed_set(self):
+        hint = _mod._missing_hint(["resolution", "assignee"])
+        assert "--resolution" in hint and "assignee" in hint
