@@ -54,28 +54,113 @@ def _normalize_transition_name(name: str) -> str:
     return re.sub(r"^\W+", "", name or "", flags=re.UNICODE).strip().casefold()
 
 
-def find_matching_transition(transitions: list[dict], status_name: str) -> tuple[dict | None, list[dict]]:
-    """Resolve a user-supplied name to a transition, tolerating emoji prefixes.
+def fetch_transitions(client, issue_key: str) -> list[dict]:
+    """Available transitions **with their screens**.
 
-    Tiers, first hit wins: (1) exact case-insensitive on transition name or
-    target status; (2) normalized equality (emoji/symbol prefix stripped);
-    (3) unique normalized-substring match. Returns (match, candidates): match is
-    the resolved transition or None; candidates lists the >1 transitions that an
-    ambiguous substring matched (empty otherwise), so the caller can report them.
+    The bare listing answers half the question: which transitions exist. The
+    other half — what each one requires — lives in the screen, and only
+    ``expand=transitions.fields`` returns it. Without the expansion a caller
+    cannot tell "requires nothing" from "nobody asked", which is exactly the
+    confusion that put twelve status changes into two tickets that needed two.
+
+    Falls back to the unexpanded listing if the instance or library version does
+    not support the expansion, so this degrades to the previous behaviour rather
+    than failing.
     """
-    target = status_name.casefold()
-    for t in transitions:
-        if t.get("name", "").casefold() == target or _get_to_status(t).casefold() == target:
-            return t, []
+    try:
+        raw = client.get_issue_transitions_full(issue_key, expand="transitions.fields")
+        transitions = raw.get("transitions") if isinstance(raw, dict) else None
+        if transitions:
+            return transitions
+    except Exception:  # noqa: BLE001 - any API/library shape problem falls back
+        pass
+    return client.get_issue_transitions(issue_key)
+
+
+def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
+    """Human-readable notes for names or targets shared by >1 transition."""
+    notes = []
+    for key, label in (("name", "name"), ("to", "target")):
+        seen: dict[str, list[dict]] = {}
+        for t in transitions:
+            value = _normalize_transition_name(t.get("name", "")) if key == "name" else _get_to_status(t).casefold()
+            if value:
+                seen.setdefault(value, []).append(t)
+        for value, group in seen.items():
+            if len(group) > 1:
+                ids = ", ".join(f"{t.get('id')} ({t.get('name')})" for t in group)
+                notes.append(f"{label} {value!r} → {ids}")
+    return notes
+
+
+def required_fields(transition: dict) -> list[str]:
+    """Field keys this transition's screen marks required.
+
+    Present only when the transitions were fetched with
+    ``expand=transitions.fields``; an unexpanded transition yields ``[]``, which
+    is indistinguishable from "requires nothing" — so callers that care must ask
+    for the expansion rather than infer from a bare listing.
+    """
+    return sorted(k for k, v in (transition.get("fields") or {}).items() if v.get("required"))
+
+
+def settable_fields(transition: dict) -> list[str]:
+    """Every field key this transition's screen accepts, required or not."""
+    return sorted((transition.get("fields") or {}).keys())
+
+
+def find_matching_transition(transitions: list[dict], status_name: str) -> tuple[dict | None, list[dict]]:
+    """Resolve a user-supplied name or id to a transition, tolerating emoji prefixes.
+
+    Tiers, first hit wins: (0) exact transition **id**; (1) exact
+    case-insensitive on transition name or target status; (2) normalized
+    equality (emoji/symbol prefix stripped); (3) unique normalized-substring
+    match. Returns (match, candidates): match is the resolved transition or
+    None; candidates lists the >1 transitions an ambiguous selector matched
+    (empty otherwise), so the caller can report them.
+
+    Tier 0 exists because a name is not always a usable selector: two
+    transitions from one status can share a target (``✅ Done → Closed`` and
+    ``✖ Close → Closed``, which differ in whether they require a resolution),
+    and two can share a display name up to an emoji (``✅ QA → Resolved`` and
+    ``❌ QA → Reopened``, which are opposite outcomes). The id from the
+    transition listing is the only unambiguous handle, so accept it.
+
+    Tier 1 collects *all* exact matches rather than returning the first. Silently
+    picking one of two transitions that lead to different places is how a ticket
+    ends up Reopened when the reviewer meant Resolved.
+    """
+    selector = (status_name or "").strip()
+
+    by_id = [t for t in transitions if str(t.get("id", "")) == selector]
+    if by_id:
+        return by_id[0], []
+
+    target = selector.casefold()
+    exact = [t for t in transitions if t.get("name", "").casefold() == target or _get_to_status(t).casefold() == target]
+    if len(exact) == 1:
+        return exact[0], []
+    if len(exact) > 1:
+        return None, exact
 
     norm_target = _normalize_transition_name(status_name)
     if norm_target:
-        for t in transitions:
-            if norm_target in (
+        # Same rule one tier down: `QA` normalizes to the same string for both
+        # `✅ QA → Resolved` and `❌ QA → Reopened`, so collect and report rather
+        # than take the first.
+        norm_exact = [
+            t
+            for t in transitions
+            if norm_target
+            in (
                 _normalize_transition_name(t.get("name", "")),
                 _normalize_transition_name(_get_to_status(t)),
-            ):
-                return t, []
+            )
+        ]
+        if len(norm_exact) == 1:
+            return norm_exact[0], []
+        if len(norm_exact) > 1:
+            return None, norm_exact
 
         substring = [
             t
@@ -133,7 +218,7 @@ def list_transitions(ctx, issue_key: str):
     client = ctx.obj["client"]
 
     try:
-        transitions = client.get_issue_transitions(issue_key)
+        transitions = fetch_transitions(client, issue_key)
 
         if ctx.obj["json"]:
             format_output(transitions, as_json=True)
@@ -153,8 +238,26 @@ def list_transitions(ctx, issue_key: str):
             else:
                 rows = []
                 for t in transitions:
-                    rows.append({"ID": t.get("id", ""), "Name": t.get("name", ""), "To Status": _get_to_status(t)})
-                print(format_table(rows, ["ID", "Name", "To Status"]))
+                    req = required_fields(t)
+                    optional = [f for f in settable_fields(t) if f not in req]
+                    rows.append(
+                        {
+                            "ID": t.get("id", ""),
+                            "Name": t.get("name", ""),
+                            "To Status": _get_to_status(t),
+                            "Requires": ", ".join(req) or "-",
+                            "Also accepts": ", ".join(optional) or "-",
+                        }
+                    )
+                print(format_table(rows, ["ID", "Name", "To Status", "Requires", "Also accepts"]))
+                dupes = _ambiguous_selectors(transitions)
+                if dupes:
+                    print(
+                        "\nAmbiguous by name or target: "
+                        + "; ".join(dupes)
+                        + ".\nSelect those by ID — the label and the target status do not "
+                        "identify them."
+                    )
 
     except Exception as e:
         if ctx.obj["debug"]:
@@ -204,50 +307,73 @@ def do_transition(
         check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
-        # Get available transitions
-        transitions = client.get_issue_transitions(issue_key)
+        # With their screens: what each transition requires is half the answer,
+        # and a bare listing cannot express it.
+        transitions = fetch_transitions(client, issue_key)
 
-        # Find matching transition (exact → emoji-tolerant → unique substring)
+        # Find matching transition (id → exact → emoji-tolerant → unique substring)
         matching, ambiguous = find_matching_transition(transitions, status_name)
 
         if not matching:
             if ambiguous:
-                names = [t.get("name", "") for t in ambiguous]
+                rows = ", ".join(f"{t.get('id')} {t.get('name')} → {_get_to_status(t)}" for t in ambiguous)
                 error(f"Transition '{status_name}' is ambiguous for {issue_key}")
-                print(f"\nMatches: {', '.join(names)} — use the exact name")
+                print(f"\nMatches: {rows}\nThese lead to different places. Pass the transition ID, not the name.")
             else:
-                available = [t.get("name", "") for t in transitions]
+                available = ", ".join(f"{t.get('id')} {t.get('name')}" for t in transitions)
                 error(f"Transition '{status_name}' not available for {issue_key}")
-                print(f"\nAvailable transitions: {', '.join(available)}")
+                print(f"\nAvailable transitions: {available}")
             sys.exit(1)
+
+        required = required_fields(matching)
+        supplied = {"resolution"} if resolution else set()
+        missing = [f for f in required if f not in supplied]
 
         # Dry run
         if dry_run:
             warning("DRY RUN - No transition will be performed")
             print(f"\nWould transition {issue_key}:")
-            print(f"  Transition: {matching['name']}")
+            print(f"  Transition: {matching['name']} (id {matching.get('id')})")
             print(f"  To status: {_get_to_status(matching)}")
+            print(f"  Requires: {', '.join(required) or '-'}")
             if comment:
                 print(f"  Comment: {comment}")
             if resolution:
                 print(f"  Resolution: {resolution}")
+            if missing:
+                error("Missing required field(s) for this transition: " + ", ".join(missing))
+                print(
+                    "  The transition's own screen declares them. Supply them "
+                    "(e.g. --resolution) or pick a transition that does not ask."
+                )
+                sys.exit(1)
             return
+
+        if missing:
+            error(f"Transition '{matching['name']}' requires: {', '.join(missing)}")
+            print(
+                "\nThis is the transition's own screen talking, not a convention — "
+                "supply the field (e.g. --resolution Done), or choose a transition "
+                "that does not require it. `list` shows the requirements per transition."
+            )
+            sys.exit(1)
 
         # Build transition payload
         fields = {}
         if resolution:
             fields["resolution"] = {"name": resolution}
 
-        # Perform transition - API uses target status name (not transition name/ID)
-        # set_issue_status handles the transition ID lookup internally
-        target_status = _get_to_status(matching)
-
-        # Build update dict for comment if provided
-        update = None
+        # Post the transition by ID. Going via the target status name would let
+        # the API re-resolve it, and a target is not always unique: one ticket
+        # can offer `✅ Done → Closed` and `✖ Close → Closed`, which differ in
+        # what they require. The ID is the only handle that means one thing.
+        payload: dict = {"transition": {"id": str(matching.get("id"))}}
+        if fields:
+            payload["fields"] = fields
         if comment:
-            update = {"comment": [{"add": {"body": comment}}]}
+            payload["update"] = {"comment": [{"add": {"body": comment}}]}
 
-        client.set_issue_status(issue_key, target_status, fields=fields if fields else None, update=update)
+        client.post(f"rest/api/2/issue/{issue_key}/transitions", json=payload)
 
         if ctx.obj["quiet"]:
             print(issue_key)

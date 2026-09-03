@@ -73,3 +73,72 @@ class TestFindMatchingTransition:
         ts = [_t("Abschließen", "Done")]
         match, _ = _mod.find_matching_transition(ts, "ABSCHLIESSEN")
         assert match["name"] == "Abschließen"
+
+
+def _tf(tid: str, name: str, to: str, required=(), optional=()):
+    """A transition as the API returns it with ``expand=transitions.fields``."""
+    fields = {k: {"required": True} for k in required}
+    fields.update({k: {"required": False} for k in optional})
+    return {"id": tid, "name": name, "to": to, "fields": fields}
+
+
+class TestAmbiguousSelectors:
+    """Two transitions that a name or a target cannot tell apart.
+
+    Both shapes are real, from one Jira DC instance: `✅ QA → Resolved` beside
+    `❌ QA → Reopened` (same label up to an emoji, opposite outcomes), and
+    `✅ Done → Closed` beside `✖ Close → Closed` (same target, different
+    requirements). Returning the first match silently sent a ticket to the wrong
+    place; the resolver must refuse and hand back the candidates instead.
+    """
+
+    QA_PAIR = [
+        _tf("121", "✅ QA", "Resolved"),
+        _tf("281", "❌ QA", "Reopened"),
+    ]
+    CLOSED_PAIR = [
+        _tf("381", "✅ Done", "Closed"),
+        _tf("341", "✖ Close", "Closed", required=("resolution",)),
+    ]
+
+    def test_same_label_up_to_emoji_is_refused(self):
+        match, ambiguous = _mod.find_matching_transition(self.QA_PAIR, "QA")
+        assert match is None
+        assert {t["id"] for t in ambiguous} == {"121", "281"}
+
+    def test_shared_target_status_is_refused(self):
+        match, ambiguous = _mod.find_matching_transition(self.CLOSED_PAIR, "Closed")
+        assert match is None
+        assert {t["id"] for t in ambiguous} == {"381", "341"}
+
+    def test_id_selects_unambiguously(self):
+        match, ambiguous = _mod.find_matching_transition(self.QA_PAIR, "121")
+        assert match["name"] == "✅ QA"
+        assert ambiguous == []
+
+    def test_id_wins_over_a_name_that_would_be_ambiguous(self):
+        match, _ = _mod.find_matching_transition(self.CLOSED_PAIR, "341")
+        assert match["name"] == "✖ Close"
+
+    def test_unambiguous_name_still_resolves(self):
+        match, ambiguous = _mod.find_matching_transition(self.CLOSED_PAIR, "Done")
+        assert match["id"] == "381"
+        assert ambiguous == []
+
+
+class TestFieldSpec:
+    def test_required_fields_read_from_the_screen(self):
+        t = _tf("341", "✖ Close", "Closed", required=("resolution",), optional=("worklog",))
+        assert _mod.required_fields(t) == ["resolution"]
+        assert _mod.settable_fields(t) == ["resolution", "worklog"]
+
+    def test_a_transition_declaring_nothing_requires_nothing(self):
+        assert _mod.required_fields(_tf("381", "✅ Done", "Closed")) == []
+
+    def test_unexpanded_transition_reports_no_requirements(self):
+        """An unexpanded listing cannot express requiredness — it must not pretend to."""
+        assert _mod.required_fields({"id": "1", "name": "x", "to": "y"}) == []
+
+    def test_ambiguity_notes_name_both_candidates(self):
+        notes = _mod._ambiguous_selectors(TestAmbiguousSelectors.CLOSED_PAIR)
+        assert any("381" in n and "341" in n for n in notes)
