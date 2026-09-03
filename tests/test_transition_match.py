@@ -566,19 +566,27 @@ class TestPathPostsTheChosenOneNotTheFirst:
         _, kwargs = client.post.call_args
         assert kwargs["data"]["transition"] == {"id": "341"}
 
-    def test_the_single_forward_step_is_not_the_first_entry(self):
+    def test_the_forward_branch_picks_the_forward_one_not_the_first(self):
         """The dangerous shape: `chosen` comes from forward[0], and index 0 is
-        the backward transition that filtering just excluded."""
-        client = self._client(
-            [
-                {"id": 999, "name": "Reopen", "to": "Reopened"},
-                {"id": 500, "name": "Pick up", "to": "Done"},
+        the backward transition that filtering just excluded.
+
+        The target must be unreachable in step 1, or the direct-match line above
+        the branch resolves first and this never enters it -- which is exactly
+        how the first version of this test managed to duplicate its sibling.
+        """
+        client = self._client([])
+        client.get_issue_transitions = mock.Mock(
+            side_effect=[
+                # "Done" is not offered yet: the walker must filter Reopen and
+                # take the single forward step, which is NOT transitions[0].
+                [{"id": 999, "name": "Reopen", "to": "Reopened"}, {"id": 500, "name": "Pick up", "to": "In Progress"}],
+                [{"id": 999, "name": "Reopen", "to": "Reopened"}, {"id": 600, "name": "Finish", "to": "Done"}],
             ]
         )
         result, _ = run_cli(_mod, ["path", "X-1", "Done"], client)
         assert result.exit_code == 0, result.output
         posted = [c.kwargs["data"]["transition"]["id"] for c in client.post.call_args_list]
-        assert posted == ["500"]
+        assert posted == ["500", "600"]
         assert "999" not in posted
 
 
