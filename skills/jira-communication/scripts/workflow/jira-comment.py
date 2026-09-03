@@ -28,18 +28,33 @@ from lib.users import check_mentions_cli, person_label
 
 
 def _check_markup(comment_text: str, force: bool, issue_key: str | None = None) -> None:
-    """Lint wiki markup and ticket language; abort on findings unless --force is given."""
-    findings = lint_wiki_markup(comment_text) + lint_ticket_language(comment_text, issue_key)
-    if not findings:
+    """Lint wiki markup and ticket language; abort on findings unless --force is given.
+
+    The two kinds are labelled and explained separately: a language-only
+    finding reported as a markup problem, with a suggestion about block tags,
+    sends the reader looking for the wrong defect.
+    """
+    markup_findings = lint_wiki_markup(comment_text)
+    language_findings = lint_ticket_language(comment_text, issue_key)
+    if not markup_findings and not language_findings:
         return
+
     if force:
-        for finding in findings:
+        for finding in markup_findings:
             warning(f"markup: {finding}")
+        for finding in language_findings:
+            warning(f"language: {finding}")
         return
-    error(
-        "Wiki-markup lint found problems:\n  " + "\n  ".join(findings),
-        suggestion="Block tags are never inline; escape literal mentions as \\{code\\}. Re-run with --force to post anyway.",
-    )
+
+    labelled = [f"markup: {f}" for f in markup_findings] + [f"language: {f}" for f in language_findings]
+    hints = []
+    if markup_findings:
+        hints.append("Block tags are never inline; escape literal mentions as \\{code\\}.")
+    if language_findings:
+        hints.append("Re-resolve the language for this ticket; quoted user content stays verbatim.")
+    hints.append("Re-run with --force to post anyway.")
+
+    error("Comment lint found problems:\n  " + "\n  ".join(labelled), suggestion=" ".join(hints))
     sys.exit(1)
 
 
