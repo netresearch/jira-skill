@@ -456,3 +456,23 @@ class TestTransitionRows:
         )
         assert row["Requires"] == "resolution"
         assert row["Also accepts"] == "assignee"
+
+
+class TestTransitionFootnotes:
+    """The two qualifications under the table, reachable without rendering one."""
+
+    def test_no_notes_when_every_screen_is_known_and_unique(self):
+        ts = [_tf("1", "Go", "Done"), _tf("2", "Stop", "Closed")]
+        assert _mod._transition_footnotes(ts) == []
+
+    def test_an_unexpanded_entry_earns_the_question_mark_note(self):
+        ts = [{"id": "1", "name": "Go", "to": "Done"}]
+        (note,) = _mod._transition_footnotes(ts)
+        assert "not that the transition requires nothing" in note
+
+    def test_a_shared_target_earns_the_ambiguity_note(self):
+        ts = [_tf("381", "✅ Done", "Closed"), _tf("341", "✖ Close", "Closed")]
+        (note,) = _mod._transition_footnotes(ts)
+        assert "381" in note
+        assert "341" in note
+        assert "Select those by ID" in note

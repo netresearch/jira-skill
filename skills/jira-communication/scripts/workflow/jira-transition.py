@@ -159,6 +159,26 @@ def _transition_rows(transitions: list[dict]) -> list[dict]:
     return rows
 
 
+def _transition_footnotes(transitions: list[dict]) -> list[str]:
+    """Notes qualifying the table above them.
+
+    Both say the same kind of thing: read alone, the table looks more definite
+    than it is. `?` is not "requires nothing", and a name or target shared by
+    two transitions identifies neither.
+    """
+    notes = []
+    if any("fields" not in t for t in transitions):
+        notes.append("`?` means the field spec was not returned, not that the transition requires nothing.")
+    dupes = _ambiguous_selectors(transitions)
+    if dupes:
+        notes.append(
+            "Ambiguous by name or target: "
+            + "; ".join(dupes)
+            + ".\nSelect those by ID — the label and the target status do not identify them."
+        )
+    return notes
+
+
 def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
     """Human-readable notes for names or targets shared by >1 transition."""
     notes = []
@@ -347,16 +367,8 @@ def list_transitions(ctx, issue_key: str):
                 print("No transitions available from this status")
             else:
                 print(format_table(_transition_rows(transitions), _TRANSITION_COLUMNS))
-                if any("fields" not in t for t in transitions):
-                    print("\n`?` means the field spec was not returned, not that the transition requires nothing.")
-                dupes = _ambiguous_selectors(transitions)
-                if dupes:
-                    print(
-                        "\nAmbiguous by name or target: "
-                        + "; ".join(dupes)
-                        + ".\nSelect those by ID — the label and the target status do not "
-                        "identify them."
-                    )
+                for note in _transition_footnotes(transitions):
+                    print("\n" + note)
 
     except Exception as e:
         if ctx.obj["debug"]:
