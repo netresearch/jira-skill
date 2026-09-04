@@ -27,6 +27,12 @@ from lib.client import LazyJiraClient
 from lib.output import comment_to_text, error, format_output, success
 from lib.users import check_mentions_cli, person_label
 
+# Trailing UTC offset in any ISO-8601 spelling: "Z", "+01:00" or "+0100".
+_TZ_SUFFIX_RE = re.compile(r"(?:(?P<utc>[Zz])|(?P<sign>[+-])(?P<hh>\d{2}):?(?P<mm>\d{2}))$")
+
+# Date and time to the second, with an optional fractional part of any length.
+_DATE_TIME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?$")
+
 
 def normalize_iso_timestamp(timestamp: str) -> str:
     """Normalize ISO timestamp to Jira's required format.
@@ -38,7 +44,12 @@ def normalize_iso_timestamp(timestamp: str) -> str:
       - 2025-01-15T09:00 (adds seconds and local timezone)
       - 2025-01-15 (adds time 00:00:00 and local timezone)
       - 2025-01-15T09:00:00+01:00 (converts timezone format)
+      - 2025-01-15T09:00:00.123456+01:00 (truncates to milliseconds, converts timezone)
+      - 2025-01-15T09:00:00Z (Z is +0000, a spelling Jira itself rejects)
       - 2025-01-15T09:00:00.000+0100 (pass through)
+
+    Anything else is returned exactly as the caller typed it, so an
+    unrecognised shape reaches Jira intact rather than half-rewritten.
     """
     # Already in Jira format (has milliseconds and compact timezone)
     if re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{4}$", timestamp):
@@ -51,23 +62,28 @@ def normalize_iso_timestamp(timestamp: str) -> str:
     if re.match(r"^\d{4}-\d{2}-\d{2}$", timestamp):
         return f"{timestamp}T00:00:00.000{local_tz}"
 
-    # Has timezone with colon: 2025-01-15T09:00:00+01:00
-    tz_match = re.search(r"([+-])(\d{2}):(\d{2})$", timestamp)
+    # Split the offset off the timestamp body; a bare body inherits local time.
+    tz_match = _TZ_SUFFIX_RE.search(timestamp)
     if tz_match:
-        tz_compact = f"{tz_match.group(1)}{tz_match.group(2)}{tz_match.group(3)}"
-        timestamp = timestamp[: tz_match.start()]
+        body = timestamp[: tz_match.start()]
+        if tz_match.group("utc"):
+            tz_compact = "+0000"
+        else:
+            tz_compact = f"{tz_match.group('sign')}{tz_match.group('hh')}{tz_match.group('mm')}"
     else:
-        tz_compact = local_tz
+        body, tz_compact = timestamp, local_tz
 
     # No seconds: 2025-01-15T09:00
-    if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$", timestamp):
-        timestamp = f"{timestamp}:00"
+    if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$", body):
+        body = f"{body}:00"
 
-    # Has seconds but no milliseconds: 2025-01-15T09:00:00
-    if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$", timestamp):
-        return f"{timestamp}.000{tz_compact}"
+    # Seconds, with or without a fractional part — Jira takes exactly 3 digits.
+    dt_match = _DATE_TIME_RE.match(body)
+    if dt_match:
+        millis = (dt_match.group(2) or "").ljust(3, "0")[:3]
+        return f"{dt_match.group(1)}.{millis}{tz_compact}"
 
-    # Fallback: return as-is (let Jira API handle/reject it)
+    # Fallback: the original input, offset included (let Jira handle/reject it)
     return timestamp
 
 
