@@ -148,7 +148,7 @@ validate_file() {
         {
             line = $0
             gsub(/\\-/, "", line)
-            if (line ~ /(^|[[:space:]]|\{\{)-+[A-Za-z0-9_]/)
+            if (line ~ /(^|[[:space:]]|\{\{)-+([[:alnum:]]|_)/)
                 printf "%d:%s\n", NR, $0
         }' <<< "$content" | head -3)
     if [ -n "$dash_hits" ]; then
