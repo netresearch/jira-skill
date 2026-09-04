@@ -125,18 +125,30 @@ validate_file() {
         grep -nE "$star_re" <<< "$content" | head -3
     fi
 
-    # Check for flag-like tokens (--strict, --no-global) that Jira renders as
-    # strikethrough. `-text-` is strikethrough; the opening `-` needs only
-    # whitespace (or a {{ monospace opener — text effects apply INSIDE {{...}}
-    # too) before it and a non-space after it, so a pair of CLI flags strikes
-    # through everything between them. Escape every dash: {{\-\-strict}}.
+    # Check for dashes that open a Jira strikethrough span. `-text-` is
+    # strikethrough; the opening dash run needs only whitespace (or a {{
+    # monospace opener — text effects apply INSIDE {{...}} too) before it and a
+    # word character after it, so a pair strikes through everything between
+    # them. This is NOT limited to double-dash flags: a single-dash option
+    # opens a span too, which makes `journalctl -b -p crit` a matched pair.
+    # Escape every dash: {{\-\-strict}}, {{\-s}}.
     # Dashes inside {code}/{noformat} blocks render literally — skip those
     # lines via open/close toggling. Markdown ``` fences are skipped the same
     # way: they are flagged as an error by their own check above, and fenced
     # content is code either way, so warning on it here would be noise on top.
     # Escaped dashes (\-) are stripped first so they don't false-positive;
-    # `--` followed by a non-letter (em-dash typography `---`, `-- `) is not a
-    # flag and stays exempt.
+    # a dash run followed by a non-word character (em-dash typography `---`,
+    # `-- `, list bullets `- item`) stays exempt, and a dash inside a word
+    # (`Round-1`, `2026-09-04`) never matches for want of leading whitespace.
+    # The word class must match Python's Unicode-aware \w in lib/markup.py.
+    # Two dead ends, both measured with gawk 5.2.1: [[:alnum:]] is
+    # locale-dependent (ASCII-only under LC_ALL=C, so a non-ASCII letter is
+    # flagged by the comment lint and passed here), and an explicit high-byte
+    # range [\200-\377] is rejected outright in a multibyte locale
+    # ("Invalid collation character"), which kills the whole rule silently.
+    # Negating space and punct instead is locale-independent: a high byte is
+    # neither under C, and is alnum under UTF-8, so both locales agree.
+    # tests/test_validator_parity.py pins the two implementations together.
     local dash_hits
     dash_hits=$(awk '
         /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { inblock = !inblock; next }
@@ -145,11 +157,11 @@ validate_file() {
         {
             line = $0
             gsub(/\\-/, "", line)
-            if (line ~ /(^|[[:space:]]|\{\{)--[A-Za-z]/)
+            if (line ~ /(^|[[:space:]]|\{\{)-+[^[:space:][:punct:]]/)
                 printf "%d:%s\n", NR, $0
         }' <<< "$content" | head -3)
     if [ -n "$dash_hits" ]; then
-        warning "Found flag-like token (--foo) outside a code block — Jira strikes through -text- spans, even inside {{...}}. Escape every dash: \\-\\-foo (e.g. {{\\-\\-strict}})."
+        warning "Found a dash that opens a strikethrough span outside a code block — Jira strikes through -text- spans, even inside {{...}}, and a single-dash option opens one too. Escape every dash: \\-foo (e.g. {{\\-\\-strict}}, {{\\-s}})."
         echo "   Lines with issue:"
         echo "$dash_hits"
     fi

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-communication` / `jira-syntax`: the strikethrough check now catches **single**-dash options, not only `--flags`. Jira opens a `-text-` span on any run of dashes preceded by whitespace (or a `{{` opener) and followed by a word character, so `journalctl -b -p crit` is a matched pair and strikes through everything between `-b` and `-p`. Both implementations previously required two dashes (`--[A-Za-z]`) and the reference documented single-dash options as deliberately out of scope, which was wrong. `_FLAG_DASH_RE` and the `validate-jira-syntax.sh` awk pattern are now `-+\w`; the message names the single-dash case. Exemptions are unchanged and covered by tests: em/en-dash typography (`---`, `--` followed by a space), list bullets (`- item`), dashes inside a word (`Round-1`, `2026-09-04`), escaped dashes (`\-`), and anything inside `{code}`/`{noformat}`. The awk word class is written as `[^[:space:][:punct:]]` so it is locale-independent: POSIX `[[:alnum:]]` is ASCII-only under `LC_ALL=C` (letting the standalone validator pass a non-ASCII case the comment lint rejects), while an explicit high-byte range is rejected outright in a multibyte locale and would disable the rule silently. `tests/test_validator_parity.py` runs both implementations over the same fixtures in every locale available on the machine, so the pair cannot drift apart again.
+
 ## [3.30.0] - 2026-09-03
 
 ### Added

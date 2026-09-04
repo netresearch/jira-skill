@@ -25,13 +25,16 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   Content inside ``{{monospace}}`` and ``[links]`` is ignored. Known blind spot:
   a bare trailing-underscore prefix (``tx_news_``) is flagged like broken
   emphasis - wrap identifiers in ``{{monospace}}`` to silence it.
-- Flag-like tokens (``--strict``) outside code blocks. Jira parses
-  ``-text-`` as strikethrough; the opening ``-`` needs only whitespace (or a
+- Dashes that open a strikethrough span, outside code blocks. Jira parses
+  ``-text-`` as strikethrough; the opening dash run needs only whitespace (or a
   ``{{`` monospace opener - text effects apply INSIDE ``{{...}}``, verified
-  against Jira Server 9.12) before it and a non-space after it, so a pair of
-  CLI flags strikes through everything between them. Escaped dashes (``\\-``)
-  are literal and pass; em/en-dash typography (``---``, ``--`` before a
-  non-letter) never matches.
+  against Jira Server 9.12) before it and a word character after it, so a pair
+  of such dashes strikes through everything between them. This is NOT limited
+  to double-dash flags: a single-dash option opens a span too, which makes
+  ``journalctl -b -p crit`` a matched pair. Escaped dashes (``\\-``) are
+  literal and pass; em/en-dash typography (``---``, ``--`` before a non-word
+  character) and list bullets (``- item``) never match, and a dash inside a
+  word (``Round-1``) has no leading whitespace and never matches either.
 
 Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
 *other* tags inside an open block are ignored. An occurrence of the
@@ -78,12 +81,18 @@ _MIDWORD_EMPHASIS_RES = {
     "*": re.compile(r"(?<=\w)\*[^\s*]+\*" + _EMPH_CLOSE),
 }
 
-# Flag-like token Jira strikes through. Scanned on the RAW line (not the
+# Dash that opens a Jira strikethrough span. Scanned on the RAW line (not the
 # monospace-blanked copy): text effects apply INSIDE {{...}}, so {{--strict}}
 # is just as broken as bare --strict. The caller strips \- escapes before
-# matching (an escaped dash is a literal); requiring a letter after the second
-# dash keeps em/en-dash typography (---, `-- `) out of scope.
-_FLAG_DASH_RE = re.compile(r"(?:^|\s|\{\{)--[A-Za-z]")
+# matching (an escaped dash is a literal).
+#
+# The opener is ANY run of dashes preceded by whitespace (or a {{ opener) and
+# followed by a word character — a single-dash option like `-s` opens a span
+# exactly as `--strict` does, so `journalctl -b -p crit` is a matched pair.
+# Requiring a word character after the run keeps em/en-dash typography (`---`,
+# `-- `) and list bullets (`- item`) out of scope, and a dash inside a word
+# (`Round-1`, `2026-09-04`) never matches for want of the leading whitespace.
+_FLAG_DASH_RE = re.compile(r"(?:^|\s|\{\{)-+\w")
 
 
 def lint_wiki_markup(text: str) -> list[str]:
@@ -136,14 +145,16 @@ def lint_wiki_markup(text: str) -> list[str]:
                     f"'Prefix{marker}Wort{marker}'): {stripped[:80]!r}"
                 )
 
-        # CLI flags render struck through, even inside {{monospace}} - scan the
-        # raw line with \- escapes removed (an escaped dash is a literal).
+        # A whitespace-preceded dash run renders struck through, even inside
+        # {{monospace}} - scan the raw line with \- escapes removed (an escaped
+        # dash is a literal). Single-dash options count, not just --flags.
         if _FLAG_DASH_RE.search(line.replace("\\-", "")):
             findings.append(
-                f"line {lineno}: flag-like token (--foo) - Jira parses -text- as "
-                f"strikethrough, even inside {{{{...}}}} monospace, so a pair of "
-                f"flags strikes through everything between them; escape every "
-                f"dash as \\-\\-foo (e.g. {{{{\\-\\-strict}}}}): {stripped[:80]!r}"
+                f"line {lineno}: dash opens a strikethrough span - Jira parses "
+                f"-text- as strikethrough, even inside {{{{...}}}} monospace, and a "
+                f"single-dash option opens one too, so a pair (e.g. '-b ... -p') "
+                f"strikes through everything between them; escape every dash as "
+                f"\\-foo (e.g. {{{{\\-\\-strict}}}}, {{{{\\-s}}}}): {stripped[:80]!r}"
             )
 
         if not matches:
