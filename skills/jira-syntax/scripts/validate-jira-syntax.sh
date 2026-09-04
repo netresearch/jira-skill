@@ -140,6 +140,12 @@ validate_file() {
     # a dash run followed by a non-word character (em-dash typography `---`,
     # `-- `, list bullets `- item`) stays exempt, and a dash inside a word
     # (`Round-1`, `2026-09-04`) never matches for want of leading whitespace.
+    # The word class must match Python's Unicode-aware \w in lib/markup.py, and
+    # POSIX [[:alnum:]] is locale-dependent — under LC_ALL=C it is ASCII-only,
+    # so `-e` with a non-ASCII letter would be flagged by the comment lint and
+    # passed here. Any high byte is therefore treated as a word character,
+    # which makes the rule locale-independent. tests/test_validator_parity.py
+    # pins the two implementations together.
     local dash_hits
     dash_hits=$(awk '
         /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { inblock = !inblock; next }
@@ -148,7 +154,7 @@ validate_file() {
         {
             line = $0
             gsub(/\\-/, "", line)
-            if (line ~ /(^|[[:space:]]|\{\{)-+([[:alnum:]]|_)/)
+            if (line ~ /(^|[[:space:]]|\{\{)-+([[:alnum:]_]|[\200-\377])/)
                 printf "%d:%s\n", NR, $0
         }' <<< "$content" | head -3)
     if [ -n "$dash_hits" ]; then
