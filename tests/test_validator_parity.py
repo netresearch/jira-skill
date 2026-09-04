@@ -11,6 +11,7 @@ The trap this pins is locale: POSIX `[[:alnum:]]` is locale-dependent, so under
 `\\w`. The validator is therefore run under both `C` and a UTF-8 locale.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-commun
 from markup import lint_wiki_markup  # noqa: E402
 
 VALIDATOR = Path(__file__).resolve().parents[1] / "skills/jira-syntax/scripts/validate-jira-syntax.sh"
+
+
+def _utf8_locale() -> str | None:
+    """A UTF-8 locale that exists on this machine, or None.
+
+    CI runners routinely ship only `C`/`POSIX`, and forcing `LC_ALL` to an
+    absent locale makes the shell abort rather than run the validator - which
+    is what turned this file red on its first push.
+    """
+    try:
+        out = subprocess.run(["locale", "-a"], capture_output=True, text=True, check=False).stdout
+    except OSError:
+        return None
+    for name in out.split():
+        if name.lower().replace("-", "").endswith("utf8"):
+            return name
+    return None
+
+
+LOCALES = ["C"] + ([u] if (u := _utf8_locale()) else [])
 
 # (text, expected_flagged). Each is prose, so nothing here is inside {code}.
 CASES = [
@@ -49,13 +70,18 @@ def _validator_flags(text: str, tmp_path: Path, locale: str) -> bool:
     # the fixture fence-free; a bare h3. header keeps the rest of its checks quiet.
     f = tmp_path / "draft.txt"
     f.write_text(f"h3. Fixture\n\n{text}\n", encoding="utf-8")
+    env = {**os.environ, "LC_ALL": locale, "LANG": locale}
     r = subprocess.run(
         ["bash", str(VALIDATOR), str(f)],
         capture_output=True,
         text=True,
-        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "LC_ALL": locale},
+        env=env,
         check=False,
     )
+    # The validator exits non-zero only on ERRORs; a warning-only run exits 0.
+    # Anything else means it did not run, and a silent "no match" would then be
+    # read as agreement - fail loudly instead.
+    assert r.returncode == 0, f"validator did not run under LC_ALL={locale}: {r.returncode} {r.stderr[:200]}"
     return "opens a strikethrough span" in r.stdout
 
 
@@ -65,10 +91,10 @@ def test_python_matches_expectation(text, expected):
 
 
 @pytest.mark.skipif(not VALIDATOR.exists(), reason="validator script not present")
-@pytest.mark.parametrize("locale", ["C", "en_US.UTF-8"])
+@pytest.mark.parametrize("locale", LOCALES)
 @pytest.mark.parametrize("text,expected", CASES)
 def test_validator_agrees_with_python(text, expected, locale, tmp_path):
     """The shell validator must reach the same verdict as the Python lint, in
-    every locale — this is what the ASCII-only awk class used to break."""
+    every locale available here - this is what the ASCII-only awk class broke."""
     assert _validator_flags(text, tmp_path, locale) is expected
     assert _validator_flags(text, tmp_path, locale) is _python_flags(text)

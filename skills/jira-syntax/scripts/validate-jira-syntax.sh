@@ -140,12 +140,15 @@ validate_file() {
     # a dash run followed by a non-word character (em-dash typography `---`,
     # `-- `, list bullets `- item`) stays exempt, and a dash inside a word
     # (`Round-1`, `2026-09-04`) never matches for want of leading whitespace.
-    # The word class must match Python's Unicode-aware \w in lib/markup.py, and
-    # POSIX [[:alnum:]] is locale-dependent — under LC_ALL=C it is ASCII-only,
-    # so `-e` with a non-ASCII letter would be flagged by the comment lint and
-    # passed here. Any high byte is therefore treated as a word character,
-    # which makes the rule locale-independent. tests/test_validator_parity.py
-    # pins the two implementations together.
+    # The word class must match Python's Unicode-aware \w in lib/markup.py.
+    # Two dead ends, both measured with gawk 5.2.1: [[:alnum:]] is
+    # locale-dependent (ASCII-only under LC_ALL=C, so a non-ASCII letter is
+    # flagged by the comment lint and passed here), and an explicit high-byte
+    # range [\200-\377] is rejected outright in a multibyte locale
+    # ("Invalid collation character"), which kills the whole rule silently.
+    # Negating space and punct instead is locale-independent: a high byte is
+    # neither under C, and is alnum under UTF-8, so both locales agree.
+    # tests/test_validator_parity.py pins the two implementations together.
     local dash_hits
     dash_hits=$(awk '
         /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { inblock = !inblock; next }
@@ -154,7 +157,7 @@ validate_file() {
         {
             line = $0
             gsub(/\\-/, "", line)
-            if (line ~ /(^|[[:space:]]|\{\{)-+([[:alnum:]_]|[\200-\377])/)
+            if (line ~ /(^|[[:space:]]|\{\{)-+[^[:space:][:punct:]]/)
                 printf "%d:%s\n", NR, $0
         }' <<< "$content" | head -3)
     if [ -n "$dash_hits" ]; then
