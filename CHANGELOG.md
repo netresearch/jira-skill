@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.30.1] - 2026-09-05
+
 ### Fixed
 
 - `jira-communication` / `jira-syntax`: the strikethrough check now catches **single**-dash options, not only `--flags`. Jira opens a `-text-` span on any run of dashes preceded by whitespace (or a `{{` opener) and followed by a word character, so `journalctl -b -p crit` is a matched pair and strikes through everything between `-b` and `-p`. Both implementations previously required two dashes (`--[A-Za-z]`) and the reference documented single-dash options as deliberately out of scope, which was wrong. `_FLAG_DASH_RE` and the `validate-jira-syntax.sh` awk pattern are now `-+\w`; the message names the single-dash case. Exemptions are unchanged and covered by tests: em/en-dash typography (`---`, `--` followed by a space), list bullets (`- item`), dashes inside a word (`Round-1`, `2026-09-04`), escaped dashes (`\-`), and anything inside `{code}`/`{noformat}`. The awk word class is written as `[^[:space:][:punct:]]` so it is locale-independent: POSIX `[[:alnum:]]` is ASCII-only under `LC_ALL=C` (letting the standalone validator pass a non-ASCII case the comment lint rejects), while an explicit high-byte range is rejected outright in a multibyte locale and would disable the rule silently. `tests/test_validator_parity.py` runs both implementations over the same fixtures in every locale available on the machine, so the pair cannot drift apart again.
@@ -825,7 +827,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.30.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.30.1...HEAD
+[3.30.1]: https://github.com/netresearch/jira-skill/compare/v3.30.0...v3.30.1
 [3.30.0]: https://github.com/netresearch/jira-skill/compare/v3.29.1...v3.30.0
 [3.29.1]: https://github.com/netresearch/jira-skill/compare/v3.29.0...v3.29.1
 [3.29.0]: https://github.com/netresearch/jira-skill/compare/v3.28.0...v3.29.0
