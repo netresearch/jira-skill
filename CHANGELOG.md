@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- README: the `/plugin install` step the marketplace section was missing, a "Without a marketplace" section covering the skills-directory route, and a note that `npx skills` installs `SKILL.md` skills only — not the hooks this repo also ships
+- README: the `/plugin install` step missing from the marketplace section, a "Without a marketplace" section covering the skills-directory route, and a note that `npx skills` installs `SKILL.md` skills only — not the hooks this repo also ships
 
 ## [3.30.1] - 2026-09-05
 
