@@ -198,6 +198,7 @@ or run scripts directly via uv run (NOT python3):
 - Search issues: uv run {scripts_dir}/core/jira-search.py query "JQL"
 - Create an issue: uv run {scripts_dir}/workflow/jira-create.py issue PROJ "Summary" --type Task
 - Transition status: uv run {scripts_dir}/workflow/jira-transition.py do KEY "Status"
+- Set fields (assignee, custom fields): uv run {scripts_dir}/core/jira-issue.py update KEY --fields-json '{{"assignee": {{"name": "username"}}}}'
 - Add comments: uv run {scripts_dir}/workflow/jira-comment.py add KEY "text"
 - Log work: uv run {scripts_dir}/core/jira-worklog.py add KEY "2h"
 
