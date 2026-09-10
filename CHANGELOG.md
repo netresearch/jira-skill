@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- README: the `/plugin install` step missing from the marketplace section, a "Without a marketplace" section covering the skills-directory route, and a note that `npx skills` installs `SKILL.md` skills only — not the hooks this repo also ships
+
+### Fixed
+
+- Hook: the injected issue-reference hint lists `jira-issue.py update`, so setting a field no longer means finding it in `SKILL.md` first
+
 ## [3.30.1] - 2026-09-05
 
 ### Fixed
