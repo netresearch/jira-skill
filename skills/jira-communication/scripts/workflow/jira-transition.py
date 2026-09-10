@@ -431,6 +431,13 @@ def do_transition(
         except json.JSONDecodeError as e:
             error(f"Invalid JSON in --fields-json: {e}")
             sys.exit(1)
+        # json.loads returns whatever the document says. A list, string, number
+        # or null reaches set()/dict() below and fails there instead, as a
+        # transition error that points at Jira rather than at the argument —
+        # and `[]` passes through as no fields at all.
+        if not isinstance(extra_fields, dict):
+            error(f"--fields-json must be a JSON object, got {type(extra_fields).__name__}: {fields_json}")
+            sys.exit(1)
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 

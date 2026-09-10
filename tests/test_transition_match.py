@@ -363,6 +363,36 @@ class TestDoCommandOutput:
         result = self._run(client, ["--quiet", "do", "X-1", "Done", "-r", "Fixed"])
         assert result.output.strip() == "X-1"
 
+    def test_fields_json_object_reaches_the_payload(self):
+        client = self._client([self._DONE])
+        self._run(client, ["do", "X-1", "Done", "-r", "Fixed", "--fields-json", '{"summary": "kept"}'])
+        _, kwargs = client.post.call_args
+        assert kwargs["data"]["fields"]["summary"] == "kept"
+
+    def test_a_json_array_is_refused_before_posting(self):
+        """`json.loads` returns whatever the document says. Without the type
+        check an array reaches set()/dict() and surfaces as a transition error
+        that points at Jira instead of at the argument."""
+        client = self._client([self._DONE])
+        result = self._run(client, ["do", "X-1", "Done", "-r", "Fixed", "--fields-json", "[]"])
+        assert result.exit_code == 1, result.output
+        assert "must be a JSON object" in result.output
+        client.post.assert_not_called()
+
+    def test_json_null_is_refused_before_posting(self):
+        """`null` is valid JSON and the emptiest way to get None past the
+        decoder — the shape that would otherwise post no fields at all."""
+        client = self._client([self._DONE])
+        result = self._run(client, ["do", "X-1", "Done", "-r", "Fixed", "--fields-json", "null"])
+        assert result.exit_code == 1, result.output
+        assert "must be a JSON object" in result.output
+        client.post.assert_not_called()
+
+    def test_the_refusal_names_the_type_it_got(self):
+        client = self._client([self._DONE])
+        result = self._run(client, ["do", "X-1", "Done", "-r", "Fixed", "--fields-json", '"a string"'])
+        assert "got str" in result.output
+
 
 class TestPathPostsById:
     """`path` chose a transition and then discarded it.
