@@ -25,13 +25,16 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   Content inside ``{{monospace}}`` and ``[links]`` is ignored. Known blind spot:
   a bare trailing-underscore prefix (``tx_news_``) is flagged like broken
   emphasis - wrap identifiers in ``{{monospace}}`` to silence it.
-- Flag-like tokens (``--strict``) outside code blocks. Jira parses
-  ``-text-`` as strikethrough; the opening ``-`` needs only whitespace (or a
+- Dashes that open a strikethrough span, outside code blocks. Jira parses
+  ``-text-`` as strikethrough; the opening dash run needs only whitespace (or a
   ``{{`` monospace opener - text effects apply INSIDE ``{{...}}``, verified
-  against Jira Server 9.12) before it and a non-space after it, so a pair of
-  CLI flags strikes through everything between them. Escaped dashes (``\\-``)
-  are literal and pass; em/en-dash typography (``---``, ``--`` before a
-  non-letter) never matches.
+  against Jira Server 9.12) before it and a word character after it, so a pair
+  of such dashes strikes through everything between them. This is NOT limited
+  to double-dash flags: a single-dash option opens a span too, which makes
+  ``journalctl -b -p crit`` a matched pair. Escaped dashes (``\\-``) are
+  literal and pass; em/en-dash typography (``---``, ``--`` before a non-word
+  character) and list bullets (``- item``) never match, and a dash inside a
+  word (``Round-1``) has no leading whitespace and never matches either.
 
 Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
 *other* tags inside an open block are ignored. An occurrence of the
@@ -78,12 +81,18 @@ _MIDWORD_EMPHASIS_RES = {
     "*": re.compile(r"(?<=\w)\*[^\s*]+\*" + _EMPH_CLOSE),
 }
 
-# Flag-like token Jira strikes through. Scanned on the RAW line (not the
+# Dash that opens a Jira strikethrough span. Scanned on the RAW line (not the
 # monospace-blanked copy): text effects apply INSIDE {{...}}, so {{--strict}}
 # is just as broken as bare --strict. The caller strips \- escapes before
-# matching (an escaped dash is a literal); requiring a letter after the second
-# dash keeps em/en-dash typography (---, `-- `) out of scope.
-_FLAG_DASH_RE = re.compile(r"(?:^|\s|\{\{)--[A-Za-z]")
+# matching (an escaped dash is a literal).
+#
+# The opener is ANY run of dashes preceded by whitespace (or a {{ opener) and
+# followed by a word character — a single-dash option like `-s` opens a span
+# exactly as `--strict` does, so `journalctl -b -p crit` is a matched pair.
+# Requiring a word character after the run keeps em/en-dash typography (`---`,
+# `-- `) and list bullets (`- item`) out of scope, and a dash inside a word
+# (`Round-1`, `2026-09-04`) never matches for want of the leading whitespace.
+_FLAG_DASH_RE = re.compile(r"(?:^|\s|\{\{)-+\w")
 
 
 def lint_wiki_markup(text: str) -> list[str]:
@@ -136,14 +145,16 @@ def lint_wiki_markup(text: str) -> list[str]:
                     f"'Prefix{marker}Wort{marker}'): {stripped[:80]!r}"
                 )
 
-        # CLI flags render struck through, even inside {{monospace}} - scan the
-        # raw line with \- escapes removed (an escaped dash is a literal).
+        # A whitespace-preceded dash run renders struck through, even inside
+        # {{monospace}} - scan the raw line with \- escapes removed (an escaped
+        # dash is a literal). Single-dash options count, not just --flags.
         if _FLAG_DASH_RE.search(line.replace("\\-", "")):
             findings.append(
-                f"line {lineno}: flag-like token (--foo) - Jira parses -text- as "
-                f"strikethrough, even inside {{{{...}}}} monospace, so a pair of "
-                f"flags strikes through everything between them; escape every "
-                f"dash as \\-\\-foo (e.g. {{{{\\-\\-strict}}}}): {stripped[:80]!r}"
+                f"line {lineno}: dash opens a strikethrough span - Jira parses "
+                f"-text- as strikethrough, even inside {{{{...}}}} monospace, and a "
+                f"single-dash option opens one too, so a pair (e.g. '-b ... -p') "
+                f"strikes through everything between them; escape every dash as "
+                f"\\-foo (e.g. {{{{\\-\\-strict}}}}, {{{{\\-s}}}}): {stripped[:80]!r}"
             )
 
         if not matches:
@@ -177,3 +188,75 @@ def lint_wiki_markup(text: str) -> list[str]:
             )
 
     return findings
+
+
+# Projects whose agent-authored content is English by convention. Team rules
+# live in the consuming skill (netresearch-jira, references/it/language.md);
+# this list only decides where the reminder fires. Matched on the key's
+# project part, `SRV`/`IO` as prefixes because of SRVGL, SRVC, IOS, IOT.
+_ENGLISH_ONLY_EXACT = frozenset({"NRS", "NRT", "LIC", "PO"})
+_ENGLISH_ONLY_PREFIXES = ("SRV", "IO")
+
+# Function words that are common in German and rare-to-absent in English
+# technical prose. Deliberately excludes look-alikes that are ordinary English
+# words on their own (`die`, `war`, `hat`, `bald`, `also`, `fast`, `an`, `in`,
+# `so`, `man`), so an English sentence cannot accumulate hits by accident.
+_GERMAN_MARKERS = frozenset(
+    """
+    aber auch auf aus bei beim bereits bis dabei damit dann dass dem den denn der
+    des deshalb durch ein eine einem einen einer eines erst falls für gegen ist
+    jede jeden jetzt kann kein keine mit nach nicht noch nur oder ohne schon sein
+    seine sich sind soll sollte über und unter vom von vor wenn werden wird wurde
+    wurden während zum zur zwei
+    """.split()
+)
+
+_WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
+
+# How many *distinct* markers must appear before the text is called German.
+# Five effectively require German sentence structure, so a loanword or a short
+# quoted fragment stays below it. The scan sees the whole body, quotes
+# included: a substantial German quote does reach five markers and does
+# produce a finding - that case is what --force is for.
+_GERMAN_MARKER_THRESHOLD = 5
+
+
+def looks_german(text: str) -> tuple[bool, list[str]]:
+    """Heuristic: does this text read as German prose? Returns (verdict, markers)."""
+    words = {w.lower() for w in _WORD_RE.findall(text)}
+    hits = sorted(words & _GERMAN_MARKERS)
+    return len(hits) >= _GERMAN_MARKER_THRESHOLD, hits
+
+
+def is_english_only_project(issue_key: str) -> bool:
+    """True when the key belongs to a project whose content is English by convention."""
+    project = issue_key.split("-", 1)[0].upper()
+    return project in _ENGLISH_ONLY_EXACT or project.startswith(_ENGLISH_ONLY_PREFIXES)
+
+
+def lint_ticket_language(text: str, issue_key: str | None) -> list[str]:
+    """Warn when German prose is about to be posted to an English-only project.
+
+    The rule itself is a team convention (see the consuming team skill); what
+    makes it worth a mechanical check is that prose alone has not held. Drift
+    happens mid-session after a run of genuinely German tickets, and it is
+    invisible in review because the ticket often already contains German from
+    quoted mails.
+
+    The scan reads the whole body, so a comment carrying a substantial German
+    quote is reported like German prose - the check cannot tell a quote from
+    authored text. That is the intended trade-off rather than a gap: posting
+    quoted content verbatim is exactly what the caller's --force is for.
+    """
+    if not issue_key or not is_english_only_project(issue_key):
+        return []
+    german, hits = looks_german(text)
+    if not german:
+        return []
+    project = issue_key.split("-", 1)[0].upper()
+    sample = ", ".join(hits[:6])
+    return [
+        f"text looks German ({sample}...) but {project} content is English by "
+        f"convention - re-resolve the language per ticket; quoted user content "
+        f"stays verbatim, so re-run with --force if that is what this is"
+    ]

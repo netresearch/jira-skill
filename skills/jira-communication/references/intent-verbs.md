@@ -201,4 +201,4 @@ Returns: description + Sebastian's scope-setting handover comment + Björn's ful
 
 ## Transition names are exact strings
 
-`jira-transition.py do KEY "<name>"` matches the transition name verbatim — including emoji prefixes some instances configure (e.g. `✅ Resolve`, `❌ QA failed`). On mismatch the error lists the available names; copy the wanted one exactly as printed. `jira-issue.py act KEY` shows them up front.
+`jira-transition.py do KEY <selector>` takes a transition ID, a transition name, or a target status name. Prefer the ID from `jira-transition.py list`: names carry emoji prefixes on some instances (`✅ Resolve`, `❌ QA failed`), two transitions can share a name up to that emoji, and two can share a target status — an ambiguous selector is refused with its candidates rather than resolved to a guess. On mismatch the error lists the available transitions with their IDs. `jira-issue.py act KEY` shows them up front.

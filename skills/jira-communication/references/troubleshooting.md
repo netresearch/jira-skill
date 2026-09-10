@@ -179,19 +179,26 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query "project = O
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query -f key,status -n 500 "project = OPS"
 ```
 
-### "Transition 'X' not available" (passing the transition ID)
+### "Transition 'X' not available"
 
-**Cause**: `jira-transition.py do` expects the **target status name**, not the numeric transition ID that `jira-transition.py list` prints in its leftmost column.
+**Cause**: the selector matched no transition offered from the issue's current status. `do` accepts a transition ID, a transition name, or a target status name — so this means none of the three matched, not that the wrong kind was passed.
 
-**Fix**: Pass the destination status, in quotes:
+**Fix**: list what the issue actually offers, then pass the ID from the leftmost column:
 ```bash
-# Wrong — 311 is the transition ID from `list`
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py list PROJ-123
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 311
-
-# Correct — the To-Status name
-uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "Resolved"
 ```
-When two transitions share a name but differ by icon (e.g. "✅ QA" → Resolved vs "❌ QA" → Reopened), disambiguate by passing the **target status** ("Resolved" / "Reopened"), which is unique.
+
+### "Transition 'X' is ambiguous"
+
+**Cause**: the name or target status matched more than one transition, and they are not interchangeable.
+
+**Fix**: pass the ID. Neither a name nor a target status is a reliable handle:
+
+- two transitions can share a **name** up to an emoji — `✅ QA` → Resolved beside `❌ QA` → Reopened, opposite outcomes;
+- two can share a **target** — `✅ Done` → Closed beside `✖ Close` → Closed, where only the second demands a resolution.
+
+`list` shows the ID, the target, and what each transition's screen requires. The ID is the only selector that means exactly one thing.
 
 ### "Issue does not exist"
 

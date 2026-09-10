@@ -173,29 +173,54 @@ class TestInlineEmphasis:
 
 
 class TestFlagDash:
-    """Flag-like tokens (--foo) render struck through outside code blocks."""
+    """A whitespace-preceded dash run opens a strikethrough span outside code
+    blocks. The trigger is: whitespace (or a ``{{`` opener), one or more ``-``,
+    then a word character."""
 
     def test_flags_in_prose_flagged(self):
-        assert any("flag-like token" in f for f in lint_wiki_markup("checked with --strict and --no-global"))
+        assert any("strikethrough span" in f for f in lint_wiki_markup("checked with --strict and --no-global"))
 
     def test_flag_inside_monospace_flagged(self):
         # Text effects apply INSIDE {{...}} - {{--strict}} is just as broken.
-        assert any("flag-like token" in f for f in lint_wiki_markup("green under {{--strict}} today"))
+        assert any("strikethrough span" in f for f in lint_wiki_markup("green under {{--strict}} today"))
 
     def test_escaped_flag_is_clean(self):
         assert lint_wiki_markup("green under {{\\-\\-strict}} and \\-\\-no-global today") == []
 
     def test_dash_typography_is_clean(self):
-        # Em/en-dash typography: no letter after the second dash.
+        # Em/en-dash typography: no word character after the dash run.
         assert lint_wiki_markup("a --- b and c -- d stay prose") == []
 
-    def test_single_dash_flag_is_clean(self):
-        # Deliberately out of scope: `-v` needs a closing dash to strike; only
-        # the high-signal double-dash shape is flagged.
-        assert lint_wiki_markup("run it with -v for verbose output") == []
+    def test_single_dash_option_flagged(self):
+        # A single dash opens a span too, so two of them are a matched pair:
+        # `journalctl -b -p crit` strikes through everything between -b and -p.
+        assert any("strikethrough span" in f for f in lint_wiki_markup("an empty {{journalctl -b -p crit}}"))
+
+    def test_lone_single_dash_option_flagged(self):
+        # Flagged even without a visible partner: the next dash may arrive in a
+        # later sentence of the same rendered paragraph.
+        assert any("strikethrough span" in f for f in lint_wiki_markup("run it with -v for verbose output"))
+
+    def test_escaped_single_dash_is_clean(self):
+        assert lint_wiki_markup("compare {{uptime \\-s}} against the mtime") == []
+
+    def test_digit_after_dash_flagged(self):
+        # "word character", not "letter": a digit closes the shape as well.
+        assert any("strikethrough span" in f for f in lint_wiki_markup("offset by -5 seconds"))
+
+    def test_list_bullet_is_clean(self):
+        # A dash bullet is followed by a space, not a word character.
+        assert lint_wiki_markup("- first item\n- second item") == []
+
+    def test_hyphenated_word_is_clean(self):
+        # No leading whitespace before the dash.
+        assert lint_wiki_markup("the Round-1 review on 2026-09-04 stays prose") == []
 
     def test_flags_inside_code_block_clean(self):
         assert lint_wiki_markup("{code:bash}\nvalidator --strict --no-global *.json\n{code}") == []
+
+    def test_single_dash_inside_code_block_clean(self):
+        assert lint_wiki_markup("{code}\njournalctl -b -p crit\n{code}") == []
 
     def test_flags_inside_noformat_block_clean(self):
         assert lint_wiki_markup("{noformat}\ncmd --strict\n{noformat}") == []

@@ -27,7 +27,7 @@ repos:
         args: [--allow-multiple-documents]
 
   - repo: https://github.com/netresearch/skill-repo-skill
-    rev: v1.37.0
+    rev: v2.0.1
     hooks:
       - id: validate-skill
       - id: check-version-parity
@@ -50,7 +50,7 @@ repos:
       - id: actionlint
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.5
+    rev: v0.16.6
     hooks:
       - id: ruff
       - id: ruff-format

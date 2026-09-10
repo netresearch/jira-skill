@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python 3.10+, uv. Jira Server/DC or Cloud instance with API access."
 metadata:
   author: Netresearch DTT GmbH
-  version: "3.29.1"
+  version: "3.30.1"
   repository: https://github.com/netresearch/jira-skill
 allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(${CLAUDE_SKILL_DIR}/scripts/*) Read Write
 ---
@@ -53,6 +53,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --commen
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task
 ```
 
+> **Transitions**: `list` shows each transition's id and what its screen requires; pass the **id** to `do` — a name or
+> a target status is not always unique, and an ambiguous one is refused rather than guessed.
 > **Terminal transitions**: pass `--resolution <value>` (`Done`, `Won't do`); if rejected ("cannot be set"),
 > retry without it — `references/intent-verbs.md`. **Versions**: read `references/versions.md` before `jira-version.py`.
 > **Mentions**: posting commands verify `[~username]` (miss → suggestions); `get`/`work` print usernames (`references/fields-and-users.md`).
