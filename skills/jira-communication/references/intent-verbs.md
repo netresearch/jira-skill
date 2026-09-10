@@ -122,6 +122,32 @@ curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" "$JIRA_URL/rest/api/2/re
   | python3 -c "import sys,json; [print(r['name']) for r in json.load(sys.stdin)]"
 ```
 
+### Fields the screen requires beyond resolution
+
+A transition screen is not limited to `resolution` — `list`'s `Requires`
+column can name any field, including ones that look pre-filled already, e.g.
+`summary`. `do` rejects the attempt up front rather than posting a payload the
+API would reject anyway:
+
+```
+jira-transition.py do PROJ-123 371
+✗ Transition 'Close' requires: summary
+```
+
+Pass it with `--fields-json`, same shape as `jira-issue.py update`:
+
+```bash
+jira-transition.py do PROJ-123 371 --resolution Done \
+  --fields-json '{"summary": "Unchanged summary, resubmitted because the screen demands it"}'
+```
+
+Observed on jira.netresearch.de (OPS project, 2026-09): a `Backlog → Closed`
+"Close" transition required `summary` on its screen even though the value
+was not changing — the transition screen re-submits whatever fields it
+lists, it does not carry the issue's current value forward automatically.
+`--fields-json` accepts any field the screen names this way, not only
+`summary`.
+
 ### Walking a multi-stage workflow (`path`)
 
 `jira-transition.py do` performs **one** transition. Workflows with intermediate

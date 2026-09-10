@@ -8,6 +8,7 @@
 # ///
 """Jira issue transitions - list available transitions and change issue status."""
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -203,9 +204,8 @@ def _ambiguous_selectors(transitions: list[dict]) -> list[str]:
 def _missing_hint(missing: list[str]) -> str:
     """What to do about the fields this transition declares and we did not send.
 
-    Only `resolution` has a flag here. Naming --resolution for an unmet
-    `assignee` or a custom field would send the reader after an option that
-    cannot help them.
+    `resolution` has its own flag; anything else goes through --fields-json,
+    same shape as `jira-issue.py update`.
     """
     flagged = [f for f in missing if f == "resolution"]
     other = [f for f in missing if f != "resolution"]
@@ -213,11 +213,9 @@ def _missing_hint(missing: list[str]) -> str:
     if flagged:
         parts.append("Pass --resolution <name> for `resolution`.")
     if other:
+        example = json.dumps({other[0]: "<value>"})
         parts.append(
-            "No flag exists here for "
-            + ", ".join(f"`{f}`" for f in other)
-            + " — POST the transition yourself with those fields, or choose a "
-            "transition that does not ask for them."
+            "Pass --fields-json for " + ", ".join(f"`{f}`" for f in other) + f", e.g. --fields-json '{example}'."
         )
     parts.append("`list` shows the requirements per transition.")
     return " ".join(parts)
@@ -384,6 +382,10 @@ def list_transitions(ctx, issue_key: str):
 @click.argument("status_name", metavar="TRANSITION")
 @click.option("--comment", "-c", help="Comment to add during transition")
 @click.option("--resolution", "-r", help="Resolution name (for closing transitions)")
+@click.option(
+    "--fields-json",
+    help="JSON string of additional fields the transition screen requires (e.g. summary) — same shape as `jira-issue.py update`",
+)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
@@ -393,6 +395,7 @@ def do_transition(
     status_name: str,
     comment: str | None,
     resolution: str | None,
+    fields_json: str | None,
     no_verify_mentions: bool,
     dry_run: bool,
 ):
@@ -417,8 +420,17 @@ def do_transition(
 
       jira-transition do PROJ-123 "Done" -c "Deployed to production" -r Fixed
 
+      jira-transition do PROJ-123 "Close" --resolution Done --fields-json '{"summary": "Unchanged summary, resubmitted because the screen demands it"}'
+
       jira-transition do PROJ-123 "In Review" --dry-run
     """
+    extra_fields: dict = {}
+    if fields_json:
+        try:
+            extra_fields = json.loads(fields_json)
+        except json.JSONDecodeError as e:
+            error(f"Invalid JSON in --fields-json: {e}")
+            sys.exit(1)
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
@@ -475,7 +487,7 @@ def do_transition(
         # check happened.
         spec_known = "fields" in matching
         required = required_fields(matching)
-        supplied = {"resolution"} if resolution else set()
+        supplied = ({"resolution"} if resolution else set()) | set(extra_fields)
         missing = [f for f in required if f not in supplied] if spec_known else []
 
         # Dry run
@@ -488,6 +500,8 @@ def do_transition(
                 print(f"  Comment: {comment}")
             if resolution:
                 print(f"  Resolution: {resolution}")
+            if extra_fields:
+                print(f"  Fields: {extra_fields}")
             if missing:
                 error("Missing required field(s) for this transition: " + ", ".join(missing))
                 print("  " + _missing_hint(missing))
@@ -508,7 +522,7 @@ def do_transition(
                 print(line)
 
         # Build transition payload
-        fields = {}
+        fields = dict(extra_fields)
         if resolution:
             fields["resolution"] = {"name": resolution}
 
