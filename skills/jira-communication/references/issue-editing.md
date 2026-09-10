@@ -61,6 +61,17 @@ Look up custom field IDs with `jira-fields.py` — see `fields-and-users.md`.
 
 **Epic Link is edit-screen-only.** On Jira Server/DC the Epic Link field (look it up with `jira-fields.py search epic`, e.g. `customfield_10580`) is usually **not on the create screen** — passing it to `jira-create.py … --fields-json` fails with *"Field … cannot be set. It is not on the appropriate screen, or unknown."* Create the issue first, then set the epic with `jira-issue.py update KEY --fields-json '{"customfield_10580": "PROJ-1"}'`.
 
+### Multi-line wiki-markup bodies (Deployment Information, UAT fields, …)
+
+`--fields-json` takes a raw JSON string with no `-`/stdin support (unlike `--description`), so hand-escaping a multi-line wiki-markup body — headers, `{{code}}` spans, embedded newlines — is error-prone. Build the payload with `jq` instead of inline JSON:
+
+```bash
+jq -Rs --arg fid "customfield_11488" '{($fid): .}' body.txt > payload.json
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --fields-json "$(cat payload.json)"
+```
+
+`jq -Rs` reads the file as one raw string, preserving newlines, and `--arg fid` keeps the field ID out of the JSON body — no manual quote/newline escaping.
+
 ## Array-valued fields: replace vs incremental updates
 
 Every array-valued field — `labels`, `fixVersions`, `versions` (Affects Version/s), `components` — is **replaced wholesale** by whatever you send. `jira-issue.py update` has no append path: it always sends a plain `fields` set (`update_fields.update(extra_fields)` → `update_issue_field`). Jira's REST API *does* have an append verb — `{"update": {"fixVersions": [{"add": {"id": "…"}}]}}` — but the scripts do not expose it, so a payload carrying one entry leaves the issue with exactly that one entry.
