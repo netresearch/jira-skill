@@ -28,7 +28,10 @@ from lib.output import comment_to_text, error, format_output, success
 from lib.users import check_mentions_cli, person_label
 
 # Trailing UTC offset in any ISO-8601 spelling: "Z", "+01:00" or "+0100".
-_TZ_SUFFIX_RE = re.compile(r"(?:(?P<utc>[Zz])|(?P<sign>[+-])(?P<hh>\d{2}):?(?P<mm>\d{2}))$")
+# The hour and minute ranges are part of the match on purpose: `\d{2}` would
+# accept "+25:00" and rewrite it to "+2500", which is neither valid nor the
+# untouched passthrough this function promises for input it cannot read.
+_TZ_SUFFIX_RE = re.compile(r"(?:(?P<utc>[Zz])|(?P<sign>[+-])(?P<hh>[01]\d|2[0-3]):?(?P<mm>[0-5]\d))$")
 
 # Date and time to the second, with an optional fractional part of any length.
 _DATE_TIME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?$")
@@ -76,7 +79,13 @@ def normalize_iso_timestamp(timestamp: str) -> str:
 
     # Date only: 2025-01-15 — midnight local, on that date's offset.
     if re.match(r"^\d{4}-\d{2}-\d{2}$", timestamp):
-        midnight = datetime.strptime(timestamp, "%Y-%m-%d")
+        # The shape matches but the date need not exist (2025-02-30). Parsing is
+        # the first step here that can reject input, and the contract for input
+        # this function cannot read is to hand it back, not to abort the command.
+        try:
+            midnight = datetime.strptime(timestamp, "%Y-%m-%d")
+        except ValueError:
+            return timestamp
         return f"{timestamp}T00:00:00.000{_local_offset_at(midnight)}"
 
     # Split the offset off the body; a bare body inherits local time.
@@ -98,7 +107,11 @@ def normalize_iso_timestamp(timestamp: str) -> str:
     dt_match = _DATE_TIME_RE.match(body)
     if dt_match:
         if tz_compact is None:
-            tz_compact = _local_offset_at(datetime.strptime(dt_match.group(1), "%Y-%m-%dT%H:%M:%S"))
+            try:
+                parsed = datetime.strptime(dt_match.group(1), "%Y-%m-%dT%H:%M:%S")
+            except ValueError:
+                return timestamp
+            tz_compact = _local_offset_at(parsed)
         millis = (dt_match.group(2) or "").ljust(3, "0")[:3]
         return f"{dt_match.group(1)}.{millis}{tz_compact}"
 

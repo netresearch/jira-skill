@@ -23,21 +23,36 @@ from conftest import load_script, make_mock_client
 _worklog_mod = load_script("jira-worklog", "core")
 normalize_iso_timestamp = _worklog_mod.normalize_iso_timestamp
 
+# The zone this session started in, read before any fixture has touched it.
+_AMBIENT_TZNAME = time.tzname
+
 
 @pytest.fixture
-def berlin(monkeypatch):
+def berlin():
     """Europe/Berlin: +0100 in winter, +0200 in summer.
 
     A zone with a DST shift is the point — a fixed-offset zone cannot tell a
     correct implementation from one reading the offset at call time.
+
+    TZ is saved and restored here rather than through ``monkeypatch``: the
+    process timezone only changes when ``tzset()`` runs, and monkeypatch tears
+    down *after* the fixture that requested it. A ``tzset()`` in this teardown
+    would therefore re-apply Berlin, and the restore that follows would never
+    take effect — leaking this zone into every later test in the session.
     """
     if not hasattr(time, "tzset"):
         pytest.skip("TZ switching needs time.tzset (POSIX)")
-    monkeypatch.setitem(os.environ, "TZ", "Europe/Berlin")
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Berlin"
     time.tzset()
-    yield
-    # monkeypatch restores TZ; tzset must be re-run for it to take effect.
-    time.tzset()
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -145,6 +160,20 @@ class TestUnrecognisedInput:
         result = normalize_iso_timestamp("2025-01-15 09:00:00+01:00")
         assert result.endswith("+01:00") or result.endswith("+0100"), result
 
+    @pytest.mark.parametrize("given", ["2025-01-15T09:00:00+25:00", "2025-01-15T09:00:00+12:99"])
+    def test_an_out_of_range_offset_is_not_compacted(self, given):
+        """`\\d{2}` would match these and emit `+2500`/`+1299` — a value that is
+        neither valid nor the untouched passthrough promised for unreadable
+        input, and one Jira would reject after the rewrite."""
+        assert normalize_iso_timestamp(given) == given
+
+    @pytest.mark.parametrize("given", ["2025-02-30", "2025-02-30T09:00:00", "2025-13-01T09:00"])
+    def test_a_date_that_does_not_exist_is_returned_verbatim(self, berlin, given):
+        """The shape matches but the calendar does not. Parsing is the first
+        step that can reject the input; an uncaught ValueError would abort the
+        command with a traceback instead of letting Jira answer."""
+        assert normalize_iso_timestamp(given) == given
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests: the CLI actually sends the normalized value
@@ -175,3 +204,23 @@ class TestWorklogAddStarted:
     def test_a_naive_timestamp_is_sent_with_its_own_dates_offset(self, berlin):
         payload = self._add("2025-07-15T09:00:00")
         assert payload["started"] == "2025-07-15T09:00:00.000+0200"
+
+
+class TestTheFixtureDoesNotLeakItsZone:
+    """The fixture changes a process-wide setting, so its restore is worth an
+    assertion of its own: a leaked TZ silently re-points every later test in the
+    session at Europe/Berlin, and they would still pass — wrongly.
+
+    The baseline is captured at import, before any fixture has run, so the
+    comparison is against the zone the session started in rather than against
+    another call to the code under test.
+    """
+
+    def test_the_fixture_really_switches_the_zone(self, berlin):
+        assert time.tzname[0] == "CET", time.tzname
+
+    def test_the_ambient_zone_is_restored_afterwards(self):
+        """Runs after the case above; `_AMBIENT_TZNAME` predates both."""
+        if _AMBIENT_TZNAME[0] == "CET":
+            pytest.skip("session already runs in Berlin; a leak is undetectable here")
+        assert time.tzname == _AMBIENT_TZNAME, f"fixture leaked {time.tzname}, expected {_AMBIENT_TZNAME}"
