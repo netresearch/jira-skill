@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.31.0] - 2026-09-11
+
 ### Added
 
 - README: the `/plugin install` step missing from the marketplace section, a "Without a marketplace" section covering the skills-directory route, and a note that `npx skills` installs `SKILL.md` skills only — not the hooks this repo also ships
@@ -835,7 +837,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.30.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.0...HEAD
+[3.31.0]: https://github.com/netresearch/jira-skill/compare/v3.30.1...v3.31.0
 [3.30.1]: https://github.com/netresearch/jira-skill/compare/v3.30.0...v3.30.1
 [3.30.0]: https://github.com/netresearch/jira-skill/compare/v3.29.1...v3.30.0
 [3.29.1]: https://github.com/netresearch/jira-skill/compare/v3.29.0...v3.29.1
