@@ -358,6 +358,17 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
         comments = list(reversed(comments))
         shown = comments if show_all else comments[:limit]
 
+        # The truncation notice belongs on stderr, in every output mode. On
+        # stdout it is part of the payload: a caller that pipes the table
+        # through grep, or parses --json, drops the one line saying the history
+        # is incomplete and reads 10 of 163 comments as the whole record. That
+        # happened -- a ticket was reported as carrying no "ready for QA"
+        # comment when it did, because the read was cut and the cut was
+        # invisible. stderr survives the pipe; stdout does not.
+        truncated = total is not None and not show_all and len(shown) < total
+        if truncated:
+            warning(f"{issue_key}: showing {len(shown)} of {total} comments — use --limit 0 for the full history")
+
         if ctx.obj["json"]:
             format_output(shown, as_json=True)
         elif ctx.obj["quiet"]:
@@ -367,7 +378,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
             if not shown:
                 print(f"No comments on {issue_key}")
             else:
-                if total is not None and not show_all and len(shown) < total:
+                if truncated:
                     print(f"Comments on {issue_key} ({len(shown)} of {total} shown — use --limit 0 to show all):\n")
                 else:
                     print(f"Comments on {issue_key} ({len(shown)} shown):\n")
