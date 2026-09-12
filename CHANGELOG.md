@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-comment.py list`: a truncated read now says so on **stderr**, in every output mode. The notice was a `print()` inside the table branch, so it vanished the moment the table went through a pipe — and `--json` and `--quiet` never carried it at all, which is the worse half: a caller parsing JSON received 10 of 163 comments with nothing to distinguish that from the whole history. The failure it produces is a confident negative drawn from a cut nobody saw; it has already reached a public ticket comment ("no `ready for QA` comment") that someone else had to correct. stdout keeps the existing line for readability. Four tests, each seen failing against a mutation aimed at it — removing the warning reddens the three presence tests, and warning unconditionally reddens the absence test
+
+### Documentation
+
+- `references/comments.md`: `--limit 0` is documented, with the distinction that decides which to use — ten comments is the right default for harvesting an ID and the wrong one for answering a question about what a ticket says, because a busy ticket carries its decisions in the middle of its history. Plus the rule against putting `| head`, `| tail` or `| grep` between `list` and the reader: they cut bodies mid-sentence and drop whole comments silently, and what survives looks like a complete answer. `--truncate N`, `--json | jq`, or a file read in windows do the same job without hiding the cut
+
 ## [3.31.0] - 2026-09-11
 
 ### Added

@@ -16,6 +16,34 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py --json list PROJ-123
 
 The JSON output has a top-level `comments` array; each entry has `id`, `author.displayName`, `body`, and `updated`.
 
+### `list` shows ten comments by default — pass `--limit 0` when you are reading, not harvesting
+
+```bash
+# The whole history, paginated for you
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py list PROJ-123 --limit 0
+```
+
+Ten is the right default for grabbing a recent comment ID. It is the wrong default for answering a question about what a ticket says, and the difference is invisible in the answer: a busy ticket carries its decisions in the middle of its history, and the last ten comments are the part that agreed with you. When the read informs a claim — a QA verdict, a status report, "nobody mentioned X" — use `--limit 0`.
+
+A truncated read now says so on **stderr** as well as in the table, so the notice survives a pipe and appears under `--json` and `--quiet` too. If you see `⚠ PROJ-123: showing 10 of 163 comments`, the answer you are about to give is based on 10.
+
+### Never put a line filter between `list` and your eyes
+
+`| head`, `| tail`, `| grep`, `--max-count` — each of them cuts a comment body mid-sentence and drops whole comments silently, and what is left looks like a complete answer. "X does not appear in this ticket" after a truncated read is a statement about the cut, not about the ticket; it has been wrong in exactly that way, in a public comment that someone else had to correct.
+
+Use the tool's own knobs instead, which cut where the data says to cut rather than where the terminal does:
+
+```bash
+# Shorten every body to N characters, keeping all comments and their metadata
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py list PROJ-123 --limit 0 --truncate 200
+
+# Or select deliberately, in a structured way
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py --json list PROJ-123 --limit 0 \
+  | jq -r '.[] | select(.author.name == "someone") | .body'
+```
+
+For a body too large to read in one go, write it to a file and read windows of it — the file keeps the whole thing while you look at part of it, which is the property a pipe destroys.
+
 ## Edit an existing comment
 
 ```bash
