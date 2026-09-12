@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.31.1] - 2026-09-12
+
 ### Fixed
 
 - `jira-comment.py list`: a truncated read now says so on **stderr**, in every output mode. The notice was a `print()` inside the table branch, so it vanished the moment the table went through a pipe — and `--json` and `--quiet` never carried it at all, which is the worse half: a caller parsing JSON received 10 of 163 comments with nothing to distinguish that from the whole history. The failure it produces is a confident negative drawn from a cut nobody saw; it has already reached a public ticket comment ("no `ready for QA` comment") that someone else had to correct. stdout keeps the existing line for readability. Four tests, each seen failing against a mutation aimed at it — removing the warning reddens the three presence tests, and warning unconditionally reddens the absence test
@@ -845,7 +847,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.1...HEAD
+[3.31.1]: https://github.com/netresearch/jira-skill/compare/v3.31.0...v3.31.1
 [3.31.0]: https://github.com/netresearch/jira-skill/compare/v3.30.1...v3.31.0
 [3.30.1]: https://github.com/netresearch/jira-skill/compare/v3.30.0...v3.30.1
 [3.30.0]: https://github.com/netresearch/jira-skill/compare/v3.29.1...v3.30.0
