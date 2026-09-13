@@ -78,7 +78,7 @@ field whose name reads like a number often is not one, and the mismatch surfaces
 ```bash
 # schema.type for one field — the half that decides how to parse the value
 uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py --json search "budget" \
-  | jq -r '.[] | "\(.id)\t\(.schema.type // "—")\t\(.name)"'
+  | jq -r '.[] | "\(.id)\t\(.schema.type // "—")\t\(.schema.items // "-")\t\(.name)"'
 ```
 
 What the common types actually deliver in `fields`:
@@ -88,9 +88,9 @@ What the common types actually deliver in `fields`:
 | `number` | `3958.51` | `float(v)` |
 | `string` | `"Q3/2026"` | as is |
 | `option` | `{"self":…,"value":"> 25.000 EUR","id":"10026"}` | `v["value"]` — **never** `float(v)` |
-| `array` | list of the above | iterate |
-| `user` | `{"name":…,"displayName":…}` | `v["name"]` |
-| `account` (Tempo) | `{"id":…,"key":…,"name":…}` on read, bare string on write | asymmetric, see the field's own docs |
+| `array` | list of whatever `schema.items` names | iterate, then read each element by its `items` type — `labels` is `items=string`, a multi-select is `items=option` |
+| `user` | Server/DC: `{"name":…,"key":…,"displayName":…}` · Cloud: `{"accountId":…,"displayName":…}` | `v["name"]` on Server/DC, `v["accountId"]` on Cloud — this skill targets Server/DC |
+| `account` (Tempo) | `{"id":…,"key":…,"name":…}` on read | asymmetric: writing takes the **account id** as a bare string (`"208"`), and the key or name is rejected with `Account id 'null' is invalid` |
 
 The case that motivates this: a field called `Vertrieb: Budget` on jira.netresearch.de
 turned out to be an `option` with three size brackets rather than an amount. Reading it
