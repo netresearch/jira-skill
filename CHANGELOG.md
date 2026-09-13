@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `references/fields-and-users.md`: confirm a custom field's `schema.type` before reading its value. The reference explained how to find the `id` and carried value shapes for three common fields, but no way to ask an arbitrary field what it returns, so a field whose name reads like an amount gets parsed as one — on jira.netresearch.de `Vertrieb: Budget` is an `option` with three size brackets, and `float()` on it raises `TypeError` and kills the caller. It shipped and waited, because no issue in the queried set carried a value at first. The new section adds the one-call lookup, a table of what each `schema.type` actually delivers in `fields` (`option` as `{value,id}`, `array` by its `schema.items`, `user` differing between Server/DC and Cloud, Tempo `account` readable as an object but writable only as the bare account id), and the corollary that a field empty everywhere you looked says nothing about its type — query one issue with `"<Field>" is not EMPTY` and read the raw JSON
+
 ## [3.31.1] - 2026-09-12
 
 ### Fixed

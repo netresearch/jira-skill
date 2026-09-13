@@ -69,6 +69,39 @@ Prints every issue type the project accepts, including sub-task types. Issue typ
 
 Always confirm the `id` with `jira-fields.py search` on the target instance — custom-field numbering is not portable.
 
+## Confirm the TYPE before you read the value
+
+The `id` tells you which field to ask for; it does not tell you what comes back. A
+field whose name reads like a number often is not one, and the mismatch surfaces as a
+`TypeError` in the caller rather than as a Jira error:
+
+```bash
+# schema.type for one field — the half that decides how to parse the value
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py --json search "budget" \
+  | jq -r '.[] | "\(.id)\t\(.schema.type // "—")\t\(.schema.items // "-")\t\(.name)"'
+```
+
+What the common types actually deliver in `fields`:
+
+| `schema.type` | Value shape | Reading it |
+|---|---|---|
+| `number` | `3958.51` | `float(v)` |
+| `string` | `"Q3/2026"` | as is |
+| `option` | `{"self":…,"value":"> 25.000 EUR","id":"10026"}` | `v["value"]` — **never** `float(v)` |
+| `array` | list of whatever `schema.items` names | iterate, then read each element by its `items` type — `labels` is `items=string`, a multi-select is `items=option` |
+| `user` | Server/DC: `{"name":…,"key":…,"displayName":…}` · Cloud: `{"accountId":…,"displayName":…}` | `v["name"]` on Server/DC, `v["accountId"]` on Cloud — this skill targets Server/DC |
+| `account` (Tempo) | `{"id":…,"key":…,"name":…}` on read | asymmetric: writing takes the **account id** as a bare string (`"208"`), and the key or name is rejected with `Account id 'null' is invalid` |
+
+The case that motivates this: a field called `Vertrieb: Budget` on jira.netresearch.de
+turned out to be an `option` with three size brackets rather than an amount. Reading it
+with `float()` raised `TypeError` and killed the collector that held it — and because
+no issue in the queried set carried a value at first, it shipped and waited. A single
+`schema.type` lookup before the first read costs one call.
+
+Corollary: a field that is empty everywhere you looked is not evidence of its type.
+Query one issue that actually has a value (`"<Field>" is not EMPTY`) and look at the
+raw JSON.
+
 ## Jira Server config reads: three access tiers — "no REST to SET" does not mean "no way to READ"
 
 For scheme assignments, mail handlers, components, categories on Jira Server, try in order:
