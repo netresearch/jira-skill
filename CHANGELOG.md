@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.31.2] - 2026-09-16
+
 ### Added
 
 - `references/fields-and-users.md`: confirm a custom field's `schema.type` before reading its value. The reference explained how to find the `id` and carried value shapes for three common fields, but no way to ask an arbitrary field what it returns, so a field whose name reads like an amount gets parsed as one — on jira.netresearch.de `Vertrieb: Budget` is an `option` with three size brackets, and `float()` on it raises `TypeError` and kills the caller. It shipped and waited, because no issue in the queried set carried a value at first. The new section adds the one-call lookup, a table of what each `schema.type` actually delivers in `fields` (`option` as `{value,id}`, `array` by its `schema.items`, `user` differing between Server/DC and Cloud, Tempo `account` readable as an object but writable only as the bare account id), and the corollary that a field empty everywhere you looked says nothing about its type — query one issue with `"<Field>" is not EMPTY` and read the raw JSON
@@ -851,7 +853,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.2...HEAD
+[3.31.2]: https://github.com/netresearch/jira-skill/compare/v3.31.1...v3.31.2
 [3.31.1]: https://github.com/netresearch/jira-skill/compare/v3.31.0...v3.31.1
 [3.31.0]: https://github.com/netresearch/jira-skill/compare/v3.30.1...v3.31.0
 [3.30.1]: https://github.com/netresearch/jira-skill/compare/v3.30.0...v3.30.1
