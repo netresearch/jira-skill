@@ -190,8 +190,14 @@ def main():
         print(f"""<system-reminder>
 Detected Jira issue reference(s): {keys_str}
 {profile_hint}
-The jira-communication skill can help. Use the Skill tool to invoke it,
-or run scripts directly via uv run (NOT python3):
+Invoke the jira-communication skill with the Skill tool before acting. The
+commands below are its execution layer, not a substitute for it: the skill
+carries the conventions the scripts do not — which fields a project expects,
+wiki markup, the QA checklist. Netresearch-specific conventions (custom field
+IDs, per-project workflow states) live in the separate netresearch-jira skill;
+invoke that one too when the key belongs to an NR project.
+
+Commands (always uv run, NOT python3):
 
 - Fetch issue details: uv run {scripts_dir}/core/jira-issue.py get KEY
 - Full context (description + all comments): uv run {scripts_dir}/core/jira-issue.py work KEY
@@ -199,6 +205,7 @@ or run scripts directly via uv run (NOT python3):
 - Create an issue: uv run {scripts_dir}/workflow/jira-create.py issue PROJ "Summary" --type Task
 - Transition status: uv run {scripts_dir}/workflow/jira-transition.py do KEY "Status"
 - Set fields (assignee, custom fields): uv run {scripts_dir}/core/jira-issue.py update KEY --fields-json '{{"assignee": {{"name": "username"}}}}'
+- Read EVERY populated field, not just the description: uv run {scripts_dir}/core/jira-issue.py --json get KEY
 - Add comments: uv run {scripts_dir}/workflow/jira-comment.py add KEY "text"
 - Log work: uv run {scripts_dir}/core/jira-worklog.py add KEY "2h"
 
@@ -206,6 +213,9 @@ IMPORTANT: Always use `uv run`, never `python3` — scripts declare inline
 dependencies (PEP 723) that uv resolves automatically.
 
 Use Jira wiki markup (not Markdown) for descriptions and comments.
+
+Bringing a record up to date means its fields, not only its prose — read them
+with --json get before deciding what was stale.
 </system-reminder>""")
 
 
