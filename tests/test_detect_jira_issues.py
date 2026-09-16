@@ -296,3 +296,25 @@ class TestMainOutput:
         """Hook output should warn against using python3 directly."""
         captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
         assert "never" in captured.out.lower() and "python3" in captured.out
+
+    def test_output_routes_to_the_skill_not_only_to_scripts(self, tmp_path, capsys):
+        """The scripts are the skill's execution layer, never an alternative to it.
+
+        Presenting them as an equivalent path ("… or run scripts directly")
+        cost a service record its version field: the conventions live in the
+        skill, and only the scripts were used.
+        """
+        captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
+        assert "Invoke the jira-communication skill" in captured.out
+        assert "or run scripts directly" not in captured.out
+        assert "not a substitute for it" in captured.out
+
+    def test_output_names_the_netresearch_skill(self, tmp_path, capsys):
+        """NR custom-field conventions live in a separate skill the hook must name."""
+        captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
+        assert "netresearch-jira" in captured.out
+
+    def test_output_points_at_the_full_field_read(self, tmp_path, capsys):
+        """A record is brought up to date through its fields, not only its prose."""
+        captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
+        assert "--json get" in captured.out
