@@ -266,7 +266,7 @@ The backslash escape is the official Jira mechanism; the rephrase is editorial; 
 `-text-` is strikethrough. The grammar below is measured against a live Jira Server 9.12 wiki renderer and recorded in `tests/fixtures/strikethrough_oracle.json`; it is not a rule of thumb, and an earlier version of this section stated it wrongly in both directions.
 
 > **opener** — an unescaped `-` at line start or after a **non-word character**, followed by neither whitespace nor another dash
-> **closer** — the next unescaped `-`, not preceded by whitespace, followed by a non-word character or line end
+> **closer** — the next *valid* closer: an unescaped `-` that is not preceded by whitespace and is followed by a non-word character or line end; a dash failing either condition is skipped over, not fatal
 > **body** — anything in between; a dash that fails the closer conditions is skipped over, not fatal
 
 Two consequences are worth stating on their own, because both are the opposite of what the shape suggests.

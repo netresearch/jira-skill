@@ -14,7 +14,7 @@ which Jira does not do.
 
 What this file asserts is that the two implementations agree with EACH OTHER on
 every one of those cases. Whether they agree with Jira is asserted separately,
-in ``tests/test_strikethrough.py``, against the 5735-case generated corpus - and
+in ``tests/test_strikethrough.py``, against the generated corpus - and
 deliberately asymmetrically, because the model is a superset. Keeping the two
 questions apart matters: an exemption granted for the Jira contract must not
 silently become an excuse for the two implementations to drift.
@@ -58,7 +58,22 @@ def _utf8_locale() -> str | None:
     return None
 
 
-LOCALES = ["C"] + ([u] if (u := _utf8_locale()) else [])
+_UTF8 = _utf8_locale()
+LOCALES = ["C"] + ([_UTF8] if _UTF8 else [])
+
+
+def test_a_utf8_locale_is_available():
+    """Fail loudly when the UTF-8 arm silently disappears.
+
+    The parametrisation above shrinks to one arm on a machine with only
+    C/POSIX, with no skip marker and nothing to notice - which is the shape
+    that hid the original ASCII-only word-class bug. This is a warning, not a
+    hard requirement, so it is skipped rather than failed; the skip is the
+    signal.
+    """
+    if not _UTF8:
+        pytest.skip("no UTF-8 locale on this machine - the UTF-8 parity arm did not run")
+
 
 _ORACLE = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
@@ -86,7 +101,10 @@ def _validator_flags(text: str, tmp_path: Path, locale: str) -> bool:
     # the fixture fence-free; a bare h3. header keeps the rest of its checks quiet.
     f = tmp_path / "draft.txt"
     f.write_text(f"h3. Fixture\n\n{text}\n", encoding="utf-8")
-    env = {**os.environ, "LC_ALL": locale, "LANG": locale}
+    # JIRA_SYNTAX_SCAN_LOCALE pins the locale the validator scans in, so the
+    # `C` arm really exercises the C-only fallback rather than the UTF-8 locale
+    # the script would otherwise pick for itself.
+    env = {**os.environ, "LC_ALL": locale, "LANG": locale, "JIRA_SYNTAX_SCAN_LOCALE": locale}
     r = subprocess.run(
         ["bash", str(VALIDATOR), str(f)],
         capture_output=True,

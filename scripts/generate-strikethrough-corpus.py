@@ -52,6 +52,12 @@ RENDER_PATH = "/rest/api/1.0/render"
 # non-ASCII kinds, the punctuation that forms a boundary, dash runs, an escape,
 # and one of each protected region (link, bare URL, image) carrying a literal
 # `/-/` - the shape a GitLab merge-request URL has.
+#
+# `§` and U+00A0 are here because a review found both classes unrepresented:
+# the awk mirror lost the opener boundary on non-ASCII SYMBOLS under LC_ALL=C,
+# and Python read U+00A0 as whitespace and dropped a closer Jira accepts. NBSP
+# arrives routinely in text pasted out of Word. `\[` covers the escaped-bracket
+# case, where the region does NOT resolve and its dashes stay live.
 TOKENS = [
     "a",
     "ab",
@@ -64,6 +70,9 @@ TOKENS = [
     "_",
     "/",
     "ä",
+    "§",
+    "\u00a0",
+    "\\[",
     "{{m}}",
     "[t|https://x.de/a/-/b]",
     "https://x.de/a/-/b",
@@ -163,18 +172,51 @@ def predicts_span(markup: str) -> bool:
     return False
 
 
+def write_fixture(fixture: dict, results: dict[str, bool]) -> int:
+    """Store the verdicts and the pinned lists the model currently produces.
+
+    Two flat lists rather than a list of objects: at this size the repeated
+    {"markup": ..., "struck": ...} scaffolding is most of the file, and the
+    repo's pre-commit gate rejects large files.
+    """
+    under = sorted(m for m, struck in results.items() if struck and not predicts_span(m))
+    over = sorted(m for m, struck in results.items() if not struck and predicts_span(m))
+    fixture["known_under_predictions"] = under
+    fixture["known_over_predictions"] = over
+    fixture["struck"] = sorted(m for m, struck in results.items() if struck)
+    fixture["clean"] = sorted(m for m, struck in results.items() if not struck)
+    fixture.pop("cases", None)
+    FIXTURE.write_text(json.dumps(fixture, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(f"under-predictions: {len(under)}  over-predictions: {len(over)}", file=sys.stderr)
+    print(f"recorded into {FIXTURE.relative_to(_REPO)}", file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--live",
         action="store_true",
-        required=True,
-        help="Actually call Jira. Required, so the traffic is never a side effect of a typo.",
+        help="Actually call Jira. Required unless --repin, so the traffic is never a side effect of a typo.",
+    )
+    parser.add_argument(
+        "--repin",
+        action="store_true",
+        help="Recompute the pinned lists from the verdicts already recorded, without calling Jira. "
+        "Use after a model change: the renderer's answers have not changed, only ours.",
     )
     parser.add_argument("--record", action="store_true", help="Write the result into the fixture")
     parser.add_argument("--env-file", help="Environment file with JIRA_URL / JIRA_PERSONAL_TOKEN")
     parser.add_argument("--workers", type=int, default=3, help="Parallel render requests (default 3)")
     args = parser.parse_args()
+
+    if args.repin:
+        fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        results = dict.fromkeys(fixture["struck"], True) | dict.fromkeys(fixture["clean"], False)
+        return write_fixture(fixture, results)
+
+    if not args.live:
+        parser.error("pass --live to call Jira, or --repin to recompute from the recorded verdicts")
 
     session, base_url = make_session(args.env_file)
     cases = build_cases()
@@ -197,12 +239,7 @@ def main() -> int:
         return 1 if under else 0
 
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    fixture["known_under_predictions"] = under
-    fixture["known_over_predictions"] = over
-    fixture["cases"] = [{"markup": m, "struck": results[m]} for m in sorted(results)]
-    FIXTURE.write_text(json.dumps(fixture, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"recorded into {FIXTURE.relative_to(_REPO)}", file=sys.stderr)
-    return 0
+    return write_fixture(fixture, results)
 
 
 if __name__ == "__main__":

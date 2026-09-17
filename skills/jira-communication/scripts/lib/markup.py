@@ -29,9 +29,13 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   ``find_strikethrough_spans`` below implements the ``-text-`` grammar as
   measured against a live Jira Server 9.12 wiki renderer - not as a heuristic,
   and not as a guess, but as a deliberate SUPERSET of it: it may report a span
-  the renderer would not draw, never miss one it would (see that function for
-  the two documented exceptions). ``escape_strikethrough`` repairs the same
-  spans mechanically, so callers can fix rather than bounce.
+  the renderer would not draw, and aims never to miss one it would. Two classes
+  of miss are known and pinned rather than fixed - autolinked issue keys, which
+  are instance state (see ``find_strikethrough_spans``), and two link macros
+  written against each other, which prose does not produce (see
+  ``_mask_protected`` and ``tests/fixtures/strikethrough_corpus.json``).
+  ``escape_strikethrough`` repairs the spans it does find, so callers can fix
+  rather than bounce.
 
 Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
 *other* tags inside an open block are ignored. An occurrence of the
@@ -83,8 +87,10 @@ _MIDWORD_EMPHASIS_RES = {
 #
 # Every rule below is pinned by two fixtures recorded from the live Jira
 # Server 9.12 wiki renderer (POST /rest/api/1.0/render):
-# tests/fixtures/strikethrough_oracle.json (209 curated cases with their HTML)
-# and tests/fixtures/strikethrough_corpus.json (5735 generated ones).
+# tests/fixtures/strikethrough_oracle.json (curated cases with their HTML) and
+# tests/fixtures/strikethrough_corpus.json (the generated bulk). Exact counts
+# live in those files rather than here, where re-recording would leave them
+# quietly false.
 # `scripts/verify-render-oracle.py --live` re-records the first and
 # `scripts/generate-strikethrough-corpus.py` the second, so "verified against
 # 9.12" is a command, not a sentence. The generator exists because the two
@@ -120,6 +126,18 @@ def _is_escaped(line: str, pos: int) -> bool:
     return pos > 0 and line[pos - 1] == "\\"
 
 
+def _is_delimiter_space(ch: str) -> bool:
+    """Whitespace for the purpose of the dash delimiters - ASCII only.
+
+    ``str.isspace()`` is wrong here and wrong in the direction that mangles
+    text: it counts U+00A0, and Jira does not. Measured, ``a -x\u00a0- y``
+    comes back struck through, so a non-breaking space before the closing dash
+    does NOT disqualify it - while a plain space does (``a -x - y`` is clean).
+    NBSP arrives routinely in text pasted out of Word or Outlook.
+    """
+    return ch in " \t\x0b\x0c\r"
+
+
 def _is_word_char(ch: str) -> bool:
     """Jira's word class for text effects: Unicode letters and digits only.
 
@@ -140,6 +158,16 @@ def _is_word_char(ch: str) -> bool:
 # `{{monospace}}` is deliberately NOT in this list: text effects do apply
 # inside it (`{{-x-}}` comes back struck), which is the one place the old
 # implementation was right.
+# A bare URL runs to whitespace or to the next `{`, `}`, `]` or `|` - measured:
+# `https://h/a/-/b{{m}}` links only up to the brace, while `...b*b*` links the
+# lot. Stopping too late is the dangerous direction, because the mask then
+# swallows real markup and hides the dashes in it.
+#
+# A bare URL after a pipe is NOT autolinked - Jira expects that shape inside
+# [text|url], so standalone it stays literal and its dashes stay live
+# (`x a|https://h/a/-/b zu- y` comes back struck). A backslash-escaped bracket
+# or bang is not a macro either, so its content is ordinary prose.
+#
 # A region only resolves at a boundary, and one that does NOT resolve leaves
 # its dashes live - masking it anyway would be a false negative, the direction
 # that mangles text. The boundary class is ASCII alphanumerics, measured:
@@ -147,12 +175,12 @@ def _is_word_char(ch: str) -> bool:
 # while `x _http://…/-/b- y` and `x ähttp://…/-/b- y` are clean (autolinked).
 _PROTECTED_RE = re.compile(
     r"""
-    (?<![A-Za-z0-9])
+    (?<!\\)
     (?:
-      \[[^\]\n]*\]              # a square-bracketed link, with or without a pipe
-    | (?:https?|ftp)://\S+      # bare URL - Jira autolinks it up to whitespace
-    | mailto:\S+
-    | ![^\s!]+!                 # an exclamation-delimited image or attachment
+      \[[^\]\n]*\]                              # a square-bracketed link
+    | (?<![A-Za-z0-9|])(?:https?|ftp)://[^\s{}\]|]+   # bare URL - needs a boundary
+    | (?<![A-Za-z0-9|])mailto:[^\s{}\]|]+
+    | (?<![A-Za-z0-9])![^\s!]+!                  # image or attachment
     )
     """,
     re.VERBOSE,
@@ -168,9 +196,15 @@ def _mask_protected(line: str) -> str:
 
     Two regions written back to back do not both resolve - Jira renders the
     first and leaves the second as literal text, dashes and all
-    (`[t|http://h/a/-/b][t|http://h/a/-/b]` comes back with the second one
+    (`[t|https://h/a/-/b][t|https://h/a/-/b]` comes back with the second one
     struck through). So a match that begins exactly where the previous one
     ended is skipped rather than masked.
+
+    Only the immediately following region is skipped, not a whole run: in
+    `[a][b][c]` the third is masked again. Whether Jira resolves that third one
+    is not measured, and the awk mirror behaves identically, so the two stay in
+    step either way. The glued-region shapes that this gets wrong are pinned in
+    the corpus fixture as known under-predictions.
     """
     out = list(line)
     previous_end = -1
@@ -205,6 +239,9 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
     In a dash run the opener is the last dash and the closer the first, so
     ``a --foo-- b`` strikes ``foo`` and leaves the outer dashes literal.
 
+    Whitespace here is ASCII only: Jira treats U+00A0 as an ordinary character,
+    so a non-breaking space before the closing dash does not disqualify it.
+
     **This is a superset, on purpose.** Jira abandons an opener whose body
     begins with a single character followed by a dash (``a -a-b- z`` renders
     literally, while ``a -ab-cd- z`` is struck); that quirk is recorded in the
@@ -232,7 +269,7 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
         if i > 0 and _is_word_char(scan[i - 1]):
             i += 1
             continue
-        if i + 1 >= n or scan[i + 1].isspace() or scan[i + 1] == "-":
+        if i + 1 >= n or _is_delimiter_space(scan[i + 1]) or scan[i + 1] == "-":
             i += 1
             continue
 
@@ -251,7 +288,7 @@ def _find_closer(scan: str, opener: int) -> int | None:
     for j in range(opener + 2, n):
         if scan[j] != "-" or _is_escaped(scan, j):
             continue
-        if scan[j - 1].isspace():
+        if _is_delimiter_space(scan[j - 1]):
             continue
         if j + 1 < n and _is_word_char(scan[j + 1]):
             continue

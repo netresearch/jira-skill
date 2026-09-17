@@ -130,10 +130,11 @@ validate_file() {
     # This is the same grammar as find_strikethrough_spans() in
     # skills/jira-communication/scripts/lib/markup.py, and both are measured
     # against a live Jira Server 9.12 renderer rather than reasoned about:
-    # tests/test_validator_parity.py runs BOTH implementations over every
-    # single-line case in tests/fixtures/strikethrough_oracle.json and asserts
-    # they agree, so the two cannot drift apart; tests/test_strikethrough.py
-    # holds the Python side against 5735 recorded renderings.
+    # tests/test_validator_parity.py runs BOTH implementations over the
+    # single-line cases in tests/fixtures/strikethrough_oracle.json and asserts
+    # they agree. It does NOT cover multi-line input, tables or headings, so
+    # block handling is pinned separately in tests/test_strikethrough.py, which
+    # also holds the Python side against the recorded corpus.
     #
     #   opener  an unescaped `-` at line start or after a non-word character
     #           (which includes the `}}`, `*`, `_`, `]`, `!` that end an inline
@@ -173,9 +174,32 @@ validate_file() {
     # exactly that on five corpus cases. They are folded down to an ASCII
     # quote first, which behaves identically in both locales - gsub on a
     # literal UTF-8 string matches bytes under C and characters under UTF-8.
+    # Run the scan under a UTF-8 locale when the machine has one. The word class
+    # below is locale-independent for ASCII and for non-ASCII LETTERS, but not
+    # for arbitrary non-ASCII PUNCTUATION: under LC_ALL=C a `§`, `€`, `°` or `±`
+    # is a run of high bytes and reads as a word character, so the opener
+    # boundary is lost and a real span is missed. fold() handles the handful of
+    # codepoints that show up in prose; the locale handles the rest. On a
+    # C-only machine the fold is what is left, and the gap is the unfolded
+    # symbols - tests/test_validator_parity.py runs both locales to keep that
+    # visible rather than silent.
+    # JIRA_SYNTAX_SCAN_LOCALE overrides the choice, so the C-only fallback can
+    # be exercised on a machine that does have UTF-8 (the parity test does that).
+    local scan_locale="${JIRA_SYNTAX_SCAN_LOCALE:-}"
+    if [ -z "$scan_locale" ]; then
+        scan_locale=$(locale -a 2>/dev/null | grep -iE '\.(utf-?8)$' | head -1)
+    fi
+    : "${scan_locale:=C}"
+
     local dash_hits
-    dash_hits=$(awk '
+    dash_hits=$(LC_ALL="$scan_locale" awk '
         function fold(line) {
+            # NBSP folds to punctuation, NOT to a space: Jira treats U+00A0 as
+            # an ordinary character, so `a -x<NBSP>- y` IS struck through
+            # (measured) while `a -x - y` is not. gawk excludes U+00A0 from
+            # [[:space:]] in both locales, so without this the two
+            # implementations disagree even under UTF-8.
+            gsub(/\xc2\xa0/, "\"", line)
             gsub(/\xe2\x80\x9e|\xe2\x80\x9c|\xe2\x80\x9d|\xe2\x80\x98|\xe2\x80\x99|\xe2\x80\x9a/, "\"", line)
             gsub(/\xc2\xab|\xc2\xbb|\xe2\x80\xb9|\xe2\x80\xba/, "\"", line)
             gsub(/\xe2\x80\x93|\xe2\x80\x94|\xe2\x80\x90|\xe2\x80\xa6|\xe2\x80\xa2/, "\"", line)
@@ -185,7 +209,7 @@ validate_file() {
         # control character is neither space nor punct, so it would otherwise
         # count as a word character and swallow the opener after a link.
         function isword(c) { return (c != "" && c != "\001" && c !~ /[[:space:][:punct:]]/) }
-        # Replace protected regions with NULs, preserving length. Mirrors
+        # Replace protected regions with \001, preserving length. Mirrors
         # _mask_protected() in lib/markup.py: each region needs an ASCII
         # non-alphanumeric before it (a URL glued to a word is not autolinked,
         # so it keeps its dashes live), and a region starting exactly where the
@@ -195,13 +219,27 @@ validate_file() {
             pos = 1
             while (pos <= length(line)) {
                 rest = substr(line, pos)
-                if (match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^[:space:]]+)|(mailto:[^[:space:]]+)|(![^[:space:]!]+!)/)) {
+                if (match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^][:space:]{}|]+)|(mailto:[^][:space:]{}|]+)|(![^[:space:]!]+!)/)) {
+                    # A backslash-escaped bracket or bang is not a macro, so
+                    # its content is ordinary prose and its dashes stay live.
                     start = pos + RSTART - 1
                     len_ = RLENGTH
                     before = (start > 1) ? substr(line, start - 1, 1) : ""
-                    # Boundary required, and no back-to-back regions: a mask
-                    # that would begin where the last one ended is skipped.
-                    if (before ~ /[A-Za-z0-9]/ || (before == "" && start > 1)) {
+                    if (before == "\\") {
+                        out = out substr(line, pos, RSTART)
+                        pos = start + 1
+                        continue
+                    }
+                    kind = substr(line, start, 1)
+                    # A boundary is required for a bare URL, a mailto and an
+                    # image, but NOT for a square-bracketed link: measured,
+                    # `a[t|https://h/a/-/b]` resolves while `ahttps://h/a/-/b`
+                    # does not. A bare URL additionally does not resolve after
+                    # a pipe, where Jira expects the [text|url] shape.
+                    # `before` is "" only at the start of the line, which IS a
+                    # boundary, so an empty `before` never disqualifies.
+                    needs_boundary = (kind != "[")
+                    if (needs_boundary && (before ~ /[A-Za-z0-9]/ || (kind != "!" && before == "|"))) {
                         out = out substr(line, pos, RSTART)
                         pos = start + 1
                         continue
@@ -244,9 +282,20 @@ validate_file() {
             }
             return 0
         }
-        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { inblock = !inblock; next }
+        # Only the SAME tag closes a block, exactly as the Jira renderer does
+        # and as _split_verbatim() in lib/markup.py does. Toggling on either tag
+        # loses track after `{noformat}` / `{code}` / `{noformat}`, and then
+        # misses every span in the rest of the file.
+        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ {
+            tag = $0
+            sub(/^[[:space:]]*\{/, "", tag)
+            sub(/[:}].*$/, "", tag)
+            if (opentag == "") opentag = tag
+            else if (opentag == tag) opentag = ""
+            next
+        }
         /^[[:space:]]*```/ { infence = !infence; next }
-        inblock || infence { next }
+        opentag != "" || infence { next }
         strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content" | head -3)
     if [ -n "$dash_hits" ]; then
         warning "Found a dash pair that renders struck through outside a code block — Jira reads a dash after a non-word character (including the {{}}, *, _, ] or ! that ends an inline element) as a strikethrough opener, and a dash before one as the closer. Escape the opener as \\-foo; a backslash-escaped dash still prints as a plain hyphen."

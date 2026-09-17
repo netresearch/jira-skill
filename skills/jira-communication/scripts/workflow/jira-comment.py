@@ -164,7 +164,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @cli.command()
 @click.argument("issue_key")
 @click.argument("comment_text")
-@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings or a struck-through render preview")
 @click.option(
     "--no-auto-escape",
     is_flag=True,
@@ -239,7 +239,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: boo
 @click.argument("issue_key")
 @click.argument("comment_id")
 @click.argument("comment_text")
-@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings or a struck-through render preview")
 @click.option(
     "--no-auto-escape",
     is_flag=True,
