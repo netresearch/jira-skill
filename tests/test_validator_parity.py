@@ -145,3 +145,65 @@ def test_validator_help_text_does_not_repeat_the_old_claim(tmp_path):
     source = VALIDATOR.read_text(encoding="utf-8")
     assert "single-dash option opens one too" not in source
     assert not re.search(r"journalctl -b -p crit.{0,40}matched pair", source, re.S)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The whole corpus, in one awk pass.
+#
+# The per-case test above runs the validator as a subprocess and is therefore
+# limited to the ~200 curated cases; 8920 subprocesses would not be a test, it
+# would be a coffee break. But the curated set does not contain the adversarial
+# token combinations, so for a long time the shell side was simply never shown
+# them - and it was silently missing spans Jira draws and this repo already had
+# recorded verdicts for. A review found three that way.
+#
+# So the awk program is extracted from between the markers in the script and
+# run once over every single-line case. One subprocess, under a second, and the
+# two implementations are finally compared on the same evidence.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_AWK_RE = re.compile(
+    r"AWK-DASH-SCAN-BEGIN.*?dash_hits=\$\(LC_ALL=\"\$scan_locale\" awk '(?P<prog>.*?)' <<< \"\$content\"",
+    re.S,
+)
+_CORPUS_FIXTURE = Path(__file__).resolve().parent / "fixtures/strikethrough_corpus.json"
+
+
+def _awk_program() -> str:
+    match = _AWK_RE.search(VALIDATOR.read_text(encoding="utf-8"))
+    assert match, "could not extract the awk dash scan - did the markers move?"
+    return match.group("prog")
+
+
+@pytest.mark.skipif(not VALIDATOR.exists(), reason="validator script not present")
+@pytest.mark.parametrize("locale", LOCALES)
+def test_awk_agrees_with_python_over_the_whole_corpus(locale, tmp_path):
+    corpus = json.loads(_CORPUS_FIXTURE.read_text(encoding="utf-8"))
+    cases = [c for c in corpus["struck"] + corpus["clean"] if "\n" not in c]
+    assert len(cases) > 5000, "corpus shrank - this test would pass on almost nothing"
+
+    source = tmp_path / "corpus.txt"
+    source.write_text("\n".join(cases) + "\n", encoding="utf-8")
+    program = tmp_path / "scan.awk"
+    program.write_text(_awk_program(), encoding="utf-8")
+
+    result = subprocess.run(
+        ["awk", "-f", str(program), str(source)],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "LC_ALL": locale, "LANG": locale},
+        check=False,
+    )
+    assert result.returncode == 0, f"awk failed under {locale}: {result.stderr[:300]}"
+
+    flagged_lines = {int(line.split(":", 1)[0]) for line in result.stdout.splitlines() if ":" in line}
+    disagreements = [
+        (n, case)
+        for n, case in enumerate(cases, 1)
+        for awk_says in [n in flagged_lines]
+        if awk_says is not bool(find_strikethrough_spans(case))
+    ]
+    assert not disagreements, "awk and Python disagree on:\n" + "\n".join(
+        f"  line {n}: awk={n in flagged_lines} python={bool(find_strikethrough_spans(c))} {c!r}"
+        for n, c in disagreements[:10]
+    )

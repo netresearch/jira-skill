@@ -192,6 +192,9 @@ validate_file() {
     : "${scan_locale:=C}"
 
     local dash_hits
+    # AWK-DASH-SCAN-BEGIN (marker: tests/test_validator_parity.py extracts the
+    # program between these two markers and runs it over the whole corpus in
+    # one pass. Keep them.)
     dash_hits=$(LC_ALL="$scan_locale" awk '
         function fold(line) {
             # NBSP folds to punctuation, NOT to a space: Jira treats U+00A0 as
@@ -203,6 +206,11 @@ validate_file() {
             gsub(/\xe2\x80\x9e|\xe2\x80\x9c|\xe2\x80\x9d|\xe2\x80\x98|\xe2\x80\x99|\xe2\x80\x9a/, "\"", line)
             gsub(/\xc2\xab|\xc2\xbb|\xe2\x80\xb9|\xe2\x80\xba/, "\"", line)
             gsub(/\xe2\x80\x93|\xe2\x80\x94|\xe2\x80\x90|\xe2\x80\xa6|\xe2\x80\xa2/, "\"", line)
+            # Common non-ASCII symbols. Not exhaustive and cannot be - this is
+            # the C-locale fallback only; where a UTF-8 locale exists the
+            # scan runs under it and gawk classifies these itself.
+            gsub(/\xc2\xa7|\xe2\x82\xac|\xc2\xb0|\xc2\xb1|\xc2\xb5|\xc3\x97|\xc3\xb7/, "\"", line)
+            gsub(/\xc2\xa9|\xc2\xae|\xe2\x84\xa2|\xe2\x80\xa0|\xe2\x80\xa1|\xe2\x80\xb0/, "\"", line)
             return line
         }
         # The \001 test comes first: a masked region must read as a boundary, and a
@@ -214,50 +222,54 @@ validate_file() {
         # non-alphanumeric before it (a URL glued to a word is not autolinked,
         # so it keeps its dashes live), and a region starting exactly where the
         # previous one ended does not resolve either.
-        function mask(line,    out, pos, rest, m, start, len_, before, i) {
+        function mask(line,    out, pos, rest, start, len_, before, kind, i, prev_end) {
             out = ""
             pos = 1
+            prev_end = 0
             while (pos <= length(line)) {
                 rest = substr(line, pos)
-                if (match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^][:space:]{}|]+)|(mailto:[^][:space:]{}|]+)|(![^[:space:]!]+!)/)) {
-                    # A backslash-escaped bracket or bang is not a macro, so
-                    # its content is ordinary prose and its dashes stay live.
-                    start = pos + RSTART - 1
-                    len_ = RLENGTH
-                    before = (start > 1) ? substr(line, start - 1, 1) : ""
-                    if (before == "\\") {
-                        out = out substr(line, pos, RSTART)
-                        pos = start + 1
-                        continue
-                    }
-                    kind = substr(line, start, 1)
-                    # A boundary is required for a bare URL, a mailto and an
-                    # image, but NOT for a square-bracketed link: measured,
-                    # `a[t|https://h/a/-/b]` resolves while `ahttps://h/a/-/b`
-                    # does not. A bare URL additionally does not resolve after
-                    # a pipe, where Jira expects the [text|url] shape.
-                    # `before` is "" only at the start of the line, which IS a
-                    # boundary, so an empty `before` never disqualifies.
-                    needs_boundary = (kind != "[")
-                    if (needs_boundary && (before ~ /[A-Za-z0-9]/ || (kind != "!" && before == "|"))) {
-                        out = out substr(line, pos, RSTART)
-                        pos = start + 1
-                        continue
-                    }
-                    out = out substr(line, pos, RSTART - 1)
-                    for (i = 0; i < len_; i++) out = out "\001"
-                    pos = start + len_
-                    # Anything immediately following stays unmasked; re-enter
-                    # the loop one character later so an abutting region is
-                    # seen as literal text, the way Jira renders it.
-                    if (pos <= length(line)) {
-                        out = out substr(line, pos, 1)
-                        pos++
-                    }
+                if (!match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^][:space:]{}|]+)|(mailto:[^][:space:]{}|]+)|(![^[:space:]!]+!)/)) {
+                    out = out rest
+                    break
+                }
+                start = pos + RSTART - 1
+                len_ = RLENGTH
+                before = (start > 1) ? substr(line, start - 1, 1) : ""
+                kind = substr(line, start, 1)
+
+                # A backslash-escaped bracket or bang is not a macro, so its
+                # content is ordinary prose and its dashes stay live. Same for a
+                # region that does not sit at a boundary: a bare URL, mailto or
+                # image needs a non-alphanumeric before it (and a URL must not
+                # follow a pipe), while a square-bracketed link resolves
+                # anywhere. In both cases the region is not a region, so the
+                # scan resumes one character in - which is what the Python
+                # regex does by simply not matching there.
+                if (before == "\\" || (kind != "[" && (before ~ /[A-Za-z0-9]/ || (kind != "!" && before == "|")))) {
+                    out = out substr(line, pos, RSTART)
+                    pos = start + 1
                     continue
                 }
-                out = out rest
-                break
+
+                # Two regions written back to back do not both resolve: Jira
+                # renders the first and leaves the second literal. The SECOND
+                # one is skipped whole, not one character at a time - resuming
+                # inside it would let a shorter region nested within it be
+                # masked, which loses the dashes around it. That was a real
+                # miss: `!i.png!https://h/a/-/b[t|...]` comes back struck and
+                # the scan reported nothing. prev_end deliberately does not
+                # advance here, so a third region is masked again, matching
+                # _mask_protected() in lib/markup.py.
+                if (start == prev_end) {
+                    out = out substr(line, pos, RSTART - 1 + len_)
+                    pos = start + len_
+                    continue
+                }
+
+                out = out substr(line, pos, RSTART - 1)
+                for (i = 0; i < len_; i++) out = out "\001"
+                pos = start + len_
+                prev_end = pos
             }
             return out
         }
@@ -297,6 +309,7 @@ validate_file() {
         /^[[:space:]]*```/ { infence = !infence; next }
         opentag != "" || infence { next }
         strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content" | head -3)
+    # AWK-DASH-SCAN-END
     if [ -n "$dash_hits" ]; then
         warning "Found a dash pair that renders struck through outside a code block — Jira reads a dash after a non-word character (including the {{}}, *, _, ] or ! that ends an inline element) as a strikethrough opener, and a dash before one as the closer. Escape the opener as \\-foo; a backslash-escaped dash still prints as a plain hyphen."
         echo "   Lines with issue:"

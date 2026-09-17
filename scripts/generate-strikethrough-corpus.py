@@ -172,22 +172,49 @@ def predicts_span(markup: str) -> bool:
     return False
 
 
-def write_fixture(fixture: dict, results: dict[str, bool]) -> int:
-    """Store the verdicts and the pinned lists the model currently produces.
+def write_fixture(fixture: dict, results: dict[str, bool], *, write: bool, accept_new_misses: bool) -> int:
+    """Report the pinned lists the model currently produces, and optionally store them.
 
     Two flat lists rather than a list of objects: at this size the repeated
     {"markup": ..., "struck": ...} scaffolding is most of the file, and the
     repo's pre-commit gate rejects large files.
+
+    A NEW under-prediction is never pinned silently. This function is what
+    ``--repin`` calls after a model change - which is exactly the moment a
+    regression would show up as a new miss, and pinning it makes the suite
+    green again while the model is worse than it was. New misses are listed
+    and refused unless ``--accept-new-misses`` says they were looked at.
     """
     under = sorted(m for m, struck in results.items() if struck and not predicts_span(m))
     over = sorted(m for m, struck in results.items() if not struck and predicts_span(m))
+    was_under = set(fixture.get("known_under_predictions", []))
+    new_misses = [m for m in under if m not in was_under]
+    fixed = sorted(was_under - set(under))
+
+    print(f"under-predictions: {len(under)} (was {len(was_under)})  over-predictions: {len(over)}", file=sys.stderr)
+    for markup in fixed:
+        print(f"  NO LONGER MISSED  {markup!r}", file=sys.stderr)
+    for markup in new_misses:
+        print(f"  NEW MISS          {markup!r}", file=sys.stderr)
+
+    if new_misses and not accept_new_misses:
+        print(
+            f"\nrefusing to pin {len(new_misses)} new miss(es). The model got worse, or a new "
+            "class appeared. Look at them, then pass --accept-new-misses to pin them.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not write:
+        print("\nnothing written (pass --record to store this)", file=sys.stderr)
+        return 1 if under else 0
+
     fixture["known_under_predictions"] = under
     fixture["known_over_predictions"] = over
     fixture["struck"] = sorted(m for m, struck in results.items() if struck)
     fixture["clean"] = sorted(m for m, struck in results.items() if not struck)
     fixture.pop("cases", None)
     FIXTURE.write_text(json.dumps(fixture, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"under-predictions: {len(under)}  over-predictions: {len(over)}", file=sys.stderr)
     print(f"recorded into {FIXTURE.relative_to(_REPO)}", file=sys.stderr)
     return 0
 
@@ -206,14 +233,21 @@ def main() -> int:
         "Use after a model change: the renderer's answers have not changed, only ours.",
     )
     parser.add_argument("--record", action="store_true", help="Write the result into the fixture")
+    parser.add_argument(
+        "--accept-new-misses",
+        action="store_true",
+        help="Pin under-predictions that are not already pinned. Without it they are listed and refused.",
+    )
     parser.add_argument("--env-file", help="Environment file with JIRA_URL / JIRA_PERSONAL_TOKEN")
     parser.add_argument("--workers", type=int, default=3, help="Parallel render requests (default 3)")
     args = parser.parse_args()
 
     if args.repin:
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        if "struck" not in fixture or "clean" not in fixture:
+            parser.error("fixture is in the old {markup, struck} format - re-record it with --live --record")
         results = dict.fromkeys(fixture["struck"], True) | dict.fromkeys(fixture["clean"], False)
-        return write_fixture(fixture, results)
+        return write_fixture(fixture, results, write=args.record, accept_new_misses=args.accept_new_misses)
 
     if not args.live:
         parser.error("pass --live to call Jira, or --repin to recompute from the recorded verdicts")
@@ -233,13 +267,8 @@ def main() -> int:
     print(f"under-predictions (model misses a real span): {len(under)}", file=sys.stderr)
     print(f"over-predictions  (model escapes needlessly): {len(over)}", file=sys.stderr)
 
-    if not args.record:
-        for markup in under:
-            print(f"UNDER {markup!r}")
-        return 1 if under else 0
-
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    return write_fixture(fixture, results)
+    return write_fixture(fixture, results, write=args.record, accept_new_misses=args.accept_new_misses)
 
 
 if __name__ == "__main__":
