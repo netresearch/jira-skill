@@ -34,6 +34,7 @@ from lib.changelog import (
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated, resolve_assignee, resolve_status
 from lib.config import load_status_sets
 from lib.input import read_stdin_utf8
+from lib.markup_cli import FORCE_HELP, NO_AUTO_ESCAPE_HELP, NO_PREFLIGHT_HELP, guard_wiki_markup
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 from lib.render import print_comment, print_description
 from lib.users import check_mentions_cli, person_label
@@ -595,6 +596,9 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 @click.option("--assignee", "-a", help="Assignee username or email")
 @click.option("--fields-json", help="JSON string of additional fields to update")
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
+@click.option("--force", is_flag=True, help=FORCE_HELP)
+@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
+@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
 @click.option("--dry-run", is_flag=True, help="Show what would be updated without making changes")
 @click.pass_context
 def update(
@@ -609,6 +613,9 @@ def update(
     assignee: str | None,
     fields_json: str | None,
     no_verify_mentions: bool,
+    force: bool,
+    no_auto_escape: bool,
+    no_preflight: bool,
     dry_run: bool,
 ):
     """Update issue fields.
@@ -662,7 +669,17 @@ def update(
                 )
                 sys.exit(1)
             description = description.rstrip("\n")
-        # A description renders wiki markup — same mention gate as jira-comment add
+        # A description renders wiki markup — same gates as jira-comment add
+        description = guard_wiki_markup(
+            description,
+            force=force,
+            auto_escape=not no_auto_escape,
+            preflight=not no_preflight,
+            issue_key=issue_key,
+            env_file=ctx.obj.get("env_file"),
+            profile=ctx.obj.get("profile"),
+            label="description",
+        )
         check_mentions_cli(client, description, skip=no_verify_mentions)
         update_fields["description"] = description
 

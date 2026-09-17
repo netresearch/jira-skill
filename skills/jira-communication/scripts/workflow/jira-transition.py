@@ -23,6 +23,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient
+from lib.markup_cli import FORCE_HELP, NO_AUTO_ESCAPE_HELP, NO_PREFLIGHT_HELP, guard_wiki_markup
 from lib.output import error, format_output, format_table, success, warning
 from lib.users import check_mentions_cli
 
@@ -387,6 +388,9 @@ def list_transitions(ctx, issue_key: str):
     help="JSON string of additional fields the transition screen requires (e.g. summary) — same shape as `jira-issue.py update`",
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
+@click.option("--force", is_flag=True, help=FORCE_HELP)
+@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
+@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
 def do_transition(
@@ -397,6 +401,9 @@ def do_transition(
     resolution: str | None,
     fields_json: str | None,
     no_verify_mentions: bool,
+    force: bool,
+    no_auto_escape: bool,
+    no_preflight: bool,
     dry_run: bool,
 ):
     """Transition an issue to a new status.
@@ -441,8 +448,20 @@ def do_transition(
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
-    # A transition comment is a real issue comment — same mention gate as jira-comment add
+    # A transition comment is a real issue comment — same gates as jira-comment add.
+    # Skipped under --dry-run along with the mention check: a preview writes nothing,
+    # and the render gate would call the instance for a post that is not happening.
     if not dry_run:
+        comment = guard_wiki_markup(
+            comment,
+            force=force,
+            auto_escape=not no_auto_escape,
+            preflight=not no_preflight,
+            issue_key=issue_key,
+            env_file=ctx.obj.get("env_file"),
+            profile=ctx.obj.get("profile"),
+            label="transition comment",
+        )
         check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:

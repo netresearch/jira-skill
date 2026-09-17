@@ -29,6 +29,17 @@ from lib.markup import escape_strikethrough, lint_ticket_language, lint_wiki_mar
 from lib.output import error, warning
 from lib.preview import preflight_render
 
+
+class _Unset:
+    """Sentinel for "not passed", so an explicit ``None`` stays distinguishable.
+
+    ``render_issue_key=None`` means "render without issue context" and must not
+    collapse into "fall back to ``issue_key``".
+    """
+
+
+_UNSET = _Unset()
+
 # What the three gates are called on the command line. Kept here so a caller
 # adding them does not invent a fourth spelling.
 FORCE_HELP = "Post despite wiki-markup lint findings or a struck-through render preview"
@@ -154,6 +165,7 @@ def guard_wiki_markup(
     auto_escape: bool,
     preflight: bool,
     issue_key: str | None = None,
+    render_issue_key: str | None | _Unset = _UNSET,
     env_file: str | None = None,
     profile: str | None = None,
     label: str = "text",
@@ -163,8 +175,25 @@ def guard_wiki_markup(
     One call so a caller cannot wire up two of the three and believe it is
     covered - which is how the description paths went unguarded while the
     comment path had the full treatment.
+
+    ``render_issue_key`` exists for ``jira-create issue``, where the two gates
+    need different things. The language lint only reads the project part of a
+    key, so the project key alone answers it. The render endpoint resolves the
+    key to an actual issue and answers 404 for a project - measured against
+    jira.netresearch.de - which would print "render preview unavailable" on
+    every single create. Passing ``None`` renders without issue context, which
+    the endpoint accepts: the text is checked, only the autolink substitution
+    that needs a surrounding issue is not.
+
+    An absent or empty body passes straight through: ``--comment`` and
+    ``--description`` are optional on most of these commands, and "nothing to
+    post" is not a markup problem. Returning it unchanged also keeps None a
+    None, so the caller's own "did the user supply one?" check still works.
     """
+    if not text or not text.strip():
+        return text
     text = repair_markup(text, auto_escape, label=label)
     check_markup(text, force, issue_key, label=label)
-    check_rendering(text, force, issue_key, preflight, env_file, profile, label=label)
+    key_for_render = issue_key if isinstance(render_issue_key, _Unset) else render_issue_key
+    check_rendering(text, force, key_for_render, preflight, env_file, profile, label=label)
     return text

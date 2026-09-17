@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 import click.testing
+import pytest
 
 _SCRIPTS_PATH = Path(__file__).parent.parent / "skills" / "jira-communication" / "scripts"
 if str(_SCRIPTS_PATH) not in sys.path:
@@ -56,3 +57,30 @@ def run_cli(mod, args, mock_client=None):
     with mock.patch.object(mod, "LazyJiraClient", return_value=mock_client):
         result = runner.invoke(mod.cli, args)
     return result, mock_client
+
+
+@pytest.fixture(autouse=True)
+def _no_live_render(monkeypatch):
+    """Stop any test from reaching the real Jira renderer.
+
+    ``guard_wiki_markup`` POSTs the text to the instance before a write, so
+    every command test that passes a ``--comment`` or ``--description`` would
+    otherwise call production. It looked safe because it only happens where
+    credentials exist: on a CI runner ``preflight_render`` finds no config,
+    returns "unavailable", and the test passes for the wrong reason - while on
+    a developer machine with ``~/.env.jira`` the same test hits the live
+    server. Eight tests were doing exactly that when this fixture was written.
+
+    Autouse, so the protection does not depend on a future test remembering
+    it. A test that wants to exercise the gate patches
+    ``lib.markup_cli.preflight_render`` itself; that patch wins, because it is
+    applied inside the test body.
+    """
+    from lib import markup_cli
+    from lib.preview import RenderVerdict
+
+    monkeypatch.setattr(
+        markup_cli,
+        "preflight_render",
+        lambda *args, **kwargs: RenderVerdict(False, [], "stubbed in tests"),
+    )
