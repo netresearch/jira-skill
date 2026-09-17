@@ -246,6 +246,53 @@ class TestEscaperClearsTheWholeCorpus:
         assert _spans_in(markup.escape_strikethrough(case)) == []
 
 
+class TestTheVisibleEscapeExceptionIsBounded:
+    """The superset's cost claim, made checkable instead of asserted in prose.
+
+    ``find_strikethrough_spans`` documents the cost of an over-prediction as
+    "one redundant ``\\-``, invisible in prose", with one exception: where two
+    macros are written against each other the escape can land inside a link
+    target, where a reader sees it. That sentence has now been wrong twice -
+    once with invented counts, once with an example shape that does not
+    reproduce - so it is pinned here rather than re-verified by hand each time.
+    """
+
+    URL_ESCAPE_RE = re.compile(r"https?://[^\s]*\\-")
+
+    def _newly_escaped_inside_a_url(self):
+        """Clean cases where the ESCAPER introduces a ``\\-`` into a URL.
+
+        The filter matters: counting every clean case whose output matches the
+        pattern gives 139, because many carry ``\\-`` in a URL already. Only a
+        NEW one is a cost the escaper imposed.
+        """
+        hits = []
+        for case in CLEAN_CASES:
+            repaired = markup.escape_strikethrough(case)
+            if repaired == case:
+                continue
+            if len(self.URL_ESCAPE_RE.findall(repaired)) > len(self.URL_ESCAPE_RE.findall(case)):
+                hits.append(case)
+        return hits
+
+    def test_the_exception_is_exactly_three_pinned_cases(self):
+        hits = self._newly_escaped_inside_a_url()
+        assert len(hits) == 3, [markup.escape_strikethrough(h) for h in hits]
+        assert set(hits) <= KNOWN_OVER, "a visible escape that is not a pinned over-prediction"
+
+    def test_the_documented_example_reproduces(self):
+        assert (
+            markup.escape_strikethrough("x !i.png![t|https://x.de/a/-/b]- y") == "x !i.png![t|https://x.de/a/\\-/b]- y"
+        )
+
+    def test_prose_that_separates_its_macros_is_untouched(self):
+        for text in (
+            "Siehe [MR|https://git.netresearch.de/g/p/-/merge_requests/5] und zu- und abschaltbar",
+            "Siehe https://git.netresearch.de/g/p/-/merge_requests/5 und zu- und abschaltbar",
+        ):
+            assert markup.escape_strikethrough(text) == text
+
+
 class TestRegressionsFromIssue226:
     """The shapes reported in netresearch/jira-skill#226, verbatim."""
 

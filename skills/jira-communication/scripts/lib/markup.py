@@ -260,10 +260,12 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
     fixture but not modelled, because the cost of predicting a span Jira would
     not draw is normally one redundant ``\\-``, which renders as a plain hyphen,
     whereas the cost of missing one is mangled text. The exception is the same
-    glued-macro class the misses come from: where a bare URL is written
-    directly against a link macro, the escape can land inside the URL and IS
-    visible (`.../-/b[MR|...]`). Measured at 0 occurrences in 120 000 cases of
-    space-separated prose, and 8 258 in 80 000 deliberately glued ones. ``tests/test_strikethrough.py``
+    glued-macro class the misses come from: where two macros are written
+    against each other, the escape can land inside a URL, where it IS visible -
+    `x !i.png![t|https://x.de/a/-/b]- y` comes back with `\\-` inside the link
+    target. Three of the corpus's clean cases do this, all of that shape, and
+    all three are in ``known_over_predictions``; prose that separates its
+    macros with whitespace does not reach it. ``tests/test_strikethrough.py``
     pins both directions: zero UNLISTED false negatives against the recorded
     corpus, and the list of known over-predictions, so neither can grow
     unnoticed. The counts live in the fixture, not here, where re-recording
