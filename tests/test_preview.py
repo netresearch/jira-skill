@@ -1,0 +1,204 @@
+"""The pre-flight render check - the layer that asks instead of predicting.
+
+Every test here uses a fake HTTP session. The point of the module is a network
+call, and a test that made one would be testing jira.netresearch.de rather than
+this code; the live behaviour it is modelled on is recorded in
+``tests/fixtures/strikethrough_oracle.json`` and reproducible with
+``scripts/verify-render-oracle.py --live``.
+
+The failure paths get as much attention as the happy one on purpose. This check
+sits in front of every comment post, so "the renderer could not be reached"
+must never be indistinguishable from "the renderer says it is fine" - that
+confusion is how an advisory check turns into false confidence.
+"""
+
+import sys
+from pathlib import Path
+
+import pytest
+import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
+
+from lib.preview import RenderVerdict, preflight_render, rendered_body_strikethrough  # noqa: E402
+
+STRUCK_HTML = "<p>Die <tt>nr-pforum</tt><del>Extensions, jede zu</del> und abschaltbar</p>"
+CLEAN_HTML = "<p>journalctl -b -p crit zeigt die Fehler</p>"
+# What the live instance returns for `{{OPS-899-Divergenzanalyse.pdf}}`: the
+# autolinked key is struck through, and escaping the dash does not change it.
+AUTOLINK_HTML = '<p>Die <tt><a href="x" class="issue-link"><del>OPS-899</del></a>-Divergenzanalyse.pdf</tt> ok</p>'
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, text=""):
+        self.status_code = status_code
+        self.text = text
+
+
+class FakeSession:
+    """Records the request and returns a canned response."""
+
+    def __init__(self, response=None, raises=None):
+        self.headers = {}
+        self.auth = None
+        self._response = response
+        self._raises = raises
+        self.calls = []
+
+    def post(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        if self._raises is not None:
+            raise self._raises
+        return self._response
+
+
+@pytest.fixture
+def server_env(monkeypatch):
+    monkeypatch.setattr(
+        "lib.preview.load_env",
+        lambda env_file=None: {"JIRA_URL": "https://jira.example.de", "JIRA_PERSONAL_TOKEN": "t"},
+    )
+
+
+class TestVerdict:
+    def test_ok_requires_both_available_and_clean(self):
+        assert RenderVerdict(True, []).ok
+        assert not RenderVerdict(True, ["x"]).ok
+        assert not RenderVerdict(False, []).ok
+
+    def test_unavailable_is_not_clean(self):
+        """The distinction this whole module hangs on.
+
+        If a failed request collapsed into "no strikethrough", every network
+        blip would read as a clean bill of health - the exact shape of bug the
+        repo's own rules call out ("can the caller tell failed from empty?").
+        """
+        verdict = RenderVerdict(False, [], "boom")
+        assert verdict.struck == []
+        assert not verdict.ok
+        assert not verdict.available
+
+
+class TestPreflightRender:
+    def test_clean_markup(self, server_env):
+        session = FakeSession(FakeResponse(200, CLEAN_HTML))
+        verdict = preflight_render("journalctl -b -p crit", session=session)
+        assert verdict.available and verdict.ok and verdict.struck == []
+
+    def test_struck_markup_reports_the_text(self, server_env):
+        session = FakeSession(FakeResponse(200, STRUCK_HTML))
+        verdict = preflight_render("Die {{nr-pforum}}-Extensions, jede zu- und abschaltbar", session=session)
+        assert verdict.available
+        assert verdict.struck == ["Extensions, jede zu"]
+
+    def test_autolinked_issue_key_is_caught(self, server_env):
+        """The case the lexical model cannot reach, and the reason this exists."""
+        session = FakeSession(FakeResponse(200, AUTOLINK_HTML))
+        verdict = preflight_render("Die {{OPS-899-Divergenzanalyse.pdf}} ok", session=session)
+        assert verdict.struck == ["OPS-899"]
+
+    def test_markup_inside_del_is_stripped(self, server_env):
+        session = FakeSession(FakeResponse(200, "<p><del>a <tt>b</tt> c</del></p>"))
+        assert preflight_render("x", session=session).struck == ["a b c"]
+
+    def test_issue_key_is_passed_through(self, server_env):
+        session = FakeSession(FakeResponse(200, CLEAN_HTML))
+        preflight_render("x", issue_key="OPS-899", session=session)
+        assert session.calls[0][1]["json"]["issueKey"] == "OPS-899"
+
+    def test_renderer_type_is_the_wiki_renderer(self, server_env):
+        session = FakeSession(FakeResponse(200, CLEAN_HTML))
+        preflight_render("x", session=session)
+        assert session.calls[0][1]["json"]["rendererType"] == "atlassian-wiki-renderer"
+
+
+class TestDegradesInsteadOfBlocking:
+    """Every failure path must be reported as unavailable, never as clean."""
+
+    def test_missing_url(self, monkeypatch):
+        monkeypatch.setattr("lib.preview.load_env", lambda env_file=None: {})
+        verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
+        assert not verdict.available and "JIRA_URL" in verdict.reason
+
+    def test_cloud_instance_is_skipped(self, monkeypatch):
+        monkeypatch.setattr(
+            "lib.preview.load_env",
+            lambda env_file=None: {"JIRA_URL": "https://acme.atlassian.net", "JIRA_PERSONAL_TOKEN": "t"},
+        )
+        verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
+        assert not verdict.available and "Server/DC" in verdict.reason
+
+    def test_no_credentials(self, monkeypatch):
+        monkeypatch.setattr("lib.preview.load_env", lambda env_file=None: {"JIRA_URL": "https://jira.example.de"})
+        # No session passed, so the credential branch is the one under test.
+        verdict = preflight_render("x")
+        assert not verdict.available and "credentials" in verdict.reason
+
+    @pytest.mark.parametrize("status", [401, 403, 404, 429, 500, 503])
+    def test_non_200_is_unavailable(self, server_env, status):
+        verdict = preflight_render("x", session=FakeSession(FakeResponse(status, STRUCK_HTML)))
+        assert not verdict.available
+        assert str(status) in verdict.reason
+        assert verdict.struck == []
+
+    @pytest.mark.parametrize(
+        "exc",
+        [requests.ConnectionError("down"), requests.Timeout("slow"), requests.TooManyRedirects("loop")],
+    )
+    def test_network_failure_is_unavailable(self, server_env, exc):
+        verdict = preflight_render("x", session=FakeSession(raises=exc))
+        assert not verdict.available and "render request failed" in verdict.reason
+
+
+class TestRenderedBodyHelper:
+    def test_finds_struck_text(self):
+        assert rendered_body_strikethrough(STRUCK_HTML) == ["Extensions, jede zu"]
+
+    def test_empty_and_none_are_safe(self):
+        assert rendered_body_strikethrough("") == []
+        assert rendered_body_strikethrough(None) == []
+
+
+class TestCommentCliWiring:
+    """`_check_rendering` must abort on a struck preview and never on a failure."""
+
+    @staticmethod
+    def _module():
+        import importlib.util
+
+        path = Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts/workflow/jira-comment.py"
+        spec = importlib.util.spec_from_file_location("jira_comment_render_under_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_struck_preview_aborts(self, monkeypatch):
+        module = self._module()
+        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(True, ["OPS-899"]))
+        with pytest.raises(SystemExit) as exc:
+            module._check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
+        assert exc.value.code == 1
+
+    def test_force_downgrades_to_a_warning(self, monkeypatch):
+        module = self._module()
+        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(True, ["OPS-899"]))
+        module._check_rendering("x", force=True, issue_key="OPS-899", enabled=True)
+
+    def test_clean_preview_passes(self, monkeypatch):
+        module = self._module()
+        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(True, []))
+        module._check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
+
+    def test_unavailable_renderer_does_not_block_the_post(self, monkeypatch):
+        module = self._module()
+        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(False, [], "down"))
+        module._check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
+
+    def test_disabled_makes_no_call(self, monkeypatch):
+        module = self._module()
+
+        def explode(*a, **k):
+            raise AssertionError("--no-preflight must not call the renderer")
+
+        monkeypatch.setattr(module, "preflight_render", explode)
+        module._check_rendering("x", force=False, issue_key="OPS-899", enabled=False)
