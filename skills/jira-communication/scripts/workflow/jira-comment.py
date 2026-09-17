@@ -4,6 +4,7 @@
 # dependencies = [
 #     "atlassian-python-api>=3.41.0,<4",
 #     "click>=8.1.0,<9",
+#     "requests>=2.31,<3",
 # ]
 # ///
 """Jira comment operations - add, edit, delete, and list issue comments."""
