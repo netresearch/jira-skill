@@ -218,9 +218,10 @@ validate_file() {
         # count as a word character and swallow the opener after a link.
         function isword(c) { return (c != "" && c != "\001" && c !~ /[[:space:][:punct:]]/) }
         # Replace protected regions with \001, preserving length. Mirrors
-        # _mask_protected() in lib/markup.py: each region needs an ASCII
-        # non-alphanumeric before it (a URL glued to a word is not autolinked,
-        # so it keeps its dashes live), and a region starting exactly where the
+        # _mask_protected() in lib/markup.py: a bare URL, mailto or image needs
+        # an ASCII non-alphanumeric before it (one glued to a word is not
+        # autolinked, so it keeps its dashes live) while a square-bracketed
+        # link resolves anywhere, and a region starting exactly where the
         # previous one ended does not resolve either.
         function mask(line,    out, pos, rest, start, len_, before, kind, i, prev_end) {
             out = ""

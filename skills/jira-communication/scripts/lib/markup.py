@@ -31,9 +31,10 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   and not as a guess, but as a deliberate SUPERSET of it: it may report a span
   the renderer would not draw, and aims never to miss one it would. Two classes
   of miss are known and pinned rather than fixed - autolinked issue keys, which
-  are instance state (see ``find_strikethrough_spans``), and two link macros
-  written against each other, which prose does not produce (see
-  ``_mask_protected`` and ``tests/fixtures/strikethrough_corpus.json``).
+  are instance state (see ``find_strikethrough_spans``), and two macro-shaped
+  tokens written against each other with nothing between them, which prose does
+  not produce (see ``_mask_protected`` and the pinned list in
+  ``tests/fixtures/strikethrough_corpus.json``).
   ``escape_strikethrough`` repairs the spans it does find, so callers can fix
   rather than bounce.
 
@@ -134,6 +135,12 @@ def _is_delimiter_space(ch: str) -> bool:
     comes back struck through, so a non-breaking space before the closing dash
     does NOT disqualify it - while a plain space does (``a -x - y`` is clean).
     NBSP arrives routinely in text pasted out of Word or Outlook.
+
+    This is NOT the same class as the ``\\s`` in ``_PROTECTED_RE``, and making
+    the two agree would be a regression. Jira's URL autolinker DOES stop at
+    U+00A0 (``https://h/a\u00a0/-/b`` links only ``https://h/a``), so ``\\s``
+    is correct there and ASCII-only is correct here. A review proposed
+    unifying them; the renderer says they are two different rules.
     """
     return ch in " \t\x0b\x0c\r"
 
@@ -202,9 +209,12 @@ def _mask_protected(line: str) -> str:
 
     Only the immediately following region is skipped, not a whole run: in
     `[a][b][c]` the third is masked again. Whether Jira resolves that third one
-    is not measured, and the awk mirror behaves identically, so the two stay in
-    step either way. The glued-region shapes that this gets wrong are pinned in
-    the corpus fixture as known under-predictions.
+    is not measured. The awk mirror implements the same rule, and the
+    whole-corpus parity test holds it to that on every recorded case - which is
+    how a divergence here was caught once already: awk used to resume INSIDE
+    the skipped region and mask a shorter one nested in it. The glued-region
+    shapes this still gets wrong are pinned in the corpus fixture as known
+    under-predictions.
     """
     out = list(line)
     previous_end = -1
@@ -248,8 +258,9 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
     fixture but not modelled, because the only cost of predicting a span Jira
     would not draw is one redundant ``\\-``, which renders as a plain hyphen,
     whereas the cost of missing one is mangled text. ``tests/test_strikethrough.py``
-    pins both directions: zero false negatives against the recorded corpus, and
-    the list of known over-predictions, so neither can grow unnoticed.
+    pins both directions: zero UNLISTED false negatives against the recorded
+    corpus - eleven are listed - and the list of known over-predictions, so
+    neither can grow unnoticed.
 
     **It is not exact, and cannot be.** Jira substitutes autolinked issue keys
     before text effects run, so ``OPS-899-x … zu-`` is struck on an instance
