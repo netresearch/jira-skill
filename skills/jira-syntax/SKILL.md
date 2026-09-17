@@ -87,6 +87,7 @@ posting command.
 ## References
 
 - `references/jira-syntax-quick-reference.md` - Complete syntax documentation
+  Includes **Ask the renderer instead of reasoning about it**: `POST /rest/api/1.0/render` returns the HTML Jira will produce for any markup, before anything is posted. Use it to settle a markup question rather than deriving the answer.
 - `references/cross-project-refs.md` - GitLab cross-project ref convention (`group/project!N`, `group/project#N`, `group/project@tag`) when linking to GitLab from Jira
 - `templates/bug-report-template.md` - Bug report template
 - `templates/feature-request-template.md` - Feature request template

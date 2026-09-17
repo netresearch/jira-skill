@@ -297,6 +297,27 @@ item, `(x)` for an open one. Use them only with that meaning.
 * (x) Rollback procedure documented
 ```
 
+## Ask the renderer instead of reasoning about it
+
+Jira renders wiki markup server-side, and it will tell you what it is going to do — for any markup, before anything is posted:
+
+```bash
+curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" -H 'Content-Type: application/json' \
+  -X POST "$JIRA_URL/rest/api/1.0/render" \
+  -d '{"rendererType":"atlassian-wiki-renderer","unrenderedMarkup":"Die {{a}}-Extensions, jede zu- und abschaltbar","issueKey":null}'
+```
+
+This is the endpoint behind Jira's own preview button. It is Server/DC only (Cloud uses ADF and has no equivalent), it needs no issue, and it writes nothing. It rate-limits with HTTP 429 above roughly three to eight parallel requests, so a batch run needs backoff.
+
+**It is the same renderer that stores a comment.** Verified by rendering the full 1185-character source of an existing comment and diffing against that comment's stored `renderedBody` (`GET /rest/api/2/issue/<KEY>/comment/<id>?expand=renderedBody`) — byte-identical. So the preview is proof, not an approximation.
+
+Use it whenever a claim about Jira markup is about to be written down — in a lint, a ticket, a reference page like this one. It costs one call and it settles the question. Two successive hand-derived versions of the strikethrough rule in this repo were wrong in opposite directions, and the second passed 168 hand-picked cases while still being wrong; a generated corpus rendered through this endpoint found the defect in minutes. `scripts/verify-render-oracle.py --live` and `scripts/generate-strikethrough-corpus.py --live` are the two runners built on it.
+
+Two things it cannot settle, because they are not in the markup:
+
+- **Instance state.** Jira substitutes autolinked issue keys before text effects run, so `OPS-899-x ... zu-` renders struck through where OPS-899 exists and literally where it does not. Render against the instance you will post to.
+- **What the markup was meant to say.** The renderer answers "what will this look like", never "is this what you wanted".
+
 ## Validation is a gate, not a formality
 
 `scripts/validate-jira-syntax.sh` only helps if its **result** is read before
