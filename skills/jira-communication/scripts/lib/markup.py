@@ -261,8 +261,9 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
     would not draw is one redundant ``\\-``, which renders as a plain hyphen,
     whereas the cost of missing one is mangled text. ``tests/test_strikethrough.py``
     pins both directions: zero UNLISTED false negatives against the recorded
-    corpus - eleven are listed - and the list of known over-predictions, so
-    neither can grow unnoticed.
+    corpus, and the list of known over-predictions, so neither can grow
+    unnoticed. The counts live in the fixture, not here, where re-recording
+    would leave them quietly false - as it already did once.
 
     **It is not exact, and cannot be.** Jira substitutes autolinked issue keys
     before text effects run, so ``OPS-899-x … zu-`` is struck on an instance

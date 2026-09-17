@@ -263,7 +263,7 @@ The backslash escape is the official Jira mechanism; the rephrase is editorial; 
 
 ### Common gotcha: prose struck through by `-text-`
 
-`-text-` is strikethrough. The grammar below is measured against a live Jira Server 9.12 wiki renderer and recorded in `tests/fixtures/strikethrough_oracle.json`; it is not a rule of thumb, and an earlier version of this section stated it wrongly in both directions.
+`-text-` is strikethrough. The grammar below is measured against a live Jira Server 9.12 wiki renderer, and the recorded cases are kept in the source repo (netresearch/jira-skill), not in the standalone skill package; it is not a rule of thumb, and an earlier version of this section stated it wrongly in both directions.
 
 > **opener** — an unescaped `-` at line start or after a **non-word character**, followed by neither whitespace nor another dash
 > **closer** — the next *valid* closer: an unescaped `-` that is not preceded by whitespace and is followed by a non-word character or line end; a dash failing either condition is skipped over, not fatal
@@ -311,7 +311,7 @@ This is the endpoint behind Jira's own preview button. It is Server/DC only (Clo
 
 **It is the same renderer that stores a comment.** Verified by rendering the full 1185-character source of an existing comment and diffing against that comment's stored `renderedBody` (`GET /rest/api/2/issue/<KEY>/comment/<id>?expand=renderedBody`) — byte-identical. So the preview is proof, not an approximation.
 
-Use it whenever a claim about Jira markup is about to be written down — in a lint, a ticket, a reference page like this one. It costs one call and it settles the question. Two successive hand-derived versions of the strikethrough rule in this repo were wrong in opposite directions, and the second passed 168 hand-picked cases while still being wrong; a generated corpus rendered through this endpoint found the defect in minutes. `scripts/verify-render-oracle.py --live` and `scripts/generate-strikethrough-corpus.py --live` are the two runners built on it.
+Use it whenever a claim about Jira markup is about to be written down — in a lint, a ticket, a reference page like this one. It costs one call and it settles the question. Two successive hand-derived versions of the strikethrough rule in this repo were wrong in opposite directions, and the second passed 168 hand-picked cases while still being wrong; a generated corpus rendered through this endpoint found the defect in minutes. Two runners built on it — one to re-record the curated cases, one to generate and record a corpus — live in the source repo (netresearch/jira-skill), not in the standalone skill package; the curl above is the whole technique and needs neither.
 
 Two things it cannot settle, because they are not in the markup:
 

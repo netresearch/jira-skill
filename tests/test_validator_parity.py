@@ -207,3 +207,42 @@ def test_awk_agrees_with_python_over_the_whole_corpus(locale, tmp_path):
         f"  line {n}: awk={n in flagged_lines} python={bool(find_strikethrough_spans(c))} {c!r}"
         for n, c in disagreements[:10]
     )
+
+
+@pytest.mark.skipif(not VALIDATOR.exists(), reason="validator script not present")
+def test_a_dead_dash_scan_is_reported_not_swallowed(tmp_path):
+    """A scan that did not run must not look like a draft with no findings.
+
+    This is the shape the whole change exists to avoid, on the shell side: no
+    hits is exactly what a clean draft produces. Two earlier attempts at this
+    guard did not work and both looked like they did - first the pipe into
+    `head` swallowed awk's status, then `set -e` aborted the script on the bare
+    assignment before the check could run. The second one still exited
+    non-zero, so a casual check ("it fails, good") passed while the ERROR never
+    printed and the remaining files in a multi-file run were skipped.
+
+    So this asserts all three: the message, the summary that follows it, and a
+    non-zero exit.
+    """
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    # Fails only for the dash scan, so the validator's other awk uses still work.
+    (fakebin / "awk").write_text(
+        '#!/bin/bash\nfor a in "$@"; do case "$a" in *"strikes("*) exit 3;; esac; done\nexec /usr/bin/awk "$@"\n',
+        encoding="utf-8",
+    )
+    (fakebin / "awk").chmod(0o755)
+
+    draft = tmp_path / "draft.txt"
+    draft.write_text("h3. Fixture\n\nDie {{a}}-Extensions, jede zu- und abschaltbar\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(VALIDATOR), str(draft)],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PATH": f"{fakebin}:{os.environ['PATH']}"},
+        check=False,
+    )
+    assert "did not run" in result.stdout, result.stdout[-500:]
+    assert "Validation Summary" in result.stdout, "the run aborted instead of reporting"
+    assert result.returncode != 0, "a draft that was never checked must not exit 0"

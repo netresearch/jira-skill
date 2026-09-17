@@ -314,8 +314,13 @@ validate_file() {
         }
         /^[[:space:]]*```/ { infence = !infence; next }
         opentag != "" || infence { next }
-        strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content")
-    local dash_rc=$?
+        strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content") && dash_rc=0 || dash_rc=$?
+    # The `&& … || …` is load-bearing under `set -e` (line 6): a bare assignment
+    # takes the command substitution's status, so a failing awk aborted the
+    # whole script before this branch could run. It exited non-zero, so nothing
+    # was silently passed - but the ERROR below never printed and the remaining
+    # files in a multi-file run were skipped. A compound command is exempt from
+    # set -e, which is what lets the branch execute.
     # awk's status must not be swallowed by the pipe: a scan that never ran
     # (no awk, a syntax error, a killed process) produces no hits, and no hits
     # is what a clean draft looks like. That is the same "a failure reads as
