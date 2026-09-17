@@ -274,6 +274,10 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     scan = _mask_protected(line)
     n = len(scan)
+    # Openers are visited left to right and the scan resumes past a matched
+    # closer, so one forward pointer into the precomputed list suffices.
+    closers = _closer_positions(scan)
+    next_closer = 0
     i = 0
     while i < n:
         if scan[i] != "-" or _is_escaped(scan, i):
@@ -287,27 +291,49 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
             i += 1
             continue
 
-        closer = _find_closer(scan, i)
-        if closer is None:
-            i += 1
-            continue
+        while next_closer < len(closers) and closers[next_closer] < i + 2:
+            next_closer += 1
+        if next_closer >= len(closers):
+            break  # no closer can exist for this opener or any later one
+        closer = closers[next_closer]
         spans.append((i, closer))
         i = closer + 1
     return spans
 
 
-def _find_closer(scan: str, opener: int) -> int | None:
-    """First index after ``opener`` holding a dash that can close a span."""
+def _opener_positions(scan: str) -> list[int]:
+    """Every index in ``scan`` holding a dash that can open a span."""
     n = len(scan)
-    for j in range(opener + 2, n):
-        if scan[j] != "-" or _is_escaped(scan, j):
-            continue
-        if _is_delimiter_space(scan[j - 1]):
-            continue
-        if j + 1 < n and _is_word_char(scan[j + 1]):
-            continue
-        return j
-    return None
+    return [
+        i
+        for i in range(n)
+        if scan[i] == "-"
+        and not _is_escaped(scan, i)
+        and not (i > 0 and _is_word_char(scan[i - 1]))
+        and i + 1 < n
+        and not _is_delimiter_space(scan[i + 1])
+        and scan[i + 1] != "-"
+    ]
+
+
+def _closer_positions(scan: str) -> list[int]:
+    """Every index in ``scan`` holding a dash that can close a span.
+
+    Computed once per line rather than searched per opener. Whether a dash can
+    close depends only on its own two neighbours, never on where the span
+    started, so a forward scan from each opener re-derives the same answer -
+    which made the whole function quadratic in the number of dashes. A review
+    measured 99 s on one 117 KB line; the regex this replaced was linear.
+    """
+    n = len(scan)
+    return [
+        j
+        for j in range(1, n)
+        if scan[j] == "-"
+        and not _is_escaped(scan, j)
+        and not _is_delimiter_space(scan[j - 1])
+        and not (j + 1 < n and _is_word_char(scan[j + 1]))
+    ]
 
 
 def _escape_dash_run(line: str, opener: int) -> str:
@@ -363,28 +389,63 @@ def escape_strikethrough(text: str) -> str:
     a plain hyphen on the page. Content inside ``{code}``/``{noformat}`` is
     left untouched, where a dash is literal already.
 
-    Escaping is iterated to a fixed point per line, because repairing one span
-    can expose the next: in ``a -x- -y- b`` the second pair only becomes
-    reachable once the first stops consuming its dashes.
+    Each pass escapes EVERY span it found, right to left so the earlier offsets
+    stay valid, and only then rescans. Repairing one span can expose the next -
+    in ``a -x- -y- b`` the second pair becomes reachable once the first stops
+    consuming its dashes - so a rescan is still needed, but a pass per span is
+    not. Escaping one at a time made the cost quadratic in the number of spans
+    on a line, which a review measured at 99 s for a single 117 KB line; the
+    rule it replaced was linear, so that would have been a regression this
+    change introduced.
 
-    The loop stops if an iteration fails to change the line. Every escape
-    strictly reduces the number of unescaped dashes, so that cannot happen
-    today - but this runs in the posting path, where a future edit that made
-    the repair a no-op would otherwise hang the caller rather than fail it.
-    (Not hypothetical: neutering ``_escape_dash_run`` in a mutation run hung
-    the whole test suite.) A line the repair cannot converge on is left as it
-    is and reported by ``lint_wiki_markup``, which callers run afterwards.
+    The loop stops if a pass fails to change the line. Every escape strictly
+    reduces the number of unescaped dashes, so that cannot happen today - but
+    this runs in the posting path, where a future edit that made the repair a
+    no-op would otherwise hang the caller rather than fail it. (Not
+    hypothetical: neutering ``_escape_dash_run`` in a mutation run hung the
+    whole test suite.) A line the repair cannot converge on is left as it is
+    and reported by ``lint_wiki_markup``, which callers run afterwards.
     """
     out: list[str] = []
     for line, verbatim in _split_verbatim(text):
         if not verbatim:
-            while spans := find_strikethrough_spans(line):
-                repaired = _escape_dash_run(line, spans[0][0])
+            while True:
+                repaired = _escape_all_openers(line)
                 if repaired == line:
                     break
                 line = repaired
         out.append(line)
     return "\n".join(out)
+
+
+def _escape_all_openers(line: str) -> str:
+    """Escape every dash that could open a span, in one right-to-left pass.
+
+    ``find_strikethrough_spans`` reports NON-OVERLAPPING spans, so repairing
+    only what it returns needs one pass per nested opener: in
+    ``-a0 -a1 ... -a9 zu-`` the first pass sees a single span from ``-a0`` to
+    ``zu-``, and only after escaping it does ``-a1`` become one. That is a pass
+    per dash, each rescanning and rebuilding the line - quadratic, where the
+    rule this replaced was linear. A review measured 99 s on one 117 KB line.
+
+    The fixed point is reachable directly: a span exists exactly where an
+    opener has some valid closer at or after ``opener + 2``, and both sets are
+    independent of each other, so escaping every such opener at once lands on
+    the same result. Right to left, so the earlier offsets stay valid.
+
+    The caller still loops, because escaping shifts positions and can in
+    principle expose an opener that was not a candidate before; it converges on
+    the second pass in practice, and the loop stops when a pass changes nothing.
+    """
+    scan = _mask_protected(line)
+    closers = _closer_positions(scan)
+    if not closers:
+        return line
+    last_closer = closers[-1]
+    openers = [i for i in _opener_positions(scan) if i + 2 <= last_closer]
+    for opener in reversed(openers):
+        line = _escape_dash_run(line, opener)
+    return line
 
 
 def lint_wiki_markup(text: str) -> list[str]:
