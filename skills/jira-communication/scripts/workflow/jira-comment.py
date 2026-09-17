@@ -23,9 +23,8 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
-from lib.markup import escape_strikethrough, lint_ticket_language, lint_wiki_markup
+from lib.markup_cli import FORCE_HELP, NO_AUTO_ESCAPE_HELP, NO_PREFLIGHT_HELP, guard_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
-from lib.preview import preflight_render
 from lib.users import check_mentions_cli, person_label
 
 
@@ -72,119 +71,6 @@ def _read_comment_text(comment_text: str, usage: str) -> str:
     return comment_text
 
 
-def _repair_markup(comment_text: str, auto_escape: bool) -> str:
-    """Escape dashes Jira would render as strikethrough, and say what changed.
-
-    This runs before the lint, and it is the reason the lint should now be
-    quiet about dashes: a strikethrough span is not a judgement call, it is a
-    mechanical defect with a mechanical repair. ``\\-`` prints as a plain
-    hyphen, so the posted text reads exactly as written.
-
-    Reporting the repair on stderr is deliberate - a silent rewrite of the
-    user's text would be worse than the bug. ``--no-auto-escape`` turns it off -
-    but not on its own: the lint and the render check each refuse the surviving
-    span independently, so a deliberate strikethrough needs
-    ``--no-auto-escape --force``.
-    """
-    if not auto_escape:
-        return comment_text
-    repaired = escape_strikethrough(comment_text)
-    if repaired == comment_text:
-        return comment_text
-    changed = [
-        (n, before, after)
-        for n, (before, after) in enumerate(zip(comment_text.split("\n"), repaired.split("\n"), strict=True), 1)
-        if before != after
-    ]
-    warning(
-        f"auto-escaped {len(changed)} line(s) that Jira would have rendered struck through "
-        f"(\\- prints as a plain hyphen; use --no-auto-escape to keep the markup as written)"
-    )
-    for n, _before, after in changed[:5]:
-        warning(f"  line {n}: {after.strip()[:100]!r}")
-    return repaired
-
-
-def _check_rendering(
-    comment_text: str,
-    force: bool,
-    issue_key: str | None,
-    enabled: bool,
-    env_file: str | None = None,
-    profile: str | None = None,
-) -> None:
-    """Ask the instance how it will render this text, and refuse a mangled post.
-
-    The lexical repair above handles what a model of the grammar CAN handle.
-    This handles what it cannot, and the gap is not academic: Jira substitutes
-    autolinked issue keys before text effects run, so
-    ``{{OPS-899-Divergenzanalyse.pdf}}`` comes back with the key struck through
-    on an instance where OPS-899 exists and clean on one where it does not.
-    Escaping the dash does not help - measured - because the opener is
-    positioned relative to the substituted link, not the source text. Asking
-    the renderer is the only way to know, and it is one call.
-
-    Advisory by construction. An unreachable, slow or absent renderer (the
-    endpoint is Server/DC only) prints one warning and gets out of the way; it
-    must never stop somebody posting a comment.
-    """
-    if not enabled:
-        return
-
-    verdict = preflight_render(comment_text, issue_key=issue_key, env_file=env_file, profile=profile)
-    if not verdict.available:
-        warning(f"render preview unavailable ({verdict.reason}) - relying on the local markup lint alone")
-        return
-    if not verdict.struck:
-        return
-
-    struck = "; ".join(repr(s[:80]) for s in verdict.struck[:3])
-    if force:
-        warning(f"rendering: Jira strikes through {struck}")
-        return
-
-    error(
-        f"Jira renders part of this comment struck through: {struck}",
-        suggestion=(
-            "The local escape could not fix it - this usually means an autolinked issue key "
-            "(a dash right after PROJ-123) or another macro creating the boundary. Rephrase, "
-            "put the token in a {code} block, or re-run with --force to post it anyway."
-        ),
-    )
-    sys.exit(1)
-
-
-def _check_markup(comment_text: str, force: bool, issue_key: str | None = None) -> None:
-    """Lint wiki markup and ticket language; abort on findings unless --force is given.
-
-    The two kinds are labelled and explained separately: a language-only
-    finding reported as a markup problem, with a suggestion about block tags,
-    sends the reader looking for the wrong defect.
-    """
-    markup_findings = lint_wiki_markup(comment_text)
-    language_findings = lint_ticket_language(comment_text, issue_key)
-    if not markup_findings and not language_findings:
-        return
-
-    if force:
-        for finding in markup_findings:
-            warning(f"markup: {finding}")
-        for finding in language_findings:
-            warning(f"language: {finding}")
-        return
-
-    labelled = [f"markup: {f}" for f in markup_findings] + [f"language: {f}" for f in language_findings]
-    hints = []
-    if markup_findings:
-        hints.append("Block tags are never inline; escape literal mentions as \\{code\\}.")
-    if language_findings:
-        hints.append("Re-resolve the language for this ticket; quoted user content stays verbatim.")
-    hints.append("Re-run with --force to post anyway.")
-
-    error("Comment lint found problems:\n  " + "\n  ".join(labelled), suggestion=" ".join(hints))
-    sys.exit(1)
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -223,17 +109,9 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @cli.command()
 @click.argument("issue_key")
 @click.argument("comment_text")
-@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings or a struck-through render preview")
-@click.option(
-    "--no-auto-escape",
-    is_flag=True,
-    help="Do not escape dashes Jira would render as strikethrough; add --force to actually post the span",
-)
-@click.option(
-    "--no-preflight",
-    is_flag=True,
-    help="Skip the render-preview check against the Jira instance before posting",
-)
+@click.option("--force", is_flag=True, help=FORCE_HELP)
+@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
+@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
 def add(
@@ -287,15 +165,15 @@ def add(
 
     comment_text = _read_comment_text(comment_text, "Usage: cat comment.txt | jira-comment add PROJ-123 -")
 
-    comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
-    _check_markup(comment_text, force, issue_key)
-    _check_rendering(
+    comment_text = guard_wiki_markup(
         comment_text,
-        force,
-        issue_key,
-        enabled=not no_preflight,
+        force=force,
+        auto_escape=not no_auto_escape,
+        preflight=not no_preflight,
+        issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),
+        label="comment",
     )
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
@@ -321,17 +199,9 @@ def add(
 @click.argument("issue_key")
 @click.argument("comment_id")
 @click.argument("comment_text")
-@click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings or a struck-through render preview")
-@click.option(
-    "--no-auto-escape",
-    is_flag=True,
-    help="Do not escape dashes Jira would render as strikethrough; add --force to actually post the span",
-)
-@click.option(
-    "--no-preflight",
-    is_flag=True,
-    help="Skip the render-preview check against the Jira instance before posting",
-)
+@click.option("--force", is_flag=True, help=FORCE_HELP)
+@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
+@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
 def edit(
@@ -373,15 +243,15 @@ def edit(
 
     comment_text = _read_comment_text(comment_text, "Usage: cat comment.txt | jira-comment edit PROJ-123 12345 -")
 
-    comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
-    _check_markup(comment_text, force, issue_key)
-    _check_rendering(
+    comment_text = guard_wiki_markup(
         comment_text,
-        force,
-        issue_key,
-        enabled=not no_preflight,
+        force=force,
+        auto_escape=not no_auto_escape,
+        preflight=not no_preflight,
+        issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),
+        label="comment",
     )
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 

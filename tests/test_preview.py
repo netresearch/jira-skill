@@ -247,46 +247,48 @@ class TestTargetsTheSameInstanceAsTheWrite:
         assert "ambiguous" in verdict.reason, verdict.reason
 
 
-class TestCommentCliWiring:
-    """`_check_rendering` must abort on a struck preview and never on a failure."""
+class TestCheckRenderingGate:
+    """``check_rendering`` must abort on a struck preview and never on a failure.
+
+    Tests the gate where it now lives - ``lib.markup_cli`` - rather than
+    through one command that happens to call it. It guards all six wiki-markup
+    surfaces, so binding these to ``jira-comment.py`` would have tested one
+    sixth of the behaviour while reading like all of it.
+    """
 
     @staticmethod
-    def _module():
-        import importlib.util
+    def _gate():
+        from lib import markup_cli
 
-        path = Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts/workflow/jira-comment.py"
-        spec = importlib.util.spec_from_file_location("jira_comment_render_under_test", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return markup_cli
 
     def test_struck_preview_aborts(self, monkeypatch):
-        module = self._module()
-        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(True, ["OPS-899"]))
+        gate = self._gate()
+        monkeypatch.setattr(gate, "preflight_render", lambda *a, **k: RenderVerdict(True, ["OPS-899"]))
         with pytest.raises(SystemExit) as exc:
-            module._check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
+            gate.check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
         assert exc.value.code == 1
 
     def test_force_downgrades_to_a_warning(self, monkeypatch):
-        module = self._module()
-        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(True, ["OPS-899"]))
-        module._check_rendering("x", force=True, issue_key="OPS-899", enabled=True)
+        gate = self._gate()
+        monkeypatch.setattr(gate, "preflight_render", lambda *a, **k: RenderVerdict(True, ["OPS-899"]))
+        gate.check_rendering("x", force=True, issue_key="OPS-899", enabled=True)
 
     def test_clean_preview_passes(self, monkeypatch):
-        module = self._module()
-        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(True, []))
-        module._check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
+        gate = self._gate()
+        monkeypatch.setattr(gate, "preflight_render", lambda *a, **k: RenderVerdict(True, []))
+        gate.check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
 
-    def test_unavailable_renderer_does_not_block_the_post(self, monkeypatch):
-        module = self._module()
-        monkeypatch.setattr(module, "preflight_render", lambda *a, **k: RenderVerdict(False, [], "down"))
-        module._check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
+    def test_unavailable_renderer_does_not_block_the_write(self, monkeypatch):
+        gate = self._gate()
+        monkeypatch.setattr(gate, "preflight_render", lambda *a, **k: RenderVerdict(False, [], "down"))
+        gate.check_rendering("x", force=False, issue_key="OPS-899", enabled=True)
 
     def test_disabled_makes_no_call(self, monkeypatch):
-        module = self._module()
+        gate = self._gate()
 
         def explode(*a, **k):
             raise AssertionError("--no-preflight must not call the renderer")
 
-        monkeypatch.setattr(module, "preflight_render", explode)
-        module._check_rendering("x", force=False, issue_key="OPS-899", enabled=False)
+        monkeypatch.setattr(gate, "preflight_render", explode)
+        gate.check_rendering("x", force=False, issue_key="OPS-899", enabled=False)
