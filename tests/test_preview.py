@@ -219,7 +219,9 @@ class TestTargetsTheSameInstanceAsTheWrite:
             session=session,
         )
         assert seen == {"profile": "other", "env_file": "/tmp/other.env", "issue_key": "OPS-899"}
-        assert session.calls[0][0].startswith("https://other.example.de")
+        # Full URL, not a prefix: a prefix check says nothing about what follows
+        # it, and CodeQL reads `startswith` on a URL as a sanitization attempt.
+        assert session.calls[0][0] == "https://other.example.de/rest/api/1.0/render"
 
     def test_issue_key_alone_still_reaches_the_loader(self, monkeypatch):
         seen = {}
