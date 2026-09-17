@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.31.3] - 2026-09-17
+
 ### Fixed
 
 - The Jira hook reminder now instructs invoking the skill instead of offering the scripts as an alternative to it. It read "The jira-communication skill can help. Use the Skill tool to invoke it, or run scripts directly via uv run" and then listed ten ready-to-paste commands; that "or" reads as an equivalence and is not one — the scripts are an execution layer, the skill carries the conventions (which fields a project expects, wiki markup, the QA checklist). It cost a service record its version field: asked to bring an IOS inventory issue up to date, an agent that had only the hook edited the description and never looked at the structured fields, while the conventions say in two places to set `customfield_12180` (Current Version), including as step 5 of the QA checklist it was working through. The message now marks the commands as the skill's execution layer, names `netresearch-jira` for NR projects — the separate skill the field conventions live in, which the hook never mentioned — and puts the full-field read (`--json get`) next to the field-setting command. Three tests pin the change; reverting only the hook fails exactly those three
@@ -857,7 +859,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.2...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.3...HEAD
+[3.31.3]: https://github.com/netresearch/jira-skill/compare/v3.31.2...v3.31.3
 [3.31.2]: https://github.com/netresearch/jira-skill/compare/v3.31.1...v3.31.2
 [3.31.1]: https://github.com/netresearch/jira-skill/compare/v3.31.0...v3.31.1
 [3.31.0]: https://github.com/netresearch/jira-skill/compare/v3.30.1...v3.31.0
