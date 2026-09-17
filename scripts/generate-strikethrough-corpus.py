@@ -29,9 +29,9 @@ scores against the freshly rendered cases. Credentials come from ``lib/config``
 """
 
 import argparse
+import hashlib
 import itertools
 import json
-import random
 import re
 import sys
 import time
@@ -65,14 +65,14 @@ TOKENS = [
     "/",
     "ä",
     "{{m}}",
-    "[t|http://x.de/a/-/b]",
-    "http://x.de/a/-/b",
+    "[t|https://x.de/a/-/b]",
+    "https://x.de/a/-/b",
     "!i.png!",
     "*b*",
     "1",
 ]
 
-# Fixed seed: the corpus must be reproducible, or "re-record and diff" is
+# Fixed salt: the corpus must be reproducible, or "re-record and diff" is
 # meaningless.
 SEED = 226
 LONG_SAMPLES = 400
@@ -84,15 +84,21 @@ def build_cases() -> list[str]:
         for combo in itertools.product(TOKENS, repeat=length):
             cases.append("x " + "".join(combo) + " y")
 
-    rng = random.Random(SEED)
-    for _ in range(LONG_SAMPLES):
-        size = rng.randint(4, 6)
-        cases.append("x " + "".join(rng.choice(TOKENS) for _ in range(size)) + " y")
+    # Longer sequences, sampled deterministically from a hash rather than a PRNG.
+    # The corpus has to be byte-identical on every machine and interpreter or
+    # "re-record and diff the fixture" means nothing, and a hash gives that
+    # guarantee outright instead of relying on an implementation detail of
+    # random.Random staying put across versions.
+    for index in range(LONG_SAMPLES):
+        digest = hashlib.sha256(f"{SEED}:{index}".encode()).digest()
+        size = 4 + digest[0] % 3
+        picks = [TOKENS[digest[1 + n] % len(TOKENS)] for n in range(size)]
+        cases.append("x " + "".join(picks) + " y")
 
     # Prose-shaped: an opener candidate after each kind of boundary, combined
     # with each kind of tail. `zu- und` is the German elliptical compound from
     # issue #226 - the closer that makes an otherwise harmless line break.
-    for lead in ["{{m}}", "*b*", "ab", "[t|http://x.de/a/-/b]", "http://x.de/a/-/b", "!i.png!", "/", "."]:
+    for lead in ["{{m}}", "*b*", "ab", "[t|https://x.de/a/-/b]", "https://x.de/a/-/b", "!i.png!", "/", "."]:
         for mid in ["-x", "--x", "\\-x", "-1", "- x"]:
             for tail in ["zu- und", "word-", "-v mehr", "nichts", "zu\\- und"]:
                 cases.append(f"Der {lead}{mid} Wert ist {tail} da.")

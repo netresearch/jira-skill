@@ -84,7 +84,7 @@ _MIDWORD_EMPHASIS_RES = {
 # Every rule below is pinned by two fixtures recorded from the live Jira
 # Server 9.12 wiki renderer (POST /rest/api/1.0/render):
 # tests/fixtures/strikethrough_oracle.json (209 curated cases with their HTML)
-# and tests/fixtures/strikethrough_corpus.json (5732 generated ones).
+# and tests/fixtures/strikethrough_corpus.json (5735 generated ones).
 # `scripts/verify-render-oracle.py --live` re-records the first and
 # `scripts/generate-strikethrough-corpus.py` the second, so "verified against
 # 9.12" is a command, not a sentence. The generator exists because the two

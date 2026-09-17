@@ -14,7 +14,7 @@ which Jira does not do.
 
 What this file asserts is that the two implementations agree with EACH OTHER on
 every one of those cases. Whether they agree with Jira is asserted separately,
-in ``tests/test_strikethrough.py``, against the 5732-case generated corpus - and
+in ``tests/test_strikethrough.py``, against the 5735-case generated corpus - and
 deliberately asymmetrically, because the model is a superset. Keeping the two
 questions apart matters: an exemption granted for the Jira contract must not
 silently become an excuse for the two implementations to drift.

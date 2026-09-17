@@ -133,7 +133,7 @@ validate_file() {
     # tests/test_validator_parity.py runs BOTH implementations over every
     # single-line case in tests/fixtures/strikethrough_oracle.json and asserts
     # they agree, so the two cannot drift apart; tests/test_strikethrough.py
-    # holds the Python side against 5732 recorded renderings.
+    # holds the Python side against 5735 recorded renderings.
     #
     #   opener  an unescaped `-` at line start or after a non-word character
     #           (which includes the `}}`, `*`, `_`, `]`, `!` that end an inline
@@ -187,9 +187,9 @@ validate_file() {
         function isword(c) { return (c != "" && c != "\001" && c !~ /[[:space:][:punct:]]/) }
         # Replace protected regions with NULs, preserving length. Mirrors
         # _mask_protected() in lib/markup.py: each region needs an ASCII
-        # non-alphanumeric before it (an unlinked `ahttp://...` keeps its
-        # dashes live), and a region starting exactly where the previous one
-        # ended does not resolve either.
+        # non-alphanumeric before it (a URL glued to a word is not autolinked,
+        # so it keeps its dashes live), and a region starting exactly where the
+        # previous one ended does not resolve either.
         function mask(line,    out, pos, rest, m, start, len_, before, i) {
             out = ""
             pos = 1

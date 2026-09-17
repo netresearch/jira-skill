@@ -27,6 +27,49 @@ from lib.output import error, extract_adf_text, format_output, success, warning
 from lib.users import check_mentions_cli, person_label
 
 
+def _read_comment_text(comment_text: str, usage: str) -> str:
+    """Return the comment body, reading stdin when the argument is ``-``.
+
+    Extracted because `add` and `edit` carried a byte-identical copy of this
+    apart from the usage line, and the pre-flight check pushed both functions
+    past the cognitive-complexity gate.
+    """
+    if comment_text != "-":
+        return comment_text
+
+    if sys.stdin.isatty():
+        error("'-' requires piped input but stdin is a terminal", suggestion=usage)
+        sys.exit(1)
+
+    max_size = 256 * 1024  # 256KB, above Jira's comment limit
+    try:
+        comment_text = read_stdin_utf8(max_size + 1)
+    except UnicodeDecodeError:
+        error(
+            "stdin contains invalid text encoding (expected UTF-8)",
+            suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
+        )
+        sys.exit(1)
+
+    if len(comment_text) > max_size:
+        error(
+            f"stdin input exceeds maximum size ({max_size // 1024}KB)",
+            suggestion="Jira comments have size limits. Consider attaching the content as a file.",
+        )
+        sys.exit(1)
+
+    comment_text = comment_text.rstrip("\n")
+
+    if not comment_text.strip():
+        error(
+            "No input received from stdin (empty or whitespace-only)",
+            suggestion="Verify your piped command produces non-empty output.",
+        )
+        sys.exit(1)
+
+    return comment_text
+
+
 def _repair_markup(comment_text: str, auto_escape: bool) -> str:
     """Escape dashes Jira would render as strikethrough, and say what changed.
 
@@ -168,40 +211,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: boo
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
-    # Read from stdin if "-" is passed as comment text
-    if comment_text == "-":
-        if sys.stdin.isatty():
-            error(
-                "'-' requires piped input but stdin is a terminal",
-                suggestion="Usage: cat comment.txt | jira-comment add PROJ-123 -",
-            )
-            sys.exit(1)
-
-        max_size = 256 * 1024  # 256KB, above Jira's comment limit
-        try:
-            comment_text = read_stdin_utf8(max_size + 1)
-        except UnicodeDecodeError:
-            error(
-                "stdin contains invalid text encoding (expected UTF-8)",
-                suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
-            )
-            sys.exit(1)
-
-        if len(comment_text) > max_size:
-            error(
-                f"stdin input exceeds maximum size ({max_size // 1024}KB)",
-                suggestion="Jira comments have size limits. Consider attaching the content as a file.",
-            )
-            sys.exit(1)
-
-        comment_text = comment_text.rstrip("\n")
-
-        if not comment_text.strip():
-            error(
-                "No input received from stdin (empty or whitespace-only)",
-                suggestion="Verify your piped command produces non-empty output.",
-            )
-            sys.exit(1)
+    comment_text = _read_comment_text(comment_text, "Usage: cat comment.txt | jira-comment add PROJ-123 -")
 
     comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
@@ -261,40 +271,7 @@ def edit(
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
-    # Read from stdin if "-" is passed as comment text
-    if comment_text == "-":
-        if sys.stdin.isatty():
-            error(
-                "'-' requires piped input but stdin is a terminal",
-                suggestion="Usage: cat comment.txt | jira-comment edit PROJ-123 12345 -",
-            )
-            sys.exit(1)
-
-        max_size = 256 * 1024  # 256KB, above Jira's comment limit
-        try:
-            comment_text = read_stdin_utf8(max_size + 1)
-        except UnicodeDecodeError:
-            error(
-                "stdin contains invalid text encoding (expected UTF-8)",
-                suggestion="Ensure the piped file is valid UTF-8 text, not binary data.",
-            )
-            sys.exit(1)
-
-        if len(comment_text) > max_size:
-            error(
-                f"stdin input exceeds maximum size ({max_size // 1024}KB)",
-                suggestion="Jira comments have size limits. Consider attaching the content as a file.",
-            )
-            sys.exit(1)
-
-        comment_text = comment_text.rstrip("\n")
-
-        if not comment_text.strip():
-            error(
-                "No input received from stdin (empty or whitespace-only)",
-                suggestion="Verify your piped command produces non-empty output.",
-            )
-            sys.exit(1)
+    comment_text = _read_comment_text(comment_text, "Usage: cat comment.txt | jira-comment edit PROJ-123 12345 -")
 
     comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
