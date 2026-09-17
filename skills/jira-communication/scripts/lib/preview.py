@@ -25,7 +25,7 @@ from typing import Any
 
 import requests
 
-from lib.config import is_cloud_url, load_env
+from lib.config import is_cloud_url, load_env, profile_to_config, resolve_profile
 
 RENDER_PATH = "/rest/api/1.0/render"
 DEFAULT_TIMEOUT = 10
@@ -57,11 +57,48 @@ def _plain(fragment: str) -> str:
     return _TAG_RE.sub("", fragment).strip()
 
 
+def _looks_like_render_output(body: str, source: str) -> bool:
+    """Cheap sanity check that ``body`` is the renderer's answer to ``source``.
+
+    Two signals, both one-directional. The renderer returns a fragment, so a
+    full HTML document is somebody else answering - a login page, a proxy, a
+    maintenance notice. And the renderer echoes the text it was given, so a
+    reasonably long word from the input should survive into the output.
+
+    Deliberately lenient: a false "unavailable" costs one warning, while a
+    false "available" is a clean verdict on an unrendered comment.
+    """
+    lowered = body.lower()
+    if "<html" in lowered or "<!doctype" in lowered:
+        return False
+    words = sorted(re.findall(r"[A-Za-z\u00c0-\u024f]{4,}", source), key=len, reverse=True)
+    if not words:
+        return True  # nothing long enough to look for; the fragment check stands
+    return words[0].lower() in _plain(body).lower()
+
+
+def _resolve_config(issue_key: str | None, env_file: str | None, profile: str | None) -> dict:
+    """Config for the SAME instance the write will go to.
+
+    Mirrors what LazyJiraClient does, because a preview rendered against a
+    different Jira is worse than no preview: the issue key does not resolve
+    there, the autolink substitution never fires, and the verdict comes back
+    clean on exactly the case this module exists to catch.
+    """
+    if profile:
+        try:
+            return profile_to_config(resolve_profile(issue_key=issue_key, profile=profile))
+        except (ValueError, KeyError, OSError):
+            return {}
+    return load_env(env_file)
+
+
 def preflight_render(
     text: str,
     *,
     issue_key: str | None = None,
     env_file: str | None = None,
+    profile: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     session: Any = None,
 ) -> RenderVerdict:
@@ -71,7 +108,7 @@ def preflight_render(
     list with ``available=True`` means the instance itself says the markup is
     clean - the strongest statement available short of posting it.
     """
-    config = load_env(env_file)
+    config = _resolve_config(issue_key, env_file, profile)
     base_url = config.get("JIRA_URL")
     if not base_url:
         return RenderVerdict(False, [], "JIRA_URL is not configured")
@@ -109,14 +146,11 @@ def preflight_render(
     if response.status_code != 200:
         return RenderVerdict(False, [], f"render endpoint returned HTTP {response.status_code}")
 
+    if not _looks_like_render_output(response.text, text):
+        # An SSO or maintenance page intercepting the request answers 200 with
+        # HTML that contains no <del>, which would otherwise be reported as
+        # "the instance says this is clean" - the one reading this module must
+        # never produce.
+        return RenderVerdict(False, [], "response does not look like render output")
+
     return RenderVerdict(True, [_plain(m) for m in _DEL_RE.findall(response.text)])
-
-
-def rendered_body_strikethrough(rendered_body: str) -> list[str]:
-    """Struck-through text in a comment's ``renderedBody``, as Jira stored it.
-
-    The last line of defence: what the reader will actually see, read back
-    after the write. ``references/comments.md`` documented doing this by hand;
-    a check nobody remembers to run is not a control.
-    """
-    return [_plain(m) for m in _DEL_RE.findall(rendered_body or "")]

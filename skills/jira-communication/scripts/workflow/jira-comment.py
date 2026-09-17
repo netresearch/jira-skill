@@ -104,7 +104,14 @@ def _repair_markup(comment_text: str, auto_escape: bool) -> str:
     return repaired
 
 
-def _check_rendering(comment_text: str, force: bool, issue_key: str | None, enabled: bool) -> None:
+def _check_rendering(
+    comment_text: str,
+    force: bool,
+    issue_key: str | None,
+    enabled: bool,
+    env_file: str | None = None,
+    profile: str | None = None,
+) -> None:
     """Ask the instance how it will render this text, and refuse a mangled post.
 
     The lexical repair above handles what a model of the grammar CAN handle.
@@ -123,7 +130,7 @@ def _check_rendering(comment_text: str, force: bool, issue_key: str | None, enab
     if not enabled:
         return
 
-    verdict = preflight_render(comment_text, issue_key=issue_key)
+    verdict = preflight_render(comment_text, issue_key=issue_key, env_file=env_file, profile=profile)
     if not verdict.available:
         warning(f"render preview unavailable ({verdict.reason}) - relying on the local markup lint alone")
         return
@@ -204,6 +211,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept so the render pre-flight resolves the SAME instance the write goes
+    # to. Without them it falls back to ~/.env.jira, which under --profile is
+    # either absent (silently degraded forever) or a DIFFERENT Jira - and a
+    # clean preview from the wrong instance reads as a clean bill of health.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command()
@@ -275,7 +288,14 @@ def add(
 
     comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
-    _check_rendering(comment_text, force, issue_key, enabled=not no_preflight)
+    _check_rendering(
+        comment_text,
+        force,
+        issue_key,
+        enabled=not no_preflight,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+    )
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
@@ -348,7 +368,14 @@ def edit(
 
     comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
-    _check_rendering(comment_text, force, issue_key, enabled=not no_preflight)
+    _check_rendering(
+        comment_text,
+        force,
+        issue_key,
+        enabled=not no_preflight,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+    )
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:

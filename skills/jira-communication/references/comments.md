@@ -104,7 +104,7 @@ curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" \
   "$JIRA_URL/rest/api/2/issue/<KEY>/comment/<id>?expand=renderedBody" | jq -r '.renderedBody'
 ```
 
-Grep it for what you fear: `<del>` means something parsed as strikethrough (the dash trap — the pre-flight check above should have caught it, so a `<del>` here means it was skipped or forced), a literal `\` means a backslash escape reached the reader, and `&#45;` is a correctly escaped dash. Run this after editing any markup-sensitive comment; verified against Jira Server 9.12.
+Grep it for what you fear: `<del>` means something parsed as strikethrough, a literal `\` means a backslash escape reached the reader, and `&#45;` is a correctly escaped dash. This is a manual check — nothing runs it for you. With the pre-flight above left on, a `<del>` here should not happen; seeing one means it was skipped, forced, or that the renderer changed its mind between the preview and the write. Run this after editing any markup-sensitive comment; verified against Jira Server 9.12.
 
 ## Comment verbosity: depth for the failing path only
 

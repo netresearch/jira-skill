@@ -20,7 +20,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
 
-from lib.preview import RenderVerdict, preflight_render, rendered_body_strikethrough  # noqa: E402
+from lib.preview import RenderVerdict, preflight_render  # noqa: E402
 
 STRUCK_HTML = "<p>Die <tt>nr-pforum</tt><del>Extensions, jede zu</del> und abschaltbar</p>"
 CLEAN_HTML = "<p>journalctl -b -p crit zeigt die Fehler</p>"
@@ -150,13 +150,92 @@ class TestDegradesInsteadOfBlocking:
         assert not verdict.available and "render request failed" in verdict.reason
 
 
-class TestRenderedBodyHelper:
-    def test_finds_struck_text(self):
-        assert rendered_body_strikethrough(STRUCK_HTML) == ["Extensions, jede zu"]
+class TestOnlyTrustsActualRenderOutput:
+    """A 200 is not proof the body came from the renderer.
 
-    def test_empty_and_none_are_safe(self):
-        assert rendered_body_strikethrough("") == []
-        assert rendered_body_strikethrough(None) == []
+    An SSO or maintenance page intercepting the request answers 200 with HTML
+    that has no <del> in it. Reported as available+clean, that is a clean
+    verdict on an unrendered comment - the worst outcome this module can
+    produce, and the one its docstring promises it will not.
+    """
+
+    SSO_PAGE = "<html><head><title>Log in</title></head><body><form>SSO</form></body></html>"
+
+    def test_interception_page_is_unavailable_not_clean(self, server_env):
+        session = FakeSession(FakeResponse(200, self.SSO_PAGE))
+        verdict = preflight_render("Die {{a}}-Extensions, jede zu- und abschaltbar", session=session)
+        assert not verdict.available
+        assert "render output" in verdict.reason
+
+    def test_empty_body_is_unavailable(self, server_env):
+        verdict = preflight_render("Extensions abschaltbar", session=FakeSession(FakeResponse(200, "")))
+        assert not verdict.available
+
+    def test_body_missing_the_input_text_is_unavailable(self, server_env):
+        # A fragment, but not this input's fragment.
+        session = FakeSession(FakeResponse(200, "<p>something else entirely</p>"))
+        assert not preflight_render("Extensions abschaltbar", session=session).available
+
+    def test_genuine_fragment_is_accepted(self, server_env):
+        session = FakeSession(FakeResponse(200, STRUCK_HTML))
+        verdict = preflight_render("Die {{nr-pforum}}-Extensions, jede zu- und abschaltbar", session=session)
+        assert verdict.available and verdict.struck == ["Extensions, jede zu"]
+
+    def test_input_with_no_long_word_still_renders(self, server_env):
+        # Nothing to look for, so the fragment check alone decides.
+        session = FakeSession(FakeResponse(200, "<p>a <del>x</del> b</p>"))
+        assert preflight_render("a -x- b", session=session).available
+
+
+class TestTargetsTheSameInstanceAsTheWrite:
+    """The preview must resolve the instance the comment will be posted to.
+
+    Rendering against a different Jira is worse than not rendering: the issue
+    key does not resolve there, so the autolink substitution never fires and
+    the verdict comes back clean on precisely the case this module exists for.
+    """
+
+    def test_env_file_is_passed_to_the_loader(self, monkeypatch):
+        seen = {}
+
+        def fake_load_env(env_file=None):
+            seen["env_file"] = env_file
+            return {"JIRA_URL": "https://jira.example.de", "JIRA_PERSONAL_TOKEN": "t"}
+
+        monkeypatch.setattr("lib.preview.load_env", fake_load_env)
+        preflight_render(
+            "Extensions abschaltbar", env_file="/tmp/other.env", session=FakeSession(FakeResponse(200, CLEAN_HTML))
+        )
+        assert seen["env_file"] == "/tmp/other.env"
+
+    def test_profile_resolves_through_the_profile_store(self, monkeypatch):
+        seen = {}
+
+        def fake_resolve(issue_key=None, profile=None, **kwargs):
+            seen["issue_key"], seen["profile"] = issue_key, profile
+            return {"url": "https://other.example.de", "personal_token": "t"}
+
+        monkeypatch.setattr("lib.preview.resolve_profile", fake_resolve)
+        monkeypatch.setattr(
+            "lib.preview.profile_to_config",
+            lambda prof: {"JIRA_URL": prof["url"], "JIRA_PERSONAL_TOKEN": "t"},
+        )
+        monkeypatch.setattr(
+            "lib.preview.load_env",
+            lambda env_file=None: pytest.fail("load_env must not be used when a profile is given"),
+        )
+        session = FakeSession(FakeResponse(200, CLEAN_HTML))
+        preflight_render("Extensions abschaltbar", issue_key="OPS-899", profile="other", session=session)
+        assert seen == {"issue_key": "OPS-899", "profile": "other"}
+        assert session.calls[0][0].startswith("https://other.example.de")
+
+    def test_unusable_profile_degrades_instead_of_raising(self, monkeypatch):
+        monkeypatch.setattr(
+            "lib.preview.resolve_profile",
+            lambda **kwargs: (_ for _ in ()).throw(ValueError("no such profile")),
+        )
+        verdict = preflight_render("x", profile="missing", session=FakeSession(FakeResponse(200, CLEAN_HTML)))
+        assert not verdict.available and "JIRA_URL" in verdict.reason
 
 
 class TestCommentCliWiring:
