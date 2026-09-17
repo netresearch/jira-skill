@@ -4,6 +4,8 @@ These tests use click.testing.CliRunner with mocked Jira clients to verify
 that CLI scripts load correctly, parse options, and handle errors gracefully.
 """
 
+import sys
+from pathlib import Path
 from unittest import mock
 
 import click.testing
@@ -19,6 +21,10 @@ _worklog_mod = load_script("jira-worklog", "core")
 _create_mod = load_script("jira-create", "workflow")
 _transition_mod = load_script("jira-transition", "workflow")
 _comment_mod = load_script("jira-comment", "workflow")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
+from lib import preview as _preview_mod  # noqa: E402
+
 _sprint_mod = load_script("jira-sprint", "workflow")
 _board_mod = load_script("jira-board", "workflow")
 _fields_mod = load_script("jira-fields", "utility")
@@ -497,16 +503,52 @@ class TestMockedCommands:
         mock_client.remove_issue_link.assert_not_called()
         mock_client.create_issue_link.assert_not_called()
 
-    def _run_comment_cmd(self, args, mock_client=None, **invoke_kwargs):
-        """Run a jira-comment CLI command with a mocked LazyJiraClient."""
+    def _run_comment_cmd(self, args, mock_client=None, preflight=None, **invoke_kwargs):
+        """Run a jira-comment CLI command with a mocked LazyJiraClient.
+
+        The render pre-flight is stubbed clean by default. These tests mock the
+        client precisely so that nothing leaves the machine, and `add`/`edit`
+        otherwise POST to the instance's wiki renderer before posting - which
+        would make the suite depend on a reachable Jira. Pass ``preflight`` to
+        exercise a different verdict.
+        """
         if mock_client is None:
             mock_client = self._make_mock_client()
         mock_client.with_context = mock.Mock()
+        if preflight is None:
+            preflight = _preview_mod.RenderVerdict(True, [])
         runner = click.testing.CliRunner()
         # Patch on the already-imported module so the constructor is intercepted
-        with mock.patch.object(_comment_mod, "LazyJiraClient", return_value=mock_client):
+        with (
+            mock.patch.object(_comment_mod, "LazyJiraClient", return_value=mock_client),
+            mock.patch.object(_comment_mod, "preflight_render", return_value=preflight),
+        ):
             result = runner.invoke(_comment_mod.cli, args, **invoke_kwargs)
         return result, mock_client
+
+    def test_comment_add_aborts_when_the_instance_renders_it_struck(self):
+        """The pre-flight must stop the post, not merely mention it."""
+        mc = self._make_mock_client()
+        result, mc = self._run_comment_cmd(
+            ["add", "PROJ-123", "Die {{OPS-899-Analyse.pdf}} ok"],
+            mock_client=mc,
+            preflight=_preview_mod.RenderVerdict(True, ["OPS-899"]),
+        )
+        assert result.exit_code == 1, result.output
+        assert "struck through" in result.output
+        mc.issue_add_comment.assert_not_called()
+
+    def test_comment_add_posts_when_the_renderer_is_unreachable(self):
+        """An unavailable renderer is advisory - it must never block a post."""
+        mc = self._make_mock_client()
+        mc.issue_add_comment.return_value = {"id": "77777"}
+        result, mc = self._run_comment_cmd(
+            ["add", "PROJ-123", "harmless text"],
+            mock_client=mc,
+            preflight=_preview_mod.RenderVerdict(False, [], "connection refused"),
+        )
+        assert result.exit_code == 0, result.output
+        mc.issue_add_comment.assert_called_once()
 
     def test_comment_add_stdin(self):
         """jira-comment add PROJ-123 - must read comment from stdin."""

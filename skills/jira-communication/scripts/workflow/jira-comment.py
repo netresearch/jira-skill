@@ -4,6 +4,7 @@
 # dependencies = [
 #     "atlassian-python-api>=3.41.0,<4",
 #     "click>=8.1.0,<9",
+#     "requests>=2.31,<3",
 # ]
 # ///
 """Jira comment operations - add, edit, delete, and list issue comments."""
@@ -24,6 +25,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup import escape_strikethrough, lint_ticket_language, lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
+from lib.preview import preflight_render
 from lib.users import check_mentions_cli, person_label
 
 
@@ -103,6 +105,55 @@ def _repair_markup(comment_text: str, auto_escape: bool) -> str:
     return repaired
 
 
+def _check_rendering(
+    comment_text: str,
+    force: bool,
+    issue_key: str | None,
+    enabled: bool,
+    env_file: str | None = None,
+    profile: str | None = None,
+) -> None:
+    """Ask the instance how it will render this text, and refuse a mangled post.
+
+    The lexical repair above handles what a model of the grammar CAN handle.
+    This handles what it cannot, and the gap is not academic: Jira substitutes
+    autolinked issue keys before text effects run, so
+    ``{{OPS-899-Divergenzanalyse.pdf}}`` comes back with the key struck through
+    on an instance where OPS-899 exists and clean on one where it does not.
+    Escaping the dash does not help - measured - because the opener is
+    positioned relative to the substituted link, not the source text. Asking
+    the renderer is the only way to know, and it is one call.
+
+    Advisory by construction. An unreachable, slow or absent renderer (the
+    endpoint is Server/DC only) prints one warning and gets out of the way; it
+    must never stop somebody posting a comment.
+    """
+    if not enabled:
+        return
+
+    verdict = preflight_render(comment_text, issue_key=issue_key, env_file=env_file, profile=profile)
+    if not verdict.available:
+        warning(f"render preview unavailable ({verdict.reason}) - relying on the local markup lint alone")
+        return
+    if not verdict.struck:
+        return
+
+    struck = "; ".join(repr(s[:80]) for s in verdict.struck[:3])
+    if force:
+        warning(f"rendering: Jira strikes through {struck}")
+        return
+
+    error(
+        f"Jira renders part of this comment struck through: {struck}",
+        suggestion=(
+            "The local escape could not fix it - this usually means an autolinked issue key "
+            "(a dash right after PROJ-123) or another macro creating the boundary. Rephrase, "
+            "put the token in a {code} block, or re-run with --force to post it anyway."
+        ),
+    )
+    sys.exit(1)
+
+
 def _check_markup(comment_text: str, force: bool, issue_key: str | None = None) -> None:
     """Lint wiki markup and ticket language; abort on findings unless --force is given.
 
@@ -161,6 +212,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept so the render pre-flight resolves the SAME instance the write goes
+    # to. Without them it falls back to ~/.env.jira, which under --profile is
+    # either absent (silently degraded forever) or a DIFFERENT Jira - and a
+    # clean preview from the wrong instance reads as a clean bill of health.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command()
@@ -172,9 +229,22 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     is_flag=True,
     help="Do not escape dashes Jira would render as strikethrough; add --force to actually post the span",
 )
+@click.option(
+    "--no-preflight",
+    is_flag=True,
+    help="Skip the render-preview check against the Jira instance before posting",
+)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: bool, no_verify_mentions: bool):
+def add(
+    ctx,
+    issue_key: str,
+    comment_text: str,
+    force: bool,
+    no_auto_escape: bool,
+    no_preflight: bool,
+    no_verify_mentions: bool,
+):
     """Add a comment to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -219,6 +289,14 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: boo
 
     comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
+    _check_rendering(
+        comment_text,
+        force,
+        issue_key,
+        enabled=not no_preflight,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+    )
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
@@ -249,10 +327,22 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: boo
     is_flag=True,
     help="Do not escape dashes Jira would render as strikethrough; add --force to actually post the span",
 )
+@click.option(
+    "--no-preflight",
+    is_flag=True,
+    help="Skip the render-preview check against the Jira instance before posting",
+)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
 def edit(
-    ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, no_auto_escape: bool, no_verify_mentions: bool
+    ctx,
+    issue_key: str,
+    comment_id: str,
+    comment_text: str,
+    force: bool,
+    no_auto_escape: bool,
+    no_preflight: bool,
+    no_verify_mentions: bool,
 ):
     """Edit an existing comment on an issue.
 
@@ -263,6 +353,12 @@ def edit(
     COMMENT_TEXT: New comment text (use Jira wiki markup, not Markdown).
     Use "-" to read from stdin (e.g., cat file.txt | jira-comment edit PROJ-123 12345 -).
     Linted for wiki-markup problems before posting (override with --force).
+
+    Dashes Jira would render as a strikethrough span (``{{mono}}-Word ... zu-``)
+    are escaped automatically before posting and reported on stderr; ``\\-``
+    prints as a plain hyphen. --no-auto-escape keeps the markup verbatim; a
+    deliberate strikethrough also needs --force, because the lint and the render
+    check each still refuse the span.
 
     Examples:
 
@@ -279,6 +375,14 @@ def edit(
 
     comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
+    _check_rendering(
+        comment_text,
+        force,
+        issue_key,
+        enabled=not no_preflight,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+    )
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
