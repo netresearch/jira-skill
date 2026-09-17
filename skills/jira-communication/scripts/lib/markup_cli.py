@@ -26,7 +26,11 @@ The order is fixed and matters:
    exists only where that key resolves.
 """
 
+import functools
 import sys
+from dataclasses import dataclass, replace
+
+import click
 
 from lib.markup import escape_strikethrough, lint_ticket_language, lint_wiki_markup
 from lib.output import error, warning
@@ -48,6 +52,53 @@ _UNSET = _Unset()
 FORCE_HELP = "Post despite wiki-markup lint findings or a struck-through render preview"
 NO_AUTO_ESCAPE_HELP = "Do not escape dashes Jira would render as strikethrough; add --force to actually post the span"
 NO_PREFLIGHT_HELP = "Skip the render-preview check against the Jira instance before posting"
+
+
+@dataclass(frozen=True)
+class MarkupGates:
+    """What the three flags decided, as one value.
+
+    They are never meaningful apart - ``--no-auto-escape`` alone does not post
+    a deliberate strikethrough, because the lint and the render check each
+    refuse the surviving span - so they travel as one. The same reason
+    ``guard_wiki_markup`` is a single call rather than three.
+    """
+
+    force: bool
+    auto_escape: bool
+    preflight: bool
+
+    def offline(self) -> "MarkupGates":
+        """The same decision with the render call dropped, for a ``--dry-run``.
+
+        The escape and the lint still run: a preview must show the text a real
+        write would post. Only the part that talks to the instance goes.
+        """
+        return replace(self, preflight=False)
+
+
+def markup_options(func):
+    """Add the three flags to a command and hand them over as one ``gates``.
+
+    A command that writes wiki markup takes ``gates: MarkupGates`` instead of
+    three booleans it would only ever pass on together. Two of three cannot be
+    wired by accident, and a command does not grow three parameters per gate -
+    ``jira-issue update`` crossed a 13-parameter limit when they were separate.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, force, no_auto_escape, no_preflight, **kwargs):
+        kwargs["gates"] = MarkupGates(force=force, auto_escape=not no_auto_escape, preflight=not no_preflight)
+        return func(*args, **kwargs)
+
+    # Applied bottom-up, so listing them in reverse keeps --force first in --help.
+    for option in (
+        click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP),
+        click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP),
+        click.option("--force", is_flag=True, help=FORCE_HELP),
+    ):
+        wrapper = option(wrapper)
+    return wrapper
 
 
 def repair_markup(text: str, auto_escape: bool, *, label: str = "text") -> str:
@@ -164,9 +215,7 @@ def check_rendering(
 def guard_wiki_markup(
     text: str,
     *,
-    force: bool,
-    auto_escape: bool,
-    preflight: bool,
+    gates: MarkupGates,
     issue_key: str | None = None,
     render_issue_key: str | None | _Unset = _UNSET,
     env_file: str | None = None,
@@ -195,8 +244,8 @@ def guard_wiki_markup(
     """
     if not text or not text.strip():
         return text
-    text = repair_markup(text, auto_escape, label=label)
-    check_markup(text, force, issue_key, label=label)
+    text = repair_markup(text, gates.auto_escape, label=label)
+    check_markup(text, gates.force, issue_key, label=label)
     key_for_render = issue_key if render_issue_key is _UNSET else render_issue_key
-    check_rendering(text, force, key_for_render, preflight, env_file, profile, label=label)
+    check_rendering(text, gates.force, key_for_render, gates.preflight, env_file, profile, label=label)
     return text

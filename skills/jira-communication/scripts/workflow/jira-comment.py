@@ -23,7 +23,7 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
-from lib.markup_cli import FORCE_HELP, NO_AUTO_ESCAPE_HELP, NO_PREFLIGHT_HELP, guard_wiki_markup
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, extract_adf_text, format_output, success, warning
 from lib.users import check_mentions_cli, person_label
 
@@ -109,18 +109,14 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @cli.command()
 @click.argument("issue_key")
 @click.argument("comment_text")
-@click.option("--force", is_flag=True, help=FORCE_HELP)
-@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
-@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
+@markup_options
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
 def add(
     ctx,
     issue_key: str,
     comment_text: str,
-    force: bool,
-    no_auto_escape: bool,
-    no_preflight: bool,
+    gates: MarkupGates,
     no_verify_mentions: bool,
 ):
     """Add a comment to an issue.
@@ -167,9 +163,7 @@ def add(
 
     comment_text = guard_wiki_markup(
         comment_text,
-        force=force,
-        auto_escape=not no_auto_escape,
-        preflight=not no_preflight,
+        gates=gates,
         issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),
@@ -199,9 +193,7 @@ def add(
 @click.argument("issue_key")
 @click.argument("comment_id")
 @click.argument("comment_text")
-@click.option("--force", is_flag=True, help=FORCE_HELP)
-@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
-@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
+@markup_options
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
 def edit(
@@ -209,9 +201,7 @@ def edit(
     issue_key: str,
     comment_id: str,
     comment_text: str,
-    force: bool,
-    no_auto_escape: bool,
-    no_preflight: bool,
+    gates: MarkupGates,
     no_verify_mentions: bool,
 ):
     """Edit an existing comment on an issue.
@@ -245,9 +235,7 @@ def edit(
 
     comment_text = guard_wiki_markup(
         comment_text,
-        force=force,
-        auto_escape=not no_auto_escape,
-        preflight=not no_preflight,
+        gates=gates,
         issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),

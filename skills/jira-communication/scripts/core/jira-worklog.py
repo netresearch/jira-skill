@@ -24,7 +24,7 @@ import re
 
 import click
 from lib.client import LazyJiraClient
-from lib.markup_cli import FORCE_HELP, NO_AUTO_ESCAPE_HELP, NO_PREFLIGHT_HELP, guard_wiki_markup
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import comment_to_text, error, format_output, success
 from lib.users import check_mentions_cli, person_label
 
@@ -161,9 +161,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     "--started", help="Start time (ISO format: YYYY-MM-DD, YYYY-MM-DDTHH:MM, or YYYY-MM-DDTHH:MM:SS; default: now)"
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
-@click.option("--force", is_flag=True, help=FORCE_HELP)
-@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
-@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
+@markup_options
 @click.pass_context
 def add(
     ctx,
@@ -172,9 +170,7 @@ def add(
     comment: str | None,
     started: str | None,
     no_verify_mentions: bool,
-    force: bool,
-    no_auto_escape: bool,
-    no_preflight: bool,
+    gates: MarkupGates,
 ):
     """Add worklog entry to an issue.
 
@@ -194,9 +190,7 @@ def add(
     # A worklog comment renders wiki markup — same gates as jira-comment add
     comment = guard_wiki_markup(
         comment,
-        force=force,
-        auto_escape=not no_auto_escape,
-        preflight=not no_preflight,
+        gates=gates,
         issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),

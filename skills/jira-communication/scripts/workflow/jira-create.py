@@ -23,7 +23,7 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, resolve_assignee, resolve_subtask_type
 from lib.input import read_stdin_utf8
-from lib.markup_cli import FORCE_HELP, NO_AUTO_ESCAPE_HELP, NO_PREFLIGHT_HELP, guard_wiki_markup
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, format_output, success, warning
 from lib.users import check_mentions_cli
 
@@ -70,9 +70,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--components", help="Comma-separated component names")
 @click.option("--fields-json", help="JSON string of additional fields")
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
-@click.option("--force", is_flag=True, help=FORCE_HELP)
-@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
-@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
+@markup_options
 @click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
 @click.pass_context
 def issue(
@@ -89,9 +87,7 @@ def issue(
     components: str | None,
     fields_json: str | None,
     no_verify_mentions: bool,
-    force: bool,
-    no_auto_escape: bool,
-    no_preflight: bool,
+    gates: MarkupGates,
     dry_run: bool,
 ):
     """Create a new Jira issue.
@@ -157,9 +153,7 @@ def issue(
         # A description renders wiki markup — same gates as jira-comment add
         description = guard_wiki_markup(
             description,
-            force=force,
-            auto_escape=not no_auto_escape,
-            preflight=not no_preflight and not dry_run,
+            gates=gates.offline() if dry_run else gates,
             # The issue does not exist yet, so there is no key. The language
             # lint only reads the project part of one, and that IS known -
             # is_english_only_project() splits on the first dash. The renderer
