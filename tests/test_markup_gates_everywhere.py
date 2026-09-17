@@ -16,6 +16,7 @@ was true the whole time the descriptions were unguarded.
 """
 
 import contextlib
+import re
 import sys
 from pathlib import Path
 from unittest import mock
@@ -151,6 +152,9 @@ def test_the_repair_reaches_every_surface(name, script, folder, argv, attr):
 # Carries MARKER so a surface that wrote anyway is caught by the same search.
 LINT_BAIT = "See {code} Extensions"
 
+# The four commands that offer --dry-run; the other three have no such flag.
+DRY_RUN_SURFACES = [s for s in SURFACES if s[1] in {"jira-transition", "jira-issue", "jira-create"}]
+
 
 @pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
 def test_a_lint_finding_aborts_every_surface(name, script, folder, argv, attr):
@@ -194,6 +198,50 @@ def test_the_selected_profile_reaches_the_render_preview(name, script, folder, a
     assert result.exit_code == 0, f"{name}: {result.output}"
     assert seen.get("profile") == "tenant-b", f"{name}: preview got profile {seen.get('profile')!r}"
     assert seen.get("env_file") == str(env_path), f"{name}: preview got env_file {seen.get('env_file')!r}"
+
+
+@pytest.mark.parametrize("name,script,folder,argv,attr", DRY_RUN_SURFACES, ids=[s[0] for s in DRY_RUN_SURFACES])
+def test_dry_run_still_refuses_what_a_real_write_would_refuse(name, script, folder, argv, attr):
+    """--dry-run drops the render call and nothing else.
+
+    `MarkupGates.offline()` must carry `force` and `auto_escape` through
+    untouched. Leaking `force=True` into every dry run survives the rest of
+    this file, because the dry-run case uses clean text and the lint case
+    never passes --dry-run - the two halves never meet without this one. The
+    consequence is the exact inverse of what the preview is for: a clean
+    preview for input a real write refuses.
+    """
+    baited = [LINT_BAIT if arg is RAW else arg for arg in argv]
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, [*baited, "--dry-run"])
+
+    assert result.exit_code == 1, f"{name}: a dry run must refuse what a real write refuses\n{result.output}"
+
+
+@pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
+def test_no_preflight_keeps_the_command_off_the_network(name, script, folder, argv, attr):
+    """--no-preflight must actually reach the gate.
+
+    `tests/test_preview.py` proves `check_rendering` short-circuits when it is
+    handed `enabled=False`; nothing proved the flag ever arrives there. Someone
+    passing --no-preflight to keep a command off the network would still have
+    posted to the instance, on all seven surfaces, with the suite green.
+    """
+    calls = []
+
+    def _record(text, **kwargs):
+        calls.append(text)
+        return RenderVerdict(False, [], "stubbed")
+
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with _driving(module, _stocked_client(), render=_record):
+        result = runner.invoke(module.cli, [*argv, "--no-preflight"])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert calls == [], f"{name}: --no-preflight still called the renderer {len(calls)} time(s)"
 
 
 def test_the_walker_gates_before_it_moves_the_issue():
@@ -240,9 +288,6 @@ def test_the_walker_verifies_mentions_too():
 
     assert result.exit_code == 0, result.output
     assert mentions.call_count == 1, "the walker skipped the mention gate"
-
-
-DRY_RUN_SURFACES = [s for s in SURFACES if s[1] in {"jira-transition", "jira-issue", "jira-create"}]
 
 
 @pytest.mark.parametrize("name,script,folder,argv,attr", DRY_RUN_SURFACES, ids=[s[0] for s in DRY_RUN_SURFACES])
@@ -322,5 +367,17 @@ def test_every_surface_offers_the_three_flags(name, script, folder, argv, attr):
     module = load_script(script, folder)
     runner = click.testing.CliRunner()
     help_text = runner.invoke(module.cli, [argv[0], "--help"]).output
+    # Anchored on the option COLUMN, not on the text: NO_AUTO_ESCAPE_HELP itself
+    # contains the string "--force", so a plain search finds prose and orders it
+    # against a definition.
+    declared = [
+        re.match(r"\s+(--[a-z-]+)", line).group(1)
+        for line in help_text.splitlines()
+        if re.match(r"\s+--[a-z-]+\s", line)
+    ]
     for flag in ("--force", "--no-auto-escape", "--no-preflight"):
-        assert flag in help_text, f"{name}: {flag} missing"
+        assert flag in declared, f"{name}: {flag} missing from the option list"
+    positions = [declared.index(f) for f in ("--force", "--no-auto-escape", "--no-preflight")]
+    # The decorator applies them bottom-up, so their order in --help follows the
+    # order they are listed in. Pinned because the code calls it deliberate.
+    assert positions == sorted(positions), f"{name}: the three flags changed order in --help: {declared}"

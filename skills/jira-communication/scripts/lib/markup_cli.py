@@ -91,7 +91,15 @@ def markup_options(func):
         kwargs["gates"] = MarkupGates(force=force, auto_escape=not no_auto_escape, preflight=not no_preflight)
         return func(*args, **kwargs)
 
-    # Applied bottom-up, so listing them in reverse keeps --force first in --help.
+    # functools.wraps copies __dict__, which ALIASES __click_params__ rather
+    # than copying it - the three options below would be appended to the inner
+    # function's list too. Harmless while each decorated function backs exactly
+    # one command, and a silent way to give a second command these flags if one
+    # ever did not.
+    wrapper.__click_params__ = list(getattr(func, "__click_params__", []))
+
+    # Applied bottom-up, so listing them in reverse keeps --force first in
+    # --help. Asserted by test_every_surface_offers_the_three_flags.
     for option in (
         click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP),
         click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP),
