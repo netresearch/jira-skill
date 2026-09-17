@@ -662,22 +662,6 @@ def path_transition(
     client = ctx.obj["client"]
     quiet, as_json = ctx.obj["quiet"], ctx.obj["json"]
 
-    # The comment rides on the final transition, but it is gated here, before the
-    # first one. A walk that aborts halfway has already moved the issue, and the
-    # status it stopped in is not one anybody chose.
-    comment = guard_wiki_markup(
-        comment,
-        force=force,
-        auto_escape=not no_auto_escape,
-        preflight=not no_preflight and not dry_run,
-        issue_key=issue_key,
-        env_file=ctx.obj.get("env_file"),
-        profile=ctx.obj.get("profile"),
-        label="transition comment",
-    )
-    if not dry_run:
-        check_mentions_cli(client, comment, skip=no_verify_mentions)
-
     try:
         issue = client.issue(issue_key, fields="status")
         current = issue["fields"]["status"]["name"]
@@ -693,6 +677,25 @@ def path_transition(
             else:
                 success(f"{issue_key} is already in status '{current}' - nothing to do")
             return
+
+        # The comment rides on the FINAL transition, but it is gated here, before
+        # the first one: a walk that aborts halfway has already moved the issue,
+        # and the status it stopped in is not one anybody chose. Below the
+        # already-in-target return, so the no-op case does not pay for a render
+        # call. A walk that stops at an ambiguous first step still does - it
+        # cannot be known to be ambiguous until the transitions are fetched.
+        comment = guard_wiki_markup(
+            comment,
+            force=force,
+            auto_escape=not no_auto_escape,
+            preflight=not no_preflight and not dry_run,
+            issue_key=issue_key,
+            env_file=ctx.obj.get("env_file"),
+            profile=ctx.obj.get("profile"),
+            label="transition comment",
+        )
+        if not dry_run:
+            check_mentions_cli(client, comment, skip=no_verify_mentions)
 
         for _ in range(max_steps):
             transitions = client.get_issue_transitions(issue_key)
@@ -720,6 +723,11 @@ def path_transition(
                 warning("DRY RUN - No transition will be performed")
                 print(f"\nNext step for {issue_key}: {chosen.get('name', '')} -> {to_status}")
                 print(f"Current: {current} | Target: {target_status}")
+                if comment:
+                    # Named as belonging to the final transition, which is not
+                    # the step shown above: the walk is greedy and only the last
+                    # hop carries the comment.
+                    print(f"Comment (on the final transition): {comment}")
                 if not is_final:
                     print("(walk continues greedily from there; re-run without --dry-run to execute)")
                 return

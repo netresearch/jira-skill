@@ -95,18 +95,23 @@ def _written_text(client, attr):
     calls = []
     if attr is not None and getattr(client, attr).call_args is not None:
         calls.append(getattr(client, attr).call_args)
-    else:
+    found = next((f for f in (_find_marker(list(c.args) + list(c.kwargs.values())) for c in calls) if f), None)
+    if found is None:
+        # The named attribute was called but carried no body, or was not called
+        # at all. Scanning everything is what makes a None answer mean "nothing
+        # reached the client" rather than "not where I looked".
+        calls = []
         for name in dir(client):
             if name.startswith("_"):
                 continue
             call = getattr(getattr(client, name), "call_args", None)
             if call is not None:
                 calls.append(call)
-    for call in calls:
-        found = _find_marker(list(call.args) + list(call.kwargs.values()))
-        if found is not None:
-            return found
-    return None
+        for call in calls:
+            found = _find_marker(list(call.args) + list(call.kwargs.values()))
+            if found is not None:
+                return found
+    return found
 
 
 @pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
@@ -139,7 +144,7 @@ def test_a_lint_finding_aborts_every_surface(name, script, folder, argv, attr):
 
 
 @pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
-def test_the_selected_profile_reaches_the_render_preview(name, script, folder, argv, attr):
+def test_the_selected_profile_reaches_the_render_preview(name, script, folder, argv, attr, tmp_path):
     """--profile must reach the preview, or it previews against another tenant.
 
     The gates read the config from ``ctx.obj``, which only ``jira-comment.py``
@@ -149,6 +154,7 @@ def test_the_selected_profile_reaches_the_render_preview(name, script, folder, a
     an unreachable renderer is advisory and just warns.
     """
     seen = {}
+    env_path = tmp_path / "x.env"
 
     def _record(text, *, issue_key=None, env_file=None, profile=None, **kwargs):
         seen["profile"] = profile
@@ -166,11 +172,103 @@ def test_the_selected_profile_reaches_the_render_preview(name, script, folder, a
         mock.patch.object(module, "check_mentions_cli", return_value=None),
         mock.patch.object(markup_cli, "preflight_render", _record),
     ):
-        result = runner.invoke(module.cli, ["--profile", "tenant-b", "--env-file", "/tmp/x.env", *argv])
+        result = runner.invoke(module.cli, ["--profile", "tenant-b", "--env-file", str(env_path), *argv])
 
     assert result.exit_code == 0, f"{name}: {result.output}"
     assert seen.get("profile") == "tenant-b", f"{name}: preview got profile {seen.get('profile')!r}"
-    assert seen.get("env_file") == "/tmp/x.env", f"{name}: preview got env_file {seen.get('env_file')!r}"
+    assert seen.get("env_file") == str(env_path), f"{name}: preview got env_file {seen.get('env_file')!r}"
+
+
+def test_the_walker_gates_before_it_moves_the_issue():
+    """`path` must refuse a bad comment BEFORE the first transition.
+
+    The comment rides on the final transition, so gating it there is the
+    obvious placement and the wrong one: on a two-hop workflow the first hop
+    posts, then the guard aborts, and the issue is parked in an intermediate
+    status nobody asked for. Moving the guard into the loop leaves every other
+    test in this file green - which is why this case exists.
+    """
+    module = load_script("jira-transition", "workflow")
+    client = make_mock_client()
+    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
+    # Two hops: Open -> In Progress -> Done. Only the second is final.
+    client.get_issue_transitions.side_effect = [
+        [{"id": "11", "name": "Start", "to": {"name": "In Progress"}}],
+        [{"id": "31", "name": "Finish", "to": {"name": "Done"}}],
+    ]
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=client),
+        mock.patch.object(module, "check_mentions_cli", return_value=None),
+    ):
+        result = runner.invoke(module.cli, ["path", "PROJ-1", "Done", "--comment", LINT_BAIT])
+
+    assert result.exit_code == 1, f"a block tag used inline must abort the walk\n{result.output}"
+    assert client.post.call_count == 0, "the walk transitioned the issue before refusing the comment"
+
+
+def test_the_walker_verifies_mentions_too():
+    """`path` carried neither gate; pin that it now carries both.
+
+    ``check_mentions_cli`` is patched out everywhere else in this file, so
+    nothing would notice it being dropped from the walker again.
+    """
+    module = load_script("jira-transition", "workflow")
+    client = make_mock_client()
+    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
+    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=client),
+        mock.patch.object(module, "check_mentions_cli") as mentions,
+    ):
+        result = runner.invoke(module.cli, ["path", "PROJ-1", "Done", "--comment", RAW])
+
+    assert result.exit_code == 0, result.output
+    assert mentions.call_count == 1, "the walker skipped the mention gate"
+
+
+DRY_RUN_SURFACES = [s for s in SURFACES if s[1] in {"jira-transition", "jira-issue", "jira-create"}]
+
+
+@pytest.mark.parametrize("name,script,folder,argv,attr", DRY_RUN_SURFACES, ids=[s[0] for s in DRY_RUN_SURFACES])
+def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, folder, argv, attr):
+    """--dry-run shows what a real write would post, and stays offline.
+
+    Both halves matter and they pull apart. `do` used to skip all three gates
+    under --dry-run, so its preview printed raw text that a real run would have
+    rewritten - a preview showing something other than the posted text is worse
+    than no preview. `update` and `create issue` ran the render call instead,
+    reaching the network for a write that is not happening.
+
+    Only the four commands that HAVE --dry-run are covered: `jira-comment
+    add`/`edit` and `jira-worklog add` do not offer the flag at all.
+    """
+    calls = []
+
+    def _record(text, **kwargs):
+        calls.append(text)
+        return RenderVerdict(False, [], "stubbed")
+
+    module = load_script(script, folder)
+    client = make_mock_client()
+    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
+    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
+    client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=client),
+        mock.patch.object(module, "check_mentions_cli", return_value=None),
+        mock.patch.object(markup_cli, "preflight_render", _record),
+    ):
+        result = runner.invoke(module.cli, [*argv, "--dry-run"])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert calls == [], f"{name}: --dry-run called the renderer {len(calls)} time(s)"
+    # A prefix, not the whole string: `create issue` truncates its preview to 50
+    # characters, so asserting the full body would fail for an unrelated reason
+    # the moment the fixture grows.
+    assert REPAIRED[:40] in result.output, f"{name}: the preview shows unrepaired text\n{result.output}"
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():
