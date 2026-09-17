@@ -45,7 +45,7 @@ Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global f
 
 `jira-comment.py add`/`edit` do two things before the write, both on by default, because a comment that renders wrong is silent — the API returns 2xx either way.
 
-1. **Dashes that Jira would render as strikethrough are escaped.** `\-` prints as a plain hyphen, so the posted text reads as written; the changed lines are listed on stderr. `--no-auto-escape` keeps the markup verbatim — but on its own it does not post a deliberate `-strikethrough-`: the lint and the render check each still refuse the span. Use `--no-auto-escape --force` for that.
+1. **Dashes that Jira would render as strikethrough are escaped.** `\-` prints as a plain hyphen, so the posted text reads as written; stderr names how many lines changed and shows the first five. `--no-auto-escape` keeps the markup verbatim — but on its own it does not post a deliberate `-strikethrough-`: the lint and the render check each still refuse the span. Use `--no-auto-escape --force` for that.
 2. **The text is rendered by the instance and refused if it comes back struck through.** This costs one API call per post and catches what no local check can — an autolinked issue key creates a boundary that exists only on an instance where that key resolves. `--no-preflight` skips it; an unreachable renderer warns once and posts anyway.
 
 `--force` posts despite either finding. See `references/comments.md` for the details.

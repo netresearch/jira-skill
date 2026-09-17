@@ -257,9 +257,13 @@ def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
     **This is a superset, on purpose.** Jira abandons an opener whose body
     begins with a single character followed by a dash (``a -a-b- z`` renders
     literally, while ``a -ab-cd- z`` is struck); that quirk is recorded in the
-    fixture but not modelled, because the only cost of predicting a span Jira
-    would not draw is one redundant ``\\-``, which renders as a plain hyphen,
-    whereas the cost of missing one is mangled text. ``tests/test_strikethrough.py``
+    fixture but not modelled, because the cost of predicting a span Jira would
+    not draw is normally one redundant ``\\-``, which renders as a plain hyphen,
+    whereas the cost of missing one is mangled text. The exception is the same
+    glued-macro class the misses come from: where a bare URL is written
+    directly against a link macro, the escape can land inside the URL and IS
+    visible (`.../-/b[MR|...]`). Measured at 0 occurrences in 120 000 cases of
+    space-separated prose, and 8 258 in 80 000 deliberately glued ones. ``tests/test_strikethrough.py``
     pins both directions: zero UNLISTED false negatives against the recorded
     corpus, and the list of known over-predictions, so neither can grow
     unnoticed. The counts live in the fixture, not here, where re-recording
@@ -389,8 +393,10 @@ def escape_strikethrough(text: str) -> str:
     a plain hyphen on the page. Content inside ``{code}``/``{noformat}`` is
     left untouched, where a dash is literal already.
 
-    Each pass escapes EVERY span it found, right to left so the earlier offsets
-    stay valid, and only then rescans. Repairing one span can expose the next -
+    Each pass escapes every opener that has a valid closer after it - a
+    superset of the spans ``find_strikethrough_spans`` reports, since those are
+    non-overlapping - right to left so the earlier offsets stay valid, and only
+    then rescans. Repairing one span can expose the next -
     in ``a -x- -y- b`` the second pair becomes reachable once the first stops
     consuming its dashes - so a rescan is still needed, but a pass per span is
     not. Escaping one at a time made the cost quadratic in the number of spans
