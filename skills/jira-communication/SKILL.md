@@ -43,12 +43,12 @@ Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global f
 
 ## Posting wiki markup rewrites and checks it first
 
-Every command that writes wiki markup does two things before the write, both on by default, because text that renders wrong is silent — the API returns 2xx either way. That is all six surfaces: `jira-comment.py add`/`edit`, `jira-transition.py do --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`.
+Every `--comment` and `--description` option that writes wiki markup does two things before the write, both on by default, because text that renders wrong is silent — the API returns 2xx either way. That is all seven: `jira-comment.py add`/`edit`, `jira-transition.py do --comment`, `jira-transition.py path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`. A body smuggled in through `--fields-json` is not gated — that option writes raw fields by design.
 
 1. **Dashes that Jira would render as strikethrough are escaped.** `\-` prints as a plain hyphen, so the posted text reads as written; stderr names how many lines changed and shows the first five. (The one shape where the escape is visible is two macros written against each other with no space — the dash can land inside a link target. Ordinary prose does not reach it.) `--no-auto-escape` keeps the markup verbatim — but on its own it does not post a deliberate `-strikethrough-`: the lint and the render check each still refuse the span. Use `--no-auto-escape --force` for that.
 2. **The text is rendered by the instance and refused if it comes back struck through.** This costs one API call per post and catches what no local check can — an autolinked issue key creates a boundary that exists only on an instance where that key resolves. `--no-preflight` skips it; an unreachable renderer warns once and posts anyway.
 
-`--force` posts despite either finding. The three flags are spelled the same on all six commands. See `references/comments.md` for the details.
+`--force` posts despite either finding. The three flags are spelled the same on each. See `references/comments.md` for the details.
 
 ## Basic Usage
 

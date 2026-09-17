@@ -449,19 +449,20 @@ def do_transition(
     client = ctx.obj["client"]
 
     # A transition comment is a real issue comment — same gates as jira-comment add.
-    # Skipped under --dry-run along with the mention check: a preview writes nothing,
-    # and the render gate would call the instance for a post that is not happening.
+    # Runs under --dry-run too, so the preview prints the text that would actually
+    # be posted; only the render call is dropped, because that one talks to the
+    # instance. Every guarded command follows this rule.
+    comment = guard_wiki_markup(
+        comment,
+        force=force,
+        auto_escape=not no_auto_escape,
+        preflight=not no_preflight and not dry_run,
+        issue_key=issue_key,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+        label="transition comment",
+    )
     if not dry_run:
-        comment = guard_wiki_markup(
-            comment,
-            force=force,
-            auto_escape=not no_auto_escape,
-            preflight=not no_preflight,
-            issue_key=issue_key,
-            env_file=ctx.obj.get("env_file"),
-            profile=ctx.obj.get("profile"),
-            label="transition comment",
-        )
         check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
@@ -614,6 +615,10 @@ def _is_backward(transition: dict, visited: set[str]) -> bool:
 @click.option(
     "--max-steps", type=click.IntRange(min=1), default=10, show_default=True, help="Safety cap on transitions walked"
 )
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
+@click.option("--force", is_flag=True, help=FORCE_HELP)
+@click.option("--no-auto-escape", is_flag=True, help=NO_AUTO_ESCAPE_HELP)
+@click.option("--no-preflight", is_flag=True, help=NO_PREFLIGHT_HELP)
 @click.option("--dry-run", is_flag=True, help="Show the first planned step without transitioning")
 @click.pass_context
 def path_transition(
@@ -623,6 +628,10 @@ def path_transition(
     resolution: str | None,
     comment: str | None,
     max_steps: int,
+    no_verify_mentions: bool,
+    force: bool,
+    no_auto_escape: bool,
+    no_preflight: bool,
     dry_run: bool,
 ):
     """Walk the workflow from the current status to TARGET_STATUS.
@@ -646,6 +655,22 @@ def path_transition(
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
     quiet, as_json = ctx.obj["quiet"], ctx.obj["json"]
+
+    # The comment rides on the final transition, but it is gated here, before the
+    # first one. A walk that aborts halfway has already moved the issue, and the
+    # status it stopped in is not one anybody chose.
+    comment = guard_wiki_markup(
+        comment,
+        force=force,
+        auto_escape=not no_auto_escape,
+        preflight=not no_preflight and not dry_run,
+        issue_key=issue_key,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+        label="transition comment",
+    )
+    if not dry_run:
+        check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
         issue = client.issue(issue_key, fields="status")

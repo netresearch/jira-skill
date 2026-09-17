@@ -153,7 +153,7 @@ def issue(
             description,
             force=force,
             auto_escape=not no_auto_escape,
-            preflight=not no_preflight,
+            preflight=not no_preflight and not dry_run,
             # The issue does not exist yet, so there is no key. The language
             # lint only reads the project part of one, and that IS known -
             # is_english_only_project() splits on the first dash. The renderer

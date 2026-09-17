@@ -1,10 +1,14 @@
 """Every surface that posts wiki markup runs the same three gates.
 
 The point of this file is the parametrisation, not any single case. The gates
-lived in ``jira-comment.py`` and therefore ran on two of the six surfaces; the
-other four rendered the same markup through the same renderer and mangled it
-the same way. A per-command test would have passed for ``add`` and told nobody
-about the other five, which is the shape the original gap had.
+lived in ``jira-comment.py`` and therefore ran on two of the seven surfaces;
+the other five rendered the same markup through the same renderer and mangled
+it the same way. A per-command test would have passed for ``add`` and told
+nobody about the other six, which is the shape the original gap had.
+
+The population is enumerated from the places that POST a body, not from the
+call sites of a neighbouring gate. Counting the mention gate instead gave six
+and missed ``jira-transition path --comment``, which carries neither.
 
 Each case drives the real Click command with a mocked client and asserts on the
 text the client was handed - not on a helper call, because "the helper exists"
@@ -21,32 +25,25 @@ from conftest import load_script, make_mock_client
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
 
+MARKER = "Extensions"
 RAW = "Die {{a}}-Extensions, jede zu- und abschaltbar"
 REPAIRED = "Die {{a}}\\-Extensions, jede zu- und abschaltbar"
 
-# (id, script, folder, argv, mock attribute that receives the write, index of
-# the text in that call's positional args)
+# (id, script, folder, argv, the mock attribute that receives the write)
 SURFACES = [
-    ("comment-add", "jira-comment", "workflow", ["add", "PROJ-1", RAW], "issue_add_comment", 1),
-    ("comment-edit", "jira-comment", "workflow", ["edit", "PROJ-1", "42", RAW], "issue_edit_comment", 2),
-    (
-        "worklog-comment",
-        "jira-worklog",
-        "core",
-        ["add", "PROJ-1", "2h", "--comment", RAW],
-        "issue_add_json_worklog",
-        None,
-    ),
-    ("issue-description", "jira-issue", "core", ["update", "PROJ-1", "--description", RAW], "update_issue_field", None),
+    ("comment-add", "jira-comment", "workflow", ["add", "PROJ-1", RAW], "issue_add_comment"),
+    ("comment-edit", "jira-comment", "workflow", ["edit", "PROJ-1", "42", RAW], "issue_edit_comment"),
+    ("worklog-comment", "jira-worklog", "core", ["add", "PROJ-1", "2h", "--comment", RAW], "issue_add_json_worklog"),
+    ("issue-description", "jira-issue", "core", ["update", "PROJ-1", "--description", RAW], "update_issue_field"),
     (
         "create-description",
         "jira-create",
         "workflow",
         ["issue", "PROJ", "Summary", "--type", "Task", "--description", RAW],
         "create_issue",
-        None,
     ),
-    ("transition-comment", "jira-transition", "workflow", ["do", "PROJ-1", "Done", "--comment", RAW], None, None),
+    ("transition-comment", "jira-transition", "workflow", ["do", "PROJ-1", "Done", "--comment", RAW], "post"),
+    ("path-comment", "jira-transition", "workflow", ["path", "PROJ-1", "Done", "--comment", RAW], "post"),
 ]
 
 
@@ -56,7 +53,8 @@ def _run(script, folder, argv, mock_client=None):
     # A transition reads the available transitions before posting its comment;
     # the shared mock returns a bare Mock, which is not iterable.
     client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
-    client.issue_transition.return_value = None
+    # `path` walks from the current status, so it reads one before transitioning.
+    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
     client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
     runner = click.testing.CliRunner()
     with (
@@ -73,10 +71,10 @@ def _find_marker(value):
     Recursive because the surfaces bury it at different depths: a comment is a
     positional argument, a description sits in a fields dict, and a transition
     posts `payload["update"]["comment"][0]["add"]["body"]`. A search that only
-    looked one level down found four of six and read like all six.
+    looked one level down found four of seven and read like all of them.
     """
     if isinstance(value, str):
-        return value if "Extensions" in value else None
+        return value if MARKER in value else None
     if isinstance(value, dict):
         for inner in value.values():
             found = _find_marker(inner)
@@ -90,7 +88,7 @@ def _find_marker(value):
     return None
 
 
-def _written_text(client, attr, index):
+def _written_text(client, attr):
     """The wiki-markup body the client was handed, wherever it ended up."""
     calls = []
     if attr is not None and getattr(client, attr).call_args is not None:
@@ -109,13 +107,33 @@ def _written_text(client, attr, index):
     return None
 
 
-@pytest.mark.parametrize("name,script,folder,argv,attr,index", SURFACES, ids=[s[0] for s in SURFACES])
-def test_the_repair_reaches_every_surface(name, script, folder, argv, attr, index):
+@pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
+def test_the_repair_reaches_every_surface(name, script, folder, argv, attr):
     result, client = _run(script, folder, argv)
     assert result.exit_code == 0, result.output
-    written = _written_text(client, attr, index)
+    written = _written_text(client, attr)
     assert written is not None, f"{name}: no wiki-markup body reached the client"
     assert written == REPAIRED, f"{name}: posted unrepaired text"
+
+
+# Carries MARKER so a surface that wrote anyway is caught by the same search.
+LINT_BAIT = "See {code} Extensions"
+
+
+@pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
+def test_a_lint_finding_aborts_every_surface(name, script, folder, argv, attr):
+    """Gate 2 is wired everywhere, not just gate 1.
+
+    The repair test above asserts text equality, which only exercises
+    ``repair_markup``. Swapping any surface's ``guard_wiki_markup`` for a bare
+    ``repair_markup`` would leave it green - this is the case that catches it.
+    ``{code}`` used inline is a block tag mid-prose: the escaper leaves it
+    alone, so only the lint can refuse it.
+    """
+    baited = [LINT_BAIT if arg is RAW else arg for arg in argv]
+    result, client = _run(script, folder, baited)
+    assert result.exit_code == 1, f"{name}: a block tag used inline must abort\n{result.output}"
+    assert _written_text(client, attr) is None, f"{name}: wrote despite a lint finding"
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():
@@ -157,8 +175,8 @@ def test_create_renders_without_an_issue_key_but_lints_the_project():
     assert seen["lint_key"] == "PROJ", "the language lint must still see the project"
 
 
-@pytest.mark.parametrize("name,script,folder,argv,attr,index", SURFACES, ids=[s[0] for s in SURFACES])
-def test_every_surface_offers_the_three_flags(name, script, folder, argv, attr, index):
+@pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
+def test_every_surface_offers_the_three_flags(name, script, folder, argv, attr):
     """The opt-outs must exist wherever the gates do, or --force is a lie."""
     module = load_script(script, folder)
     runner = click.testing.CliRunner()

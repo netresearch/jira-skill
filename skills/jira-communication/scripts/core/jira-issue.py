@@ -674,7 +674,7 @@ def update(
             description,
             force=force,
             auto_escape=not no_auto_escape,
-            preflight=not no_preflight,
+            preflight=not no_preflight and not dry_run,
             issue_key=issue_key,
             env_file=ctx.obj.get("env_file"),
             profile=ctx.obj.get("profile"),

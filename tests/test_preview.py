@@ -251,7 +251,7 @@ class TestCheckRenderingGate:
     """``check_rendering`` must abort on a struck preview and never on a failure.
 
     Tests the gate where it now lives - ``lib.markup_cli`` - rather than
-    through one command that happens to call it. It guards all six wiki-markup
+    through one command that happens to call it. It guards all seven wiki-markup
     surfaces, so binding these to ``jira-comment.py`` would have tested one
     sixth of the behaviour while reading like all of it.
     """

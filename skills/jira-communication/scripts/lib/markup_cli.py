@@ -6,11 +6,14 @@ user: it repairs, it reports, and it decides when to abort. Same split as
 ``lib/users.py``, where ``check_mentions_cli`` wraps the mention lookup.
 
 It exists because these three lived in ``jira-comment.py`` and therefore ran on
-exactly two of the six surfaces that post wiki markup. The other four - a
-worklog comment, a transition comment, and the description of ``jira-create
-issue`` and ``jira-issue update`` - render the same markup through the same
-renderer and mangled it the same way. The mention gate had already been spread
-across all six; this follows it.
+exactly two of the seven surfaces that post wiki markup. The other five - a
+worklog comment, the comment of ``jira-transition do`` and of ``jira-transition
+path``, and the description of ``jira-create issue`` and ``jira-issue update`` -
+render the same markup through the same renderer and mangled it the same way.
+
+Seven is counted from the places that POST a body. Counting the mention gate's
+call sites instead gives six and misses ``jira-transition path``, which carried
+neither gate.
 
 The order is fixed and matters:
 
@@ -194,6 +197,6 @@ def guard_wiki_markup(
         return text
     text = repair_markup(text, auto_escape, label=label)
     check_markup(text, force, issue_key, label=label)
-    key_for_render = issue_key if isinstance(render_issue_key, _Unset) else render_issue_key
+    key_for_render = issue_key if render_issue_key is _UNSET else render_issue_key
     check_rendering(text, force, key_for_render, preflight, env_file, profile, label=label)
     return text

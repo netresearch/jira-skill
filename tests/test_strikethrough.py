@@ -509,7 +509,7 @@ class TestCommentCliWiring:
         with (
             mock.patch.object(module, "LazyJiraClient", return_value=client),
             # Patched where it is USED, not where the command lives: the three
-            # gates moved to lib.markup_cli so all six wiki-markup surfaces
+            # gates moved to lib.markup_cli so all seven wiki-markup surfaces
             # share one implementation.
             mock.patch("lib.markup_cli.preflight_render", return_value=RenderVerdict(True, [])),
             mock.patch.object(module, "check_mentions_cli", return_value=None),
