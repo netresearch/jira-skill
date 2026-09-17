@@ -261,19 +261,25 @@ Three ways to write the literal token safely, in order of preference:
 
 The backslash escape is the official Jira mechanism; the rephrase is editorial; the `{{monospace}}` wrap renders fine but is disliked by teams that reserve monospace for actual code spans rather than inline references.
 
-### Common gotcha: command flags struck through by `-text-`
+### Common gotcha: prose struck through by `-text-`
 
-`-text-` is strikethrough, and the opening dash run needs only whitespace before it and a **word character** after it. Prose that mentions command flags hands the parser exactly that shape: in `checked with --strict and --no-global`, the dash before `strict` opens the effect, a later dash (here inside `no-global`) closes it, and everything between renders struck through. Text effects apply *inside* `{{...}}` monospace too (verified against the Jira Server 9.12 wiki renderer), so `{{--strict}}` does **not** protect the dashes.
+`-text-` is strikethrough. The grammar below is measured against a live Jira Server 9.12 wiki renderer, and the recorded cases are kept in the source repo (netresearch/jira-skill), not in the standalone skill package; it is not a rule of thumb, and an earlier version of this section stated it wrongly in both directions.
 
-**This is not limited to double-dash flags.** A single dash opens a span just as well, so any two single-dash options in one line are a matched pair: `journalctl -b -p crit` opens at `-b` and closes at `-p`. The trigger, stated once:
+> **opener** — an unescaped `-` at line start or after a **non-word character**, followed by neither whitespace nor another dash
+> **closer** — the next *valid* closer: an unescaped `-` that is not preceded by whitespace and is followed by a non-word character or line end; a dash failing either condition is skipped over, not fatal
+> **body** — anything in between; a dash that fails the closer conditions is skipped over, not fatal
 
-> whitespace (or a `{{` opener) · one or more `-` · a word character
+Two consequences are worth stating on their own, because both are the opposite of what the shape suggests.
 
-Everything else is exempt and must not be escaped: em/en-dash typography (`---`, or `--` followed by a space), list bullets (`- item`), and dashes inside a word (`Round-1`, `2026-09-04`), which have no leading whitespace.
+**A pair of CLI flags is not a span — on its own.** `journalctl -b -p crit` renders literally, and so do `--strict ... -v` and `offset by -5 seconds`, because a dash that *leads* a word can never close a span, so flags cannot pair with each other. They are not immune, though: put a trailing-dash word anywhere later on the same line and the flag becomes the opener — `journalctl -b -p crit zeigt die Fehler; das Modul ist zu- und abschaltbar.` is struck from `-b` to `zu-`.
 
-Backslash-escape every dash of the token, inside or outside monospace: `{{\-\-strict}}`, `\-\-strict` and `{{\-s}}` render as literal `--strict` / `-s` (each `\-` reaches the rendered HTML as a `&#45;` entity). Dashes inside `{code}` and `{noformat}` blocks render literally and must not be escaped — which is the cheapest fix of all: put the command in a `{code}` block and the question does not arise.
+**The real trap is a dash after an inline element, closed by a trailing-dash word.** Any inline element's closing punctuation — `}}`, `*`, `_`, `]`, `!`, `{color}` — is a non-word character, so `{{nr-pforum}}-Extensions` opens a span; a German elliptical compound (`zu- und abschaltbar`) or any other word ending in a dash then closes it, and everything between renders struck through. German prose produces this shape routinely. A single flag also becomes dangerous once such a closer appears later on the same line: `with -v and a trailing word- here`.
 
-A quick sanity check before posting: run `skills/jira-syntax/scripts/validate-jira-syntax.sh <file>` on your draft (from the repo root). The script verifies that the six paired macros (`code`, `panel`, `color`, `noformat`, `quote`, `anchor`) are balanced — every opener matches a closer, even with a language tag like `{code:bash}` — and catches Markdown leakage (` ``` ` fences, `[text](url)` links, `` `code` `` spans), language declarations Jira Server does not recognise, malformed table headers, and unescaped dash runs (`--strict`, `-s`) outside code blocks that would render struck through.
+Exempt, and not to be escaped: a dash inside a word (`Round-1`, `2026-09-04`, `Größe-x`), a leading dash with no closer anywhere on the line, em/en-dash typography (`---`, `--`), list bullets (`- item`), Unicode dashes (`–`, `—`), and anything inside `{code}`/`{noformat}`. `{quote}` and `{panel}` are **not** exempt — Jira parses text effects inside them.
+
+The fix is to backslash-escape the whole dash run that opens the span: `{{nr-pforum}}\-Extensions`. A `\-` reaches the rendered HTML as `&#45;` and prints as a plain hyphen, so the reader sees no difference. Escaping only part of a run does not work: in `{{--strict}}` the opener is the *second* dash, and neutralising just that one promotes the first — write `{{\-\-strict}}`. Putting the command in a `{code}` block avoids the question entirely.
+
+You normally do not have to do any of this by hand. `jira-comment.py add`/`edit` escape these spans automatically before posting and report on stderr which lines they changed (`--no-auto-escape` keeps the markup verbatim; posting a deliberate span needs `--no-auto-escape --force`, because the lint and the render check each still refuse it). For a draft that does not go through those scripts, run `skills/jira-syntax/scripts/validate-jira-syntax.sh <file>` on it (from the repo root). The script verifies that the six paired macros (`code`, `panel`, `color`, `noformat`, `quote`, `anchor`) are balanced — every opener matches a closer, even with a language tag like `{code:bash}` — and catches Markdown leakage (` ``` ` fences, `[text](url)` links, `` `code` `` spans), language declarations Jira Server does not recognise, malformed table headers, and dash pairs outside code blocks that would render struck through.
 
 ## Checklist Markers
 
@@ -290,6 +296,27 @@ item, `(x)` for an open one. Use them only with that meaning.
 * (/) Migration script written and tested
 * (x) Rollback procedure documented
 ```
+
+## Ask the renderer instead of reasoning about it
+
+Jira renders wiki markup server-side, and it will tell you what it is going to do — for any markup, before anything is posted:
+
+```bash
+curl -s -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" -H 'Content-Type: application/json' \
+  -X POST "$JIRA_URL/rest/api/1.0/render" \
+  -d '{"rendererType":"atlassian-wiki-renderer","unrenderedMarkup":"Die {{a}}-Extensions, jede zu- und abschaltbar","issueKey":null}'
+```
+
+This is the endpoint behind Jira's own preview button. It is Server/DC only (Cloud uses ADF and has no equivalent), it needs no issue, and it writes nothing. It rate-limits with HTTP 429 above roughly three to eight parallel requests, so a batch run needs backoff.
+
+**It is the same renderer that stores a comment.** Verified by rendering the full 1185-character source of an existing comment and diffing against that comment's stored `renderedBody` (`GET /rest/api/2/issue/<KEY>/comment/<id>?expand=renderedBody`) — byte-identical. So the preview is proof, not an approximation.
+
+Use it whenever a claim about Jira markup is about to be written down — in a lint, a ticket, a reference page like this one. It costs one call and it settles the question. Two successive hand-derived versions of the strikethrough rule in this repo were wrong in opposite directions, and the second passed 168 hand-picked cases while still being wrong; a generated corpus rendered through this endpoint found the defect in minutes. Two runners built on it — one to re-record the curated cases, one to generate and record a corpus — live in the source repo (netresearch/jira-skill), not in the standalone skill package; the curl above is the whole technique and needs neither.
+
+Two things it cannot settle, because they are not in the markup:
+
+- **Instance state.** Jira substitutes autolinked issue keys before text effects run, so `OPS-899-x ... zu-` renders struck through where OPS-899 exists and literally where it does not. Render against the instance you will post to.
+- **What the markup was meant to say.** The renderer answers "what will this look like", never "is this what you wanted".
 
 ## Validation is a gate, not a formality
 

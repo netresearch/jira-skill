@@ -41,6 +41,15 @@ Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
 Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global flags before subcommand: `jira-issue.py --json get PROJ-123`.
 
+## Posting a comment rewrites and checks it first
+
+`jira-comment.py add`/`edit` do two things before the write, both on by default, because a comment that renders wrong is silent — the API returns 2xx either way.
+
+1. **Dashes that Jira would render as strikethrough are escaped.** `\-` prints as a plain hyphen, so the posted text reads as written; stderr names how many lines changed and shows the first five. (The one shape where the escape is visible is two macros written against each other with no space — the dash can land inside a link target. Ordinary prose does not reach it.) `--no-auto-escape` keeps the markup verbatim — but on its own it does not post a deliberate `-strikethrough-`: the lint and the render check each still refuse the span. Use `--no-auto-escape --force` for that.
+2. **The text is rendered by the instance and refused if it comes back struck through.** This costs one API call per post and catches what no local check can — an autolinked issue key creates a boundary that exists only on an instance where that key resolves. `--no-preflight` skips it; an unreachable renderer warns once and posts anyway.
+
+`--force` posts despite either finding. See `references/comments.md` for the details.
+
 ## Basic Usage
 
 ```bash
@@ -48,6 +57,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py get PROJ-123
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py query "assignee = currentUser() AND status != Closed" -n 5 -f key,summary,status
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-issue.py update PROJ-123 --assignee me --priority Critical
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text"
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 "Comment text" --no-auto-escape --force  # deliberate -strikethrough-
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-transition.py do PROJ-123 "In Progress"
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 2h --comment "Work done"
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py issue PROJ "Summary" --type Task

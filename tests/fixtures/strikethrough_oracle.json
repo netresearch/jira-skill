@@ -1,0 +1,844 @@
+{
+ "_comment": "Curated ground truth for the Jira strikethrough grammar: wiki markup and the HTML jira.netresearch.de (Jira Server 9.12) returned from POST /rest/api/1.0/render. These are the cases a human should read to understand the rule; tests/fixtures/strikethrough_corpus.json is the generated bulk. Regenerate with scripts/verify-render-oracle.py --live --record; do not hand-edit.",
+ "renderer": "atlassian-wiki-renderer",
+ "recorded_against": "Jira Server 9.12 (jira.netresearch.de)",
+ "recorded_on": "2026-09-17",
+ "cases": [
+  {
+   "markup": "Die nr-pforum-*Extensions waren als unabhängig dranstöpselbare Erweiterungen gedacht, jede für sich zu- und abschaltbar.",
+   "rendered": "<p>Die nr-pforum-*Extensions waren als unabhängig dranstöpselbare Erweiterungen gedacht, jede für sich zu- und abschaltbar.</p>"
+  },
+  {
+   "markup": "Die {{nr-pforum-*}}-Extensions waren gedacht, jede für sich zu- und abschaltbar.",
+   "rendered": "<p>Die <tt>nr-pforum-*</tt><del>Extensions waren gedacht, jede für sich zu</del> und abschaltbar.</p>"
+  },
+  {
+   "markup": "journalctl -b -p crit zeigt die Fehler",
+   "rendered": "<p>journalctl -b -p crit zeigt die Fehler</p>"
+  },
+  {
+   "markup": "Wir haben zu- und abschaltbare Module, und das Round-1 Review ist offen.",
+   "rendered": "<p>Wir haben zu- und abschaltbare Module, und das Round-1 Review ist offen.</p>"
+  },
+  {
+   "markup": "Ein Test mit --strict und danach noch -v am Ende",
+   "rendered": "<p>Ein Test mit --strict und danach noch -v am Ende</p>"
+  },
+  {
+   "markup": "Ein Test mit {{\\-\\-strict}} und danach noch {{\\-v}} am Ende",
+   "rendered": "<p>Ein Test mit <tt>&#45;&#45;strict</tt> und danach noch <tt>&#45;v</tt> am Ende</p>"
+  },
+  {
+   "markup": "Ein Test mit \\--strict und danach noch \\-v am Ende",
+   "rendered": "<p>Ein Test mit &#45;-strict und danach noch &#45;v am Ende</p>"
+  },
+  {
+   "markup": "a -foo- b",
+   "rendered": "<p>a <del>foo</del> b</p>"
+  },
+  {
+   "markup": "a -foo bar- b",
+   "rendered": "<p>a <del>foo bar</del> b</p>"
+  },
+  {
+   "markup": "run -v then -x done",
+   "rendered": "<p>run -v then -x done</p>"
+  },
+  {
+   "markup": "run --v then --x done",
+   "rendered": "<p>run --v then --x done</p>"
+  },
+  {
+   "markup": "a -1- b",
+   "rendered": "<p>a <del>1</del> b</p>"
+  },
+  {
+   "markup": "foo -bar- baz -qux- quux",
+   "rendered": "<p>foo <del>bar</del> baz <del>qux</del> quux</p>"
+  },
+  {
+   "markup": "x -a- y",
+   "rendered": "<p>x <del>a</del> y</p>"
+  },
+  {
+   "markup": "tag -a-b- z",
+   "rendered": "<p>tag -a-b- z</p>"
+  },
+  {
+   "markup": "(-a-) b",
+   "rendered": "<p>(<del>a</del>) b</p>"
+  },
+  {
+   "markup": "a -a- ",
+   "rendered": "<p>a <del>a</del> </p>"
+  },
+  {
+   "markup": "start -word end -word2 tail",
+   "rendered": "<p>start -word end -word2 tail</p>"
+  },
+  {
+   "markup": "{{mono}}-Extensions und zu- und abschaltbar",
+   "rendered": "<p><tt>mono</tt><del>Extensions und zu</del> und abschaltbar</p>"
+  },
+  {
+   "markup": "{{mono}}-A und -B ende",
+   "rendered": "<p><tt>mono</tt>-A und -B ende</p>"
+  },
+  {
+   "markup": "*bold*-A und -B ende",
+   "rendered": "<p><b>bold</b>-A und -B ende</p>"
+  },
+  {
+   "markup": "[link|http://x]-A und -B ende",
+   "rendered": "<p><a href=\"http://x\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">link</a>-A und -B ende</p>"
+  },
+  {
+   "markup": "word-A und -B ende",
+   "rendered": "<p>word-A und -B ende</p>"
+  },
+  {
+   "markup": "a{{m}}-A -B c",
+   "rendered": "<p>a{{m}}-A -B c</p>"
+  },
+  {
+   "markup": "ab -A -B c",
+   "rendered": "<p>ab -A -B c</p>"
+  },
+  {
+   "markup": "a -a-b- z",
+   "rendered": "<p>a -a-b- z</p>"
+  },
+  {
+   "markup": "a -ab- z",
+   "rendered": "<p>a <del>ab</del> z</p>"
+  },
+  {
+   "markup": "a -a b- z",
+   "rendered": "<p>a <del>a b</del> z</p>"
+  },
+  {
+   "markup": "a -a, b- z",
+   "rendered": "<p>a <del>a, b</del> z</p>"
+  },
+  {
+   "markup": "a -a-b c- z",
+   "rendered": "<p>a -a-b c- z</p>"
+  },
+  {
+   "markup": "line one -foo\nline two bar- end",
+   "rendered": "<p>line one -foo<br/>\nline two bar- end</p>"
+  },
+  {
+   "markup": "a -foo- and -bar- and -baz- b",
+   "rendered": "<p>a <del>foo</del> and <del>bar</del> and <del>baz</del> b</p>"
+  },
+  {
+   "markup": "pre -x- .",
+   "rendered": "<p>pre <del>x</del> .</p>"
+  },
+  {
+   "markup": "pre-x- .",
+   "rendered": "<p>pre-x- .</p>"
+  },
+  {
+   "markup": "a --foo-- b",
+   "rendered": "<p>a -<del>foo</del>- b</p>"
+  },
+  {
+   "markup": "a --foo- b",
+   "rendered": "<p>a -<del>foo</del> b</p>"
+  },
+  {
+   "markup": "a -foo-- b",
+   "rendered": "<p>a <del>foo</del>- b</p>"
+  },
+  {
+   "markup": "a - foo - b",
+   "rendered": "<p>a - foo - b</p>"
+  },
+  {
+   "markup": "{{a}}-b- c",
+   "rendered": "<p><tt>a</tt><del>b</del> c</p>"
+  },
+  {
+   "markup": "h3. -title- text",
+   "rendered": "<h3><a name=\"titletext\"></a><del>title</del> text</h3>"
+  },
+  {
+   "markup": "* -item- list",
+   "rendered": "<ul>\n\t<li><del>item</del> list</li>\n</ul>\n"
+  },
+  {
+   "markup": "|cell -x- |y|",
+   "rendered": "<div class='table-wrap'>\n<table class='confluenceTable'><tbody>\n<tr>\n<td class='confluenceTd'>cell <del>x</del> </td>\n<td class='confluenceTd'>y</td>\n</tr>\n</tbody></table>\n</div>\n"
+  },
+  {
+   "markup": "{code}\na -x- b\n{code}",
+   "rendered": "<div class=\"code panel\" style=\"border-width: 1px;\"><div class=\"codeContent panelContent\">\n<pre class=\"code-java\">a -x- b\n</pre>\n</div></div>"
+  },
+  {
+   "markup": "{noformat}\na -x- b\n{noformat}",
+   "rendered": "<div class=\"preformatted panel\" style=\"border-width: 1px;\"><div class=\"preformattedContent panelContent\">\n<pre>a -x- b\n</pre>\n</div></div>"
+  },
+  {
+   "markup": "a \\-x- b",
+   "rendered": "<p>a &#45;x- b</p>"
+  },
+  {
+   "markup": "a -x\\- b",
+   "rendered": "<p>a -x&#45; b</p>"
+  },
+  {
+   "markup": "a &#45;x- b",
+   "rendered": "<p>a &#45;x- b</p>"
+  },
+  {
+   "markup": "pre(-x- y",
+   "rendered": "<p>pre(<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre[-x- y",
+   "rendered": "<p>pre[<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre{-x- y",
+   "rendered": "<p>pre{<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre\"-x- y",
+   "rendered": "<p>pre\"<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre'-x- y",
+   "rendered": "<p>pre'<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre/-x- y",
+   "rendered": "<p>pre/<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre:-x- y",
+   "rendered": "<p>pre:<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre;-x- y",
+   "rendered": "<p>pre;<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre,-x- y",
+   "rendered": "<p>pre,<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre.-x- y",
+   "rendered": "<p>pre.<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre!-x- y",
+   "rendered": "<p>pre!<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre?-x- y",
+   "rendered": "<p>pre?<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre|-x- y",
+   "rendered": "<p>pre|<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre*-x- y",
+   "rendered": "<p>pre*<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre_-x- y",
+   "rendered": "<p>pre_<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre~-x- y",
+   "rendered": "<p>pre~<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre^-x- y",
+   "rendered": "<p>pre^<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre+-x- y",
+   "rendered": "<p>pre+<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre=-x- y",
+   "rendered": "<p>pre=<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre>-x- y",
+   "rendered": "<p>pre&gt;<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre<-x- y",
+   "rendered": "<p>pre&lt;<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre&-x- y",
+   "rendered": "<p>pre&amp;<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre#-x- y",
+   "rendered": "<p>pre#<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre„-x- y",
+   "rendered": "<p>pre„<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre“-x- y",
+   "rendered": "<p>pre“<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre«-x- y",
+   "rendered": "<p>pre«<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre\t-x- y",
+   "rendered": "<p>pre\t<del>x</del> y</p>"
+  },
+  {
+   "markup": "pre -x-) y",
+   "rendered": "<p>pre <del>x</del>) y</p>"
+  },
+  {
+   "markup": "pre -x-] y",
+   "rendered": "<p>pre <del>x</del>] y</p>"
+  },
+  {
+   "markup": "pre -x-} y",
+   "rendered": "<p>pre <del>x</del>} y</p>"
+  },
+  {
+   "markup": "pre -x-\" y",
+   "rendered": "<p>pre <del>x</del>\" y</p>"
+  },
+  {
+   "markup": "pre -x-' y",
+   "rendered": "<p>pre <del>x</del>' y</p>"
+  },
+  {
+   "markup": "pre -x-/ y",
+   "rendered": "<p>pre <del>x</del>/ y</p>"
+  },
+  {
+   "markup": "pre -x-: y",
+   "rendered": "<p>pre <del>x</del>: y</p>"
+  },
+  {
+   "markup": "pre -x-; y",
+   "rendered": "<p>pre <del>x</del>; y</p>"
+  },
+  {
+   "markup": "pre -x-, y",
+   "rendered": "<p>pre <del>x</del>, y</p>"
+  },
+  {
+   "markup": "pre -x-. y",
+   "rendered": "<p>pre <del>x</del>. y</p>"
+  },
+  {
+   "markup": "pre -x-! y",
+   "rendered": "<p>pre <del>x</del>! y</p>"
+  },
+  {
+   "markup": "pre -x-? y",
+   "rendered": "<p>pre <del>x</del>? y</p>"
+  },
+  {
+   "markup": "pre -x-| y",
+   "rendered": "<p>pre <del>x</del>| y</p>"
+  },
+  {
+   "markup": "pre -x-* y",
+   "rendered": "<p>pre <del>x</del>* y</p>"
+  },
+  {
+   "markup": "pre -x-_ y",
+   "rendered": "<p>pre <del>x</del>_ y</p>"
+  },
+  {
+   "markup": "pre -x-~ y",
+   "rendered": "<p>pre <del>x</del>~ y</p>"
+  },
+  {
+   "markup": "pre -x-^ y",
+   "rendered": "<p>pre <del>x</del>^ y</p>"
+  },
+  {
+   "markup": "pre -x-+ y",
+   "rendered": "<p>pre <del>x</del>+ y</p>"
+  },
+  {
+   "markup": "pre -x-= y",
+   "rendered": "<p>pre <del>x</del>= y</p>"
+  },
+  {
+   "markup": "pre -x-> y",
+   "rendered": "<p>pre <del>x</del>&gt; y</p>"
+  },
+  {
+   "markup": "pre -x-< y",
+   "rendered": "<p>pre <del>x</del>&lt; y</p>"
+  },
+  {
+   "markup": "pre -x-& y",
+   "rendered": "<p>pre <del>x</del>&amp; y</p>"
+  },
+  {
+   "markup": "pre -x-# y",
+   "rendered": "<p>pre <del>x</del># y</p>"
+  },
+  {
+   "markup": "pre -x-“ y",
+   "rendered": "<p>pre <del>x</del>“ y</p>"
+  },
+  {
+   "markup": "pre -x-» y",
+   "rendered": "<p>pre <del>x</del>» y</p>"
+  },
+  {
+   "markup": "pre -x-\t y",
+   "rendered": "<p>pre <del>x</del>\t y</p>"
+  },
+  {
+   "markup": "pre1-x- y",
+   "rendered": "<p>pre1-x- y</p>"
+  },
+  {
+   "markup": "pre -x-y z",
+   "rendered": "<p>pre -x-y z</p>"
+  },
+  {
+   "markup": "pre -x-1 z",
+   "rendered": "<p>pre -x-1 z</p>"
+  },
+  {
+   "markup": "Größe-x- y",
+   "rendered": "<p>Größe-x- y</p>"
+  },
+  {
+   "markup": "Grüße -x-ä y",
+   "rendered": "<p>Grüße -x-ä y</p>"
+  },
+  {
+   "markup": "pre -x-ß y",
+   "rendered": "<p>pre -x-ß y</p>"
+  },
+  {
+   "markup": "straße-x- y",
+   "rendered": "<p>straße-x- y</p>"
+  },
+  {
+   "markup": "a -x-ä y",
+   "rendered": "<p>a -x-ä y</p>"
+  },
+  {
+   "markup": "aä-x- y",
+   "rendered": "<p>aä-x- y</p>"
+  },
+  {
+   "markup": "a -äbc- y",
+   "rendered": "<p>a <del>äbc</del> y</p>"
+  },
+  {
+   "markup": "*b*-x- y",
+   "rendered": "<p><b>b</b><del>x</del> y</p>"
+  },
+  {
+   "markup": "_i_-x- y",
+   "rendered": "<p><em>i</em><del>x</del> y</p>"
+  },
+  {
+   "markup": "[l|http://u]-x- y",
+   "rendered": "<p><a href=\"http://u\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">l</a><del>x</del> y</p>"
+  },
+  {
+   "markup": "{color:red}c{color}-x- y",
+   "rendered": "<p><font color=\"red\">c</font><del>x</del> y</p>"
+  },
+  {
+   "markup": "^s^-x- y",
+   "rendered": "<p><sup>s</sup><del>x</del> y</p>"
+  },
+  {
+   "markup": "~s~-x- y",
+   "rendered": "<p><sub>s</sub><del>x</del> y</p>"
+  },
+  {
+   "markup": "{{a}}-x- y",
+   "rendered": "<p><tt>a</tt><del>x</del> y</p>"
+  },
+  {
+   "markup": "!img.png!-x- y",
+   "rendered": "<p><img src=\"https://jira.netresearch.de/images/icons/attach/noimage.png\" imagetext=\"img.png\" align=\"absmiddle\" border=\"0\" /><del>x</del> y</p>"
+  },
+  {
+   "markup": "{{-x-}} y",
+   "rendered": "<p><tt><del>x</del></tt> y</p>"
+  },
+  {
+   "markup": "-x {{y}} z-",
+   "rendered": "<p><del>x <tt>y</tt> z</del></p>"
+  },
+  {
+   "markup": "{{a}} -x {{b}} y-",
+   "rendered": "<p><tt>a</tt> <del>x <tt>b</tt> y</del></p>"
+  },
+  {
+   "markup": "{{--strict}} foo bar- z",
+   "rendered": "<p><tt>-<del>strict</tt> foo bar</del> z</p>"
+  },
+  {
+   "markup": "a –x– b",
+   "rendered": "<p>a –x– b</p>"
+  },
+  {
+   "markup": "a —x— b",
+   "rendered": "<p>a —x— b</p>"
+  },
+  {
+   "markup": "a ‐x‐ b",
+   "rendered": "<p>a ‐x‐ b</p>"
+  },
+  {
+   "markup": "a \\--x foo- b",
+   "rendered": "<p>a &#45;<del>x foo</del> b</p>"
+  },
+  {
+   "markup": "a \\-\\-x foo- b",
+   "rendered": "<p>a &#45;&#45;x foo- b</p>"
+  },
+  {
+   "markup": "a_-x- y",
+   "rendered": "<p>a_<del>x</del> y</p>"
+  },
+  {
+   "markup": "a_b-x- y",
+   "rendered": "<p>a_b-x- y</p>"
+  },
+  {
+   "markup": "a -x -",
+   "rendered": "<p>a -x -</p>"
+  },
+  {
+   "markup": "a -x - y",
+   "rendered": "<p>a -x - y</p>"
+  },
+  {
+   "markup": "a -x- ",
+   "rendered": "<p>a <del>x</del> </p>"
+  },
+  {
+   "markup": "-x-",
+   "rendered": "<p><del>x</del></p>"
+  },
+  {
+   "markup": "a -x-",
+   "rendered": "<p>a <del>x</del></p>"
+  },
+  {
+   "markup": "a -ä- y",
+   "rendered": "<p>a <del>ä</del> y</p>"
+  },
+  {
+   "markup": "a$-x- y",
+   "rendered": "<p>a$<del>x</del> y</p>"
+  },
+  {
+   "markup": "a%-x- y",
+   "rendered": "<p>a%<del>x</del> y</p>"
+  },
+  {
+   "markup": "a@-x- y",
+   "rendered": "<p>a@<del>x</del> y</p>"
+  },
+  {
+   "markup": "a\\\\-x- y",
+   "rendered": "<p>a<br class=\"atl-forced-newline\" />-x- y</p>"
+  },
+  {
+   "markup": "zu- und abschaltbar, -also nicht",
+   "rendered": "<p>zu- und abschaltbar, -also nicht</p>"
+  },
+  {
+   "markup": "Die {{nr-pforum-*}}-Extensions waren gedacht, jede für sich zu\\- und abschaltbar.",
+   "rendered": "<p>Die <tt>nr-pforum-*</tt>-Extensions waren gedacht, jede für sich zu&#45; und abschaltbar.</p>"
+  },
+  {
+   "markup": "Die {{nr-pforum-*}}\\-Extensions waren gedacht, jede für sich zu- und abschaltbar.",
+   "rendered": "<p>Die <tt>nr-pforum-*</tt>&#45;Extensions waren gedacht, jede für sich zu- und abschaltbar.</p>"
+  },
+  {
+   "markup": "| {{a}}-x- | y- |",
+   "rendered": "<div class='table-wrap'>\n<table class='confluenceTable'><tbody>\n<tr>\n<td class='confluenceTd'> <tt>a</tt><del>x</del> </td>\n<td class='confluenceTd'> y- </td>\n</tr>\n</tbody></table>\n</div>\n"
+  },
+  {
+   "markup": "{{a}}\\-x\\- y",
+   "rendered": "<p><tt>a</tt>&#45;x&#45; y</p>"
+  },
+  {
+   "markup": "h2. {{a}}-x- y",
+   "rendered": "<h2><a name=\"%7B%7Ba%7D%7Dxy\"></a><tt>a</tt><del>x</del> y</h2>"
+  },
+  {
+   "markup": "a -x \\- y- b",
+   "rendered": "<p>a <del>x &#45; y</del> b</p>"
+  },
+  {
+   "markup": "a -x \\-y- b",
+   "rendered": "<p>a <del>x &#45;y</del> b</p>"
+  },
+  {
+   "markup": "{{-\\-strict}} foo bar- z",
+   "rendered": "<p><tt><del>&#45;strict</tt> foo bar</del> z</p>"
+  },
+  {
+   "markup": "a -foo- b -bar- c",
+   "rendered": "<p>a <del>foo</del> b <del>bar</del> c</p>"
+  },
+  {
+   "markup": "a \\-foo- b -bar- c",
+   "rendered": "<p>a &#45;foo- b <del>bar</del> c</p>"
+  },
+  {
+   "markup": "{quote}\na {{m}}-x- b\n{quote}",
+   "rendered": "<blockquote>\n<p>a <tt>m</tt><del>x</del> b</p></blockquote>"
+  },
+  {
+   "markup": "{panel}\na {{m}}-x- b\n{panel}",
+   "rendered": "<div class=\"panel\" style=\"border-width: 1px;\"><div class=\"panelContent\">\n<p>a <tt>m</tt><del>x</del> b</p>\n</div></div>"
+  },
+  {
+   "markup": "{code:bash}\na -x- b\n{code}",
+   "rendered": "<div class=\"code panel\" style=\"border-width: 1px;\"><div class=\"codeContent panelContent\">\n<pre class=\"code-bash\">a -x- b\n</pre>\n</div></div>"
+  },
+  {
+   "markup": "{noformat}\n-x-\n{noformat}",
+   "rendered": "<div class=\"preformatted panel\" style=\"border-width: 1px;\"><div class=\"preformattedContent panelContent\">\n<pre>-x-\n</pre>\n</div></div>"
+  },
+  {
+   "markup": "checked with --strict and --no-global",
+   "rendered": "<p>checked with --strict and --no-global</p>"
+  },
+  {
+   "markup": "green under {{--strict}} today",
+   "rendered": "<p>green under <tt>--strict</tt> today</p>"
+  },
+  {
+   "markup": "an empty {{journalctl -b -p crit}}",
+   "rendered": "<p>an empty <tt>journalctl -b -p crit</tt></p>"
+  },
+  {
+   "markup": "run it with -v for verbose output",
+   "rendered": "<p>run it with -v for verbose output</p>"
+  },
+  {
+   "markup": "offset by -5 seconds",
+   "rendered": "<p>offset by -5 seconds</p>"
+  },
+  {
+   "markup": "use -é as the flag",
+   "rendered": "<p>use -é as the flag</p>"
+  },
+  {
+   "markup": "green under {{\\-\\-strict}} and \\-\\-no-global today",
+   "rendered": "<p>green under <tt>&#45;&#45;strict</tt> and &#45;&#45;no-global today</p>"
+  },
+  {
+   "markup": "a --- b and c -- d stay prose",
+   "rendered": "<p>a &#8212; b and c &#8211; d stay prose</p>"
+  },
+  {
+   "markup": "compare {{uptime \\-s}} against the mtime",
+   "rendered": "<p>compare <tt>uptime &#45;s</tt> against the mtime</p>"
+  },
+  {
+   "markup": "- first item\n- second item",
+   "rendered": "<ul class=\"alternate\" type=\"square\">\n\t<li>first item</li>\n\t<li>second item</li>\n</ul>\n"
+  },
+  {
+   "markup": "the Round-1 review on 2026-09-04 stays prose",
+   "rendered": "<p>the Round-1 review on 2026-09-04 stays prose</p>"
+  },
+  {
+   "markup": "{code:bash}\nvalidator --strict --no-global *.json\n{code}",
+   "rendered": "<div class=\"code panel\" style=\"border-width: 1px;\"><div class=\"codeContent panelContent\">\n<pre class=\"code-bash\">validator --strict --no-global *.json\n</pre>\n</div></div>"
+  },
+  {
+   "markup": "offset by -5 seconds and -3 minutes",
+   "rendered": "<p>offset by -5 seconds and -3 minutes</p>"
+  },
+  {
+   "markup": "a paragraph with -v and a trailing word- here",
+   "rendered": "<p>a paragraph with <del>v and a trailing word</del> here</p>"
+  },
+  {
+   "markup": "a -b -p crit zu- z",
+   "rendered": "<p>a <del>b -p crit zu</del> z</p>"
+  },
+  {
+   "markup": "a -b -p zu- z",
+   "rendered": "<p>a <del>b -p zu</del> z</p>"
+  },
+  {
+   "markup": "a -ab -cd- z",
+   "rendered": "<p>a <del>ab -cd</del> z</p>"
+  },
+  {
+   "markup": "a -ab-cd- z",
+   "rendered": "<p>a <del>ab-cd</del> z</p>"
+  },
+  {
+   "markup": "xx -a -b cd- z",
+   "rendered": "<p>xx <del>a -b cd</del> z</p>"
+  },
+  {
+   "markup": "xx -a-b cd- z",
+   "rendered": "<p>xx -a-b cd- z</p>"
+  },
+  {
+   "markup": "a -x -y z- b",
+   "rendered": "<p>a <del>x -y z</del> b</p>"
+  },
+  {
+   "markup": "a -x -y- b",
+   "rendered": "<p>a <del>x -y</del> b</p>"
+  },
+  {
+   "markup": "a -x y-z w- b",
+   "rendered": "<p>a <del>x y-z w</del> b</p>"
+  },
+  {
+   "markup": "journalctl -b -p crit zeigt die Fehler; {{nr-pforum}}-Extensions sind zu- und abschaltbar.",
+   "rendered": "<p>journalctl <del>b -p crit zeigt die Fehler; <tt>nr-pforum</tt>-Extensions sind zu</del> und abschaltbar.</p>"
+  },
+  {
+   "markup": "a -x -\\- y- b",
+   "rendered": "<p>a <del>x -&#45; y</del> b</p>"
+  },
+  {
+   "markup": "a -a-bc- z",
+   "rendered": "<p>a -a-bc- z</p>"
+  },
+  {
+   "markup": "a -ab-c- z",
+   "rendered": "<p>a <del>ab-c</del> z</p>"
+  },
+  {
+   "markup": "a -aa-b- z",
+   "rendered": "<p>a <del>aa-b</del> z</p>"
+  },
+  {
+   "markup": "a -a-bb- z",
+   "rendered": "<p>a -a-bb- z</p>"
+  },
+  {
+   "markup": "a -a -b- z",
+   "rendered": "<p>a <del>a -b</del> z</p>"
+  },
+  {
+   "markup": "a -a-b-c- z",
+   "rendered": "<p>a -a-b-c- z</p>"
+  },
+  {
+   "markup": "a -abc-d- z",
+   "rendered": "<p>a <del>abc-d</del> z</p>"
+  },
+  {
+   "markup": "a -a-bcd- z",
+   "rendered": "<p>a -a-bcd- z</p>"
+  },
+  {
+   "markup": "a -ab-cd-ef- z",
+   "rendered": "<p>a <del>ab-cd-ef</del> z</p>"
+  },
+  {
+   "markup": "a -a.b- z",
+   "rendered": "<p>a <del>a.b</del> z</p>"
+  },
+  {
+   "markup": "a -a-b. z",
+   "rendered": "<p>a -a-b. z</p>"
+  },
+  {
+   "markup": "a -a-b-",
+   "rendered": "<p>a -a-b-</p>"
+  },
+  {
+   "markup": "[MR|https://git.netresearch.de/g/p/-/merge_requests/5] ist zu- und abschaltbar",
+   "rendered": "<p><a href=\"https://git.netresearch.de/g/p/-/merge_requests/5\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">MR</a> ist zu- und abschaltbar</p>"
+  },
+  {
+   "markup": "https://git.netresearch.de/g/p/-/merge_requests/5 ist zu- und abschaltbar",
+   "rendered": "<p><a href=\"https://git.netresearch.de/g/p/-/merge_requests/5\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">https://git.netresearch.de/g/p/-/merge_requests/5</a> ist zu- und abschaltbar</p>"
+  },
+  {
+   "markup": "Siehe https://x.de/a/-/b und das Modul zu- und abschaltbar",
+   "rendered": "<p>Siehe <a href=\"https://x.de/a/-/b\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">https://x.de/a/-/b</a> und das Modul zu- und abschaltbar</p>"
+  },
+  {
+   "markup": "[Text mit -x|https://x.de] und zu- foo",
+   "rendered": "<p><a href=\"https://x.de\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">Text mit -x</a> und zu- foo</p>"
+  },
+  {
+   "markup": "!-x.png! zu- foo",
+   "rendered": "<p><img src=\"https://jira.netresearch.de/images/icons/attach/noimage.png\" imagetext=\"-x.png\" align=\"absmiddle\" border=\"0\" /> zu- foo</p>"
+  },
+  {
+   "markup": "[~user] -x zu- foo",
+   "rendered": "<p><span class=\"error\">&#91;~user&#93;</span> <del>x zu</del> foo</p>"
+  },
+  {
+   "markup": "[MR|https://git.netresearch.de/g/p/-/merge_requests/5] ok",
+   "rendered": "<p><a href=\"https://git.netresearch.de/g/p/-/merge_requests/5\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">MR</a> ok</p>"
+  },
+  {
+   "markup": "a /-/ zu- b",
+   "rendered": "<p>a /<del>/ zu</del> b</p>"
+  },
+  {
+   "markup": "a -x- [L|http://y.de] b",
+   "rendered": "<p>a <del>x</del> <a href=\"http://y.de\" class=\"external-link\" target=\"_blank\" rel=\"nofollow noopener\">L</a> b</p>"
+  },
+  {
+   "markup": "{code}\nhttps://x.de/a/-/b\n{code}",
+   "rendered": "<div class=\"code panel\" style=\"border-width: 1px;\"><div class=\"codeContent panelContent\">\n<pre class=\"code-java\">https:<span class=\"code-comment\">//x.de/a/-/b</span>\n</pre>\n</div></div>"
+  },
+  {
+   "markup": "Die Analyse ({{OPS-899-Divergenzanalyse.pdf}} / {{.md}}) prüft alles.",
+   "rendered": "<p>Die Analyse (<tt><a href=\"https://jira.netresearch.de/browse/OPS-899\" title=\"CVE-2026-77143: Broken Access Control in pforum (Fork) schließen\" class=\"issue-link\" data-issue-key=\"OPS-899\"><del>OPS-899</del></a>-Divergenzanalyse.pdf</tt> / <tt>.md</tt>) prüft alles.</p>"
+  },
+  {
+   "markup": "Die Analyse ({{OPS-899\\-Divergenzanalyse.pdf}} / {{.md}}) prüft alles.",
+   "rendered": "<p>Die Analyse (<tt><a href=\"https://jira.netresearch.de/browse/OPS-899\" title=\"CVE-2026-77143: Broken Access Control in pforum (Fork) schließen\" class=\"issue-link\" data-issue-key=\"OPS-899\"><del>OPS-899</del></a>&#45;Divergenzanalyse.pdf</tt> / <tt>.md</tt>) prüft alles.</p>"
+  },
+  {
+   "markup": "Die Analyse {{OPS-899-Divergenzanalyse.pdf}} ok",
+   "rendered": "<p>Die Analyse <tt><a href=\"https://jira.netresearch.de/browse/OPS-899\" title=\"CVE-2026-77143: Broken Access Control in pforum (Fork) schließen\" class=\"issue-link\" data-issue-key=\"OPS-899\"><del>OPS-899</del></a>-Divergenzanalyse.pdf</tt> ok</p>"
+  },
+  {
+   "markup": "Die Analyse {{ZZZ-899-Divergenzanalyse.pdf}} ok",
+   "rendered": "<p>Die Analyse <tt>ZZZ-899-Divergenzanalyse.pdf</tt> ok</p>"
+  },
+  {
+   "markup": "Die Analyse OPS-899-Divergenzanalyse ok",
+   "rendered": "<p>Die Analyse <a href=\"https://jira.netresearch.de/browse/OPS-899\" title=\"CVE-2026-77143: Broken Access Control in pforum (Fork) schließen\" class=\"issue-link\" data-issue-key=\"OPS-899\"><del>OPS-899</del></a>-Divergenzanalyse ok</p>"
+  },
+  {
+   "markup": "Die Analyse ZZZ-899-Divergenzanalyse ok",
+   "rendered": "<p>Die Analyse ZZZ-899-Divergenzanalyse ok</p>"
+  },
+  {
+   "markup": "OPS-899-x und zu- und",
+   "rendered": "<p><a href=\"https://jira.netresearch.de/browse/OPS-899\" title=\"CVE-2026-77143: Broken Access Control in pforum (Fork) schließen\" class=\"issue-link\" data-issue-key=\"OPS-899\"><del>OPS-899</del></a><del>x und zu</del> und</p>"
+  },
+  {
+   "markup": "ZZZ-899-x und zu- und",
+   "rendered": "<p>ZZZ-899-x und zu- und</p>"
+  }
+ ]
+}

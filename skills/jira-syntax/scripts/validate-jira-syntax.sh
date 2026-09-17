@@ -125,43 +125,216 @@ validate_file() {
         grep -nE "$star_re" <<< "$content" | head -3
     fi
 
-    # Check for dashes that open a Jira strikethrough span. `-text-` is
-    # strikethrough; the opening dash run needs only whitespace (or a {{
-    # monospace opener — text effects apply INSIDE {{...}} too) before it and a
-    # word character after it, so a pair strikes through everything between
-    # them. This is NOT limited to double-dash flags: a single-dash option
-    # opens a span too, which makes `journalctl -b -p crit` a matched pair.
-    # Escape every dash: {{\-\-strict}}, {{\-s}}.
-    # Dashes inside {code}/{noformat} blocks render literally — skip those
-    # lines via open/close toggling. Markdown ``` fences are skipped the same
-    # way: they are flagged as an error by their own check above, and fenced
-    # content is code either way, so warning on it here would be noise on top.
-    # Escaped dashes (\-) are stripped first so they don't false-positive;
-    # a dash run followed by a non-word character (em-dash typography `---`,
-    # `-- `, list bullets `- item`) stays exempt, and a dash inside a word
-    # (`Round-1`, `2026-09-04`) never matches for want of leading whitespace.
-    # The word class must match Python's Unicode-aware \w in lib/markup.py.
-    # Two dead ends, both measured with gawk 5.2.1: [[:alnum:]] is
-    # locale-dependent (ASCII-only under LC_ALL=C, so a non-ASCII letter is
-    # flagged by the comment lint and passed here), and an explicit high-byte
-    # range [\200-\377] is rejected outright in a multibyte locale
-    # ("Invalid collation character"), which kills the whole rule silently.
-    # Negating space and punct instead is locale-independent: a high byte is
-    # neither under C, and is alnum under UTF-8, so both locales agree.
-    # tests/test_validator_parity.py pins the two implementations together.
+    # Check for dash pairs Jira renders as a strikethrough span (`-text-`).
+    #
+    # This is the same grammar as find_strikethrough_spans() in
+    # skills/jira-communication/scripts/lib/markup.py, and both are measured
+    # against a live Jira Server 9.12 renderer rather than reasoned about:
+    # tests/test_validator_parity.py runs BOTH implementations over the
+    # single-line cases in tests/fixtures/strikethrough_oracle.json and asserts
+    # they agree. It does NOT cover multi-line input, tables or headings, so
+    # block handling is pinned separately in tests/test_strikethrough.py, which
+    # also holds the Python side against the recorded corpus.
+    #
+    #   opener  an unescaped `-` at line start or after a non-word character
+    #           (which includes the `}}`, `*`, `_`, `]`, `!` that end an inline
+    #           element — that is why {{mono}}-Extensions opens a span), and
+    #           followed by neither whitespace nor another dash
+    #   closer  the first LATER unescaped `-` that is not preceded by
+    #           whitespace and is followed by a non-word character or end of
+    #           line; dashes that fail those conditions are skipped over. A
+    #           dash that leads a word can never close, which is why
+    #           `journalctl -b -p crit` alone is not a span — but the same
+    #           flags followed by `zu-` later on the line ARE one.
+    #
+    # Dashes inside {code}/{noformat} render literally, so those lines are
+    # skipped via open/close toggling ({quote}/{panel} are NOT skipped — Jira
+    # parses text effects inside them). Markdown ``` fences are skipped the
+    # same way: their own check above already errors on them.
+    #
+    # Links, bare URLs and !images! are resolved into a single element before
+    # text effects run, so a dash inside them is inert — the `/-/` in a GitLab
+    # merge-request URL must not be escaped, or the link breaks. They are
+    # masked out before the scan. {{monospace}} is NOT masked: text effects do
+    # apply inside it.
+    #
+    # Word class: NOT space and NOT punct, which is locale-independent. Two
+    # dead ends, both measured with gawk 5.2.1: [[:alnum:]] is locale-dependent
+    # (ASCII-only under LC_ALL=C), and an explicit high-byte range
+    # [\200-\377] is rejected outright in a multibyte locale ("Invalid
+    # collation character"), killing the rule silently. Negating space and
+    # punct agrees in both for ASCII and for non-ASCII LETTERS: a high byte is
+    # neither space nor punct under C, and is alnum under UTF-8. It also
+    # matches Jira, where `_` is NOT a word character.
+    #
+    # The one place the two locales genuinely disagree is non-ASCII
+    # PUNCTUATION: under LC_ALL=C a typographic quote is a run of high bytes
+    # and therefore reads as a word character, so `Der Wert "-x- ist falsch`
+    # (German quotes) would be missed. tests/test_validator_parity.py caught
+    # exactly that on five corpus cases. They are folded down to an ASCII
+    # quote first, which behaves identically in both locales - gsub on a
+    # literal UTF-8 string matches bytes under C and characters under UTF-8.
+    # Run the scan under a UTF-8 locale when the machine has one. The word class
+    # below is locale-independent for ASCII and for non-ASCII LETTERS, but not
+    # for arbitrary non-ASCII PUNCTUATION: under LC_ALL=C a `§`, `€`, `°` or `±`
+    # is a run of high bytes and reads as a word character, so the opener
+    # boundary is lost and a real span is missed. fold() handles the handful of
+    # codepoints that show up in prose; the locale handles the rest. On a
+    # C-only machine the fold is what is left, and the gap is the unfolded
+    # symbols - tests/test_validator_parity.py runs both locales to keep that
+    # visible rather than silent.
+    # JIRA_SYNTAX_SCAN_LOCALE overrides the choice, so the C-only fallback can
+    # be exercised on a machine that does have UTF-8 (the parity test does that).
+    local scan_locale="${JIRA_SYNTAX_SCAN_LOCALE:-}"
+    if [ -z "$scan_locale" ]; then
+        scan_locale=$(locale -a 2>/dev/null | grep -iE '\.(utf-?8)$' | head -1)
+    fi
+    : "${scan_locale:=C}"
+
     local dash_hits
-    dash_hits=$(awk '
-        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { inblock = !inblock; next }
+    # AWK-DASH-SCAN-BEGIN (marker: tests/test_validator_parity.py extracts the
+    # program between these two markers and runs it over the whole corpus in
+    # one pass. Keep them.)
+    dash_hits=$(LC_ALL="$scan_locale" awk '
+        function fold(line) {
+            # NBSP becomes \002, a sentinel that is neither space nor word.
+            # It has to be BOTH at once, because Jira treats U+00A0 as two
+            # different things: an ordinary character for the dash delimiters
+            # (`a -x<NBSP>- y` IS struck through, measured) and a terminator
+            # for the URL autolinker (`https://h/a<NBSP>/-/b` links only
+            # `https://h/a`). Python gets this from `\s` matching U+00A0 while
+            # _is_delimiter_space does not; here \002 is excluded from the
+            # region classes below and from isword(). Folding it to a space
+            # instead would break the delimiters, and folding it to punctuation
+            # - which this did - let a region swallow the dashes after it.
+            gsub(/\xc2\xa0/, "\002", line)
+            gsub(/\xe2\x80\x9e|\xe2\x80\x9c|\xe2\x80\x9d|\xe2\x80\x98|\xe2\x80\x99|\xe2\x80\x9a/, "\"", line)
+            gsub(/\xc2\xab|\xc2\xbb|\xe2\x80\xb9|\xe2\x80\xba/, "\"", line)
+            gsub(/\xe2\x80\x93|\xe2\x80\x94|\xe2\x80\x90|\xe2\x80\xa6|\xe2\x80\xa2/, "\"", line)
+            # Common non-ASCII symbols. Not exhaustive and cannot be - this is
+            # the C-locale fallback only; where a UTF-8 locale exists the
+            # scan runs under it and gawk classifies these itself.
+            gsub(/\xc2\xa7|\xe2\x82\xac|\xc2\xb0|\xc2\xb1|\xc2\xb5|\xc3\x97|\xc3\xb7/, "\"", line)
+            gsub(/\xc2\xa9|\xc2\xae|\xe2\x84\xa2|\xe2\x80\xa0|\xe2\x80\xa1|\xe2\x80\xb0/, "\"", line)
+            return line
+        }
+        # The \001 test comes first: a masked region must read as a boundary, and a
+        # control character is neither space nor punct, so it would otherwise
+        # count as a word character and swallow the opener after a link.
+        function isword(c) { return (c != "" && c != "\001" && c != "\002" && c !~ /[[:space:][:punct:]]/) }
+        # Replace protected regions with \001, preserving length. Mirrors
+        # _mask_protected() in lib/markup.py: a bare URL, mailto or image needs
+        # an ASCII non-alphanumeric before it (one glued to a word is not
+        # autolinked, so it keeps its dashes live) while a square-bracketed
+        # link resolves anywhere, and a region starting exactly where the
+        # previous one ended does not resolve either.
+        function mask(line,    out, pos, rest, start, len_, before, kind, i, prev_end) {
+            out = ""
+            pos = 1
+            prev_end = 0
+            while (pos <= length(line)) {
+                rest = substr(line, pos)
+                if (!match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^][:space:]{}|\002]+)|(mailto:[^][:space:]{}|\002]+)|(![^[:space:]!\002]+!)/)) {
+                    out = out rest
+                    break
+                }
+                start = pos + RSTART - 1
+                len_ = RLENGTH
+                before = (start > 1) ? substr(line, start - 1, 1) : ""
+                kind = substr(line, start, 1)
+
+                # A backslash-escaped bracket or bang is not a macro, so its
+                # content is ordinary prose and its dashes stay live. Same for a
+                # region that does not sit at a boundary: a bare URL, mailto or
+                # image needs a non-alphanumeric before it (and a URL must not
+                # follow a pipe), while a square-bracketed link resolves
+                # anywhere. In both cases the region is not a region, so the
+                # scan resumes one character in - which is what the Python
+                # regex does by simply not matching there.
+                if (before == "\\" || (kind != "[" && (before ~ /[A-Za-z0-9]/ || (kind != "!" && (before == "|" || before == "!"))))) {
+                    out = out substr(line, pos, RSTART)
+                    pos = start + 1
+                    continue
+                }
+
+                # Two regions written back to back do not both resolve: Jira
+                # renders the first and leaves the second literal. The SECOND
+                # one is skipped whole, not one character at a time - resuming
+                # inside it would let a shorter region nested within it be
+                # masked, which loses the dashes around it. That was a real
+                # miss: `!i.png!https://h/a/-/b[t|...]` comes back struck and
+                # the scan reported nothing. prev_end deliberately does not
+                # advance here, so a third region is masked again, matching
+                # _mask_protected() in lib/markup.py.
+                if (start == prev_end) {
+                    out = out substr(line, pos, RSTART - 1 + len_)
+                    pos = start + len_
+                    continue
+                }
+
+                out = out substr(line, pos, RSTART - 1)
+                for (i = 0; i < len_; i++) out = out "\001"
+                pos = start + len_
+                prev_end = pos
+            }
+            return out
+        }
+        function strikes(raw,    line, n, i, j, prev, nxt, after) {
+            line = mask(raw)
+            n = length(line)
+            for (i = 1; i <= n; i++) {
+                if (substr(line, i, 1) != "-") continue
+                if (i > 1 && substr(line, i - 1, 1) == "\\") continue
+                prev = (i > 1) ? substr(line, i - 1, 1) : ""
+                if (isword(prev)) continue
+                nxt = (i < n) ? substr(line, i + 1, 1) : ""
+                if (nxt == "" || nxt ~ /[[:space:]]/ || nxt == "-") continue
+                for (j = i + 2; j <= n; j++) {
+                    if (substr(line, j, 1) != "-") continue
+                    if (substr(line, j - 1, 1) == "\\") continue
+                    if (substr(line, j - 1, 1) ~ /[[:space:]]/) continue
+                    after = (j < n) ? substr(line, j + 1, 1) : ""
+                    if (isword(after)) continue
+                    return 1
+                }
+            }
+            return 0
+        }
+        # Only the SAME tag closes a block, exactly as the Jira renderer does
+        # and as _split_verbatim() in lib/markup.py does. Toggling on either tag
+        # loses track after `{noformat}` / `{code}` / `{noformat}`, and then
+        # misses every span in the rest of the file.
+        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ {
+            tag = $0
+            sub(/^[[:space:]]*\{/, "", tag)
+            sub(/[:}].*$/, "", tag)
+            if (opentag == "") opentag = tag
+            else if (opentag == tag) opentag = ""
+            next
+        }
         /^[[:space:]]*```/ { infence = !infence; next }
-        inblock || infence { next }
-        {
-            line = $0
-            gsub(/\\-/, "", line)
-            if (line ~ /(^|[[:space:]]|\{\{)-+[^[:space:][:punct:]]/)
-                printf "%d:%s\n", NR, $0
-        }' <<< "$content" | head -3)
+        opentag != "" || infence { next }
+        strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content") && dash_rc=0 || dash_rc=$?
+    # The `&& … || …` is load-bearing under `set -e` (line 6): a bare assignment
+    # takes the command substitution's status, so a failing awk aborted the
+    # whole script before this branch could run. It exited non-zero, so nothing
+    # was silently passed - but the ERROR below never printed and the remaining
+    # files in a multi-file run were skipped. A compound command is exempt from
+    # set -e, which is what lets the branch execute.
+    # awk's status must not be swallowed by the pipe: a scan that never ran
+    # (no awk, a syntax error, a killed process) produces no hits, and no hits
+    # is what a clean draft looks like. That is the same "a failure reads as
+    # clean" shape RenderVerdict.available exists to prevent on the Python
+    # side, and it is an ERROR here rather than silence.
+    if [ "$dash_rc" -ne 0 ]; then
+        error "The dash-strikethrough scan did not run (awk exited $dash_rc) - this draft was NOT checked for spans Jira would render struck through."
+        dash_hits=""
+    else
+        dash_hits=$(printf '%s\n' "$dash_hits" | grep -v '^$' | head -3)
+    fi
+    # AWK-DASH-SCAN-END
     if [ -n "$dash_hits" ]; then
-        warning "Found a dash that opens a strikethrough span outside a code block — Jira strikes through -text- spans, even inside {{...}}, and a single-dash option opens one too. Escape every dash: \\-foo (e.g. {{\\-\\-strict}}, {{\\-s}})."
+        warning "Found a dash pair that renders struck through outside a code block — Jira reads a dash after a non-word character (including the {{}}, *, _, ] or ! that ends an inline element) as a strikethrough opener, and a dash before one as the closer. Escape the opener as \\-foo; a backslash-escaped dash still prints as a plain hyphen."
         echo "   Lines with issue:"
         echo "$dash_hits"
     fi

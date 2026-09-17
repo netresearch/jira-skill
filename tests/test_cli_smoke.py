@@ -559,14 +559,21 @@ class TestMockedCommands:
         to test the isatty guard through the CLI. We verify at the source level
         that the guard exists and is correctly placed before the stdin read
         (read_stdin_utf8 — see lib/input.py).
+
+        The guard lives in _read_comment_text, which `add` and `edit` share;
+        this also asserts that `add` still routes through it, so moving the
+        code cannot quietly remove the guard from one of the two callers.
         """
         import inspect
 
-        source = inspect.getsource(_comment_mod.add.callback)
+        assert "_read_comment_text(" in inspect.getsource(_comment_mod.add.callback)
+        assert "_read_comment_text(" in inspect.getsource(_comment_mod.edit.callback)
+
+        source = inspect.getsource(_comment_mod._read_comment_text)
         isatty_pos = source.find("isatty()")
         read_pos = source.find("read_stdin_utf8(")
-        assert isatty_pos != -1, "isatty() guard missing from add command"
-        assert read_pos != -1, "read_stdin_utf8() missing from add command"
+        assert isatty_pos != -1, "isatty() guard missing from the stdin reader"
+        assert read_pos != -1, "read_stdin_utf8() missing from the stdin reader"
         assert isatty_pos < read_pos, "isatty() guard must come before read_stdin_utf8()"
 
     def test_comment_list_rejects_negative_limit(self):
