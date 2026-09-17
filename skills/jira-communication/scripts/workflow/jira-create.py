@@ -49,6 +49,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept for callers that resolve the config themselves rather than through
+    # the client - the render preview does. Without them guard_wiki_markup
+    # reads None and previews against the DEFAULT profile, which is a
+    # different tenant from the one this command is writing to.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command()

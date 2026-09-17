@@ -22,6 +22,8 @@ from unittest import mock
 import click.testing
 import pytest
 from conftest import load_script, make_mock_client
+from lib import markup_cli
+from lib.preview import RenderVerdict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
 
@@ -134,6 +136,41 @@ def test_a_lint_finding_aborts_every_surface(name, script, folder, argv, attr):
     result, client = _run(script, folder, baited)
     assert result.exit_code == 1, f"{name}: a block tag used inline must abort\n{result.output}"
     assert _written_text(client, attr) is None, f"{name}: wrote despite a lint finding"
+
+
+@pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
+def test_the_selected_profile_reaches_the_render_preview(name, script, folder, argv, attr):
+    """--profile must reach the preview, or it previews against another tenant.
+
+    The gates read the config from ``ctx.obj``, which only ``jira-comment.py``
+    populated. Everywhere else ``ctx.obj.get("profile")`` returned None and the
+    preview silently resolved the DEFAULT profile - a different Jira - while
+    the command itself wrote to the selected one. Nothing reported it, because
+    an unreachable renderer is advisory and just warns.
+    """
+    seen = {}
+
+    def _record(text, *, issue_key=None, env_file=None, profile=None, **kwargs):
+        seen["profile"] = profile
+        seen["env_file"] = env_file
+        return RenderVerdict(False, [], "stubbed")
+
+    module = load_script(script, folder)
+    client = make_mock_client()
+    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
+    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
+    client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=client),
+        mock.patch.object(module, "check_mentions_cli", return_value=None),
+        mock.patch.object(markup_cli, "preflight_render", _record),
+    ):
+        result = runner.invoke(module.cli, ["--profile", "tenant-b", "--env-file", "/tmp/x.env", *argv])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert seen.get("profile") == "tenant-b", f"{name}: preview got profile {seen.get('profile')!r}"
+    assert seen.get("env_file") == "/tmp/x.env", f"{name}: preview got env_file {seen.get('env_file')!r}"
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():
