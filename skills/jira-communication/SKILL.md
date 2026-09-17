@@ -41,14 +41,15 @@ Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
 Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global flags before subcommand: `jira-issue.py --json get PROJ-123`.
 
-## Posting a comment rewrites and checks it first
+## Posting wiki markup rewrites and checks it first
 
-`jira-comment.py add`/`edit` do two things before the write, both on by default, because a comment that renders wrong is silent — the API returns 2xx either way.
+Every `--comment` and `--description` option that writes wiki markup runs three gates before the write, all on by default, because text that renders wrong is silent — the API returns 2xx either way. That is all seven: `jira-comment.py add`/`edit`, `jira-transition.py do --comment`, `jira-transition.py path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`. A body smuggled in through `--fields-json` is not gated — that option writes raw fields by design. `jira-version.py` writes two `--description` fields that are NOT gated (`create` and `update`); whether Jira renders a version description as wiki markup at all is unverified, and its help string claiming it does may simply be wrong.
 
 1. **Dashes that Jira would render as strikethrough are escaped.** `\-` prints as a plain hyphen, so the posted text reads as written; stderr names how many lines changed and shows the first five. (The one shape where the escape is visible is two macros written against each other with no space — the dash can land inside a link target. Ordinary prose does not reach it.) `--no-auto-escape` keeps the markup verbatim — but on its own it does not post a deliberate `-strikethrough-`: the lint and the render check each still refuse the span. Use `--no-auto-escape --force` for that.
-2. **The text is rendered by the instance and refused if it comes back struck through.** This costs one API call per post and catches what no local check can — an autolinked issue key creates a boundary that exists only on an instance where that key resolves. `--no-preflight` skips it; an unreachable renderer warns once and posts anyway.
+2. **The markup and the ticket language are linted.** Block tags used inline (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level), unbalanced tag counts, and German prose on an English-only project each abort the write. `--force` turns the findings into warnings and posts anyway.
+3. **The text is rendered by the instance and refused if it comes back struck through.** This costs one API call per post and catches what no local check can — an autolinked issue key creates a boundary that exists only on an instance where that key resolves. `--no-preflight` skips it; an unreachable renderer warns once and posts anyway.
 
-`--force` posts despite either finding. See `references/comments.md` for the details.
+`--force` posts despite any of the three. The flags are spelled the same on each command. Under `--dry-run` the escape and the lint still run — the preview shows the text a real write would post — while the render call does not. See `references/comments.md` for the details.
 
 ## Basic Usage
 

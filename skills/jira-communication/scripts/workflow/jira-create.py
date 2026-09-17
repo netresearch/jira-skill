@@ -23,6 +23,7 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, resolve_assignee, resolve_subtask_type
 from lib.input import read_stdin_utf8
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, format_output, success, warning
 from lib.users import check_mentions_cli
 
@@ -48,6 +49,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept for callers that resolve the config themselves rather than through
+    # the client - the render preview does. Without them guard_wiki_markup
+    # reads None and previews against the DEFAULT profile, which is a
+    # different tenant from the one this command is writing to.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command()
@@ -63,6 +70,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option("--components", help="Comma-separated component names")
 @click.option("--fields-json", help="JSON string of additional fields")
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
+@markup_options
 @click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
 @click.pass_context
 def issue(
@@ -79,6 +87,7 @@ def issue(
     components: str | None,
     fields_json: str | None,
     no_verify_mentions: bool,
+    gates: MarkupGates,
     dry_run: bool,
 ):
     """Create a new Jira issue.
@@ -141,7 +150,20 @@ def issue(
         description = description.rstrip("\n")
 
     if description:
-        # A description renders wiki markup — same mention gate as jira-comment add
+        # A description renders wiki markup — same gates as jira-comment add
+        description = guard_wiki_markup(
+            description,
+            gates=gates.offline() if dry_run else gates,
+            # The issue does not exist yet, so there is no key. The language
+            # lint only reads the project part of one, and that IS known -
+            # is_english_only_project() splits on the first dash. The renderer
+            # wants a real issue and 404s on a project key, so it gets none.
+            issue_key=project_key,
+            render_issue_key=None,
+            env_file=ctx.obj.get("env_file"),
+            profile=ctx.obj.get("profile"),
+            label="description",
+        )
         check_mentions_cli(client, description, skip=no_verify_mentions)
         fields["description"] = description
 

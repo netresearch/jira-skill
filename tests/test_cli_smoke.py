@@ -521,7 +521,7 @@ class TestMockedCommands:
         # Patch on the already-imported module so the constructor is intercepted
         with (
             mock.patch.object(_comment_mod, "LazyJiraClient", return_value=mock_client),
-            mock.patch.object(_comment_mod, "preflight_render", return_value=preflight),
+            mock.patch("lib.markup_cli.preflight_render", return_value=preflight),
         ):
             result = runner.invoke(_comment_mod.cli, args, **invoke_kwargs)
         return result, mock_client

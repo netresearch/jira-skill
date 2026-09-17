@@ -23,6 +23,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, format_output, format_table, success, warning
 from lib.users import check_mentions_cli
 
@@ -328,6 +329,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept for callers that resolve the config themselves rather than through
+    # the client - the render preview does. Without them guard_wiki_markup
+    # reads None and previews against the DEFAULT profile, which is a
+    # different tenant from the one this command is writing to.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command("list")
@@ -387,6 +394,7 @@ def list_transitions(ctx, issue_key: str):
     help="JSON string of additional fields the transition screen requires (e.g. summary) — same shape as `jira-issue.py update`",
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
+@markup_options
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
 @click.pass_context
 def do_transition(
@@ -397,6 +405,7 @@ def do_transition(
     resolution: str | None,
     fields_json: str | None,
     no_verify_mentions: bool,
+    gates: MarkupGates,
     dry_run: bool,
 ):
     """Transition an issue to a new status.
@@ -441,7 +450,18 @@ def do_transition(
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
-    # A transition comment is a real issue comment — same mention gate as jira-comment add
+    # A transition comment is a real issue comment — same gates as jira-comment add.
+    # Runs under --dry-run too, so the preview prints the text that would actually
+    # be posted; only the render call is dropped, because that one talks to the
+    # instance. Every guarded command follows this rule.
+    comment = guard_wiki_markup(
+        comment,
+        gates=gates.offline() if dry_run else gates,
+        issue_key=issue_key,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+        label="transition comment",
+    )
     if not dry_run:
         check_mentions_cli(client, comment, skip=no_verify_mentions)
 
@@ -595,6 +615,8 @@ def _is_backward(transition: dict, visited: set[str]) -> bool:
 @click.option(
     "--max-steps", type=click.IntRange(min=1), default=10, show_default=True, help="Safety cap on transitions walked"
 )
+@click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
+@markup_options
 @click.option("--dry-run", is_flag=True, help="Show the first planned step without transitioning")
 @click.pass_context
 def path_transition(
@@ -604,6 +626,8 @@ def path_transition(
     resolution: str | None,
     comment: str | None,
     max_steps: int,
+    no_verify_mentions: bool,
+    gates: MarkupGates,
     dry_run: bool,
 ):
     """Walk the workflow from the current status to TARGET_STATUS.
@@ -644,6 +668,23 @@ def path_transition(
                 success(f"{issue_key} is already in status '{current}' - nothing to do")
             return
 
+        # The comment rides on the FINAL transition, but it is gated here, before
+        # the first one: a walk that aborts halfway has already moved the issue,
+        # and the status it stopped in is not one anybody chose. Below the
+        # already-in-target return, so the no-op case does not pay for a render
+        # call. A walk that stops at an ambiguous first step still does - it
+        # cannot be known to be ambiguous until the transitions are fetched.
+        comment = guard_wiki_markup(
+            comment,
+            gates=gates.offline() if dry_run else gates,
+            issue_key=issue_key,
+            env_file=ctx.obj.get("env_file"),
+            profile=ctx.obj.get("profile"),
+            label="transition comment",
+        )
+        if not dry_run:
+            check_mentions_cli(client, comment, skip=no_verify_mentions)
+
         for _ in range(max_steps):
             transitions = client.get_issue_transitions(issue_key)
 
@@ -670,6 +711,11 @@ def path_transition(
                 warning("DRY RUN - No transition will be performed")
                 print(f"\nNext step for {issue_key}: {chosen.get('name', '')} -> {to_status}")
                 print(f"Current: {current} | Target: {target_status}")
+                if comment:
+                    # Named as belonging to the final transition, which is not
+                    # the step shown above: the walk is greedy and only the last
+                    # hop carries the comment.
+                    print(f"Comment (on the final transition): {comment}")
                 if not is_final:
                     print("(walk continues greedily from there; re-run without --dry-run to execute)")
                 return

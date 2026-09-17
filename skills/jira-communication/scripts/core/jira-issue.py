@@ -34,6 +34,7 @@ from lib.changelog import (
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated, resolve_assignee, resolve_status
 from lib.config import load_status_sets
 from lib.input import read_stdin_utf8
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 from lib.render import print_comment, print_description
 from lib.users import check_mentions_cli, person_label
@@ -139,6 +140,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept for callers that resolve the config themselves rather than through
+    # the client - the render preview does. Without them guard_wiki_markup
+    # reads None and previews against the DEFAULT profile, which is a
+    # different tenant from the one this command is writing to.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command()
@@ -595,6 +602,7 @@ def _status_order(current_status: str, transitions: list) -> list[str]:
 @click.option("--assignee", "-a", help="Assignee username or email")
 @click.option("--fields-json", help="JSON string of additional fields to update")
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --description")
+@markup_options
 @click.option("--dry-run", is_flag=True, help="Show what would be updated without making changes")
 @click.pass_context
 def update(
@@ -609,6 +617,7 @@ def update(
     assignee: str | None,
     fields_json: str | None,
     no_verify_mentions: bool,
+    gates: MarkupGates,
     dry_run: bool,
 ):
     """Update issue fields.
@@ -662,7 +671,15 @@ def update(
                 )
                 sys.exit(1)
             description = description.rstrip("\n")
-        # A description renders wiki markup — same mention gate as jira-comment add
+        # A description renders wiki markup — same gates as jira-comment add
+        description = guard_wiki_markup(
+            description,
+            gates=gates.offline() if dry_run else gates,
+            issue_key=issue_key,
+            env_file=ctx.obj.get("env_file"),
+            profile=ctx.obj.get("profile"),
+            label="description",
+        )
         check_mentions_cli(client, description, skip=no_verify_mentions)
         update_fields["description"] = description
 

@@ -24,6 +24,7 @@ import re
 
 import click
 from lib.client import LazyJiraClient
+from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import comment_to_text, error, format_output, success
 from lib.users import check_mentions_cli, person_label
 
@@ -144,6 +145,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["quiet"] = quiet
     ctx.obj["debug"] = debug
     ctx.obj["client"] = LazyJiraClient(env_file=env_file, profile=profile)
+    # Kept for callers that resolve the config themselves rather than through
+    # the client - the render preview does. Without them guard_wiki_markup
+    # reads None and previews against the DEFAULT profile, which is a
+    # different tenant from the one this command is writing to.
+    ctx.obj["env_file"] = env_file
+    ctx.obj["profile"] = profile
 
 
 @cli.command()
@@ -154,8 +161,17 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     "--started", help="Start time (ISO format: YYYY-MM-DD, YYYY-MM-DDTHH:MM, or YYYY-MM-DDTHH:MM:SS; default: now)"
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
+@markup_options
 @click.pass_context
-def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str | None, no_verify_mentions: bool):
+def add(
+    ctx,
+    issue_key: str,
+    time_spent: str,
+    comment: str | None,
+    started: str | None,
+    no_verify_mentions: bool,
+    gates: MarkupGates,
+):
     """Add worklog entry to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -171,7 +187,15 @@ def add(ctx, issue_key: str, time_spent: str, comment: str | None, started: str 
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
-    # A worklog comment renders wiki markup — same mention gate as jira-comment add
+    # A worklog comment renders wiki markup — same gates as jira-comment add
+    comment = guard_wiki_markup(
+        comment,
+        gates=gates,
+        issue_key=issue_key,
+        env_file=ctx.obj.get("env_file"),
+        profile=ctx.obj.get("profile"),
+        label="worklog comment",
+    )
     check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
