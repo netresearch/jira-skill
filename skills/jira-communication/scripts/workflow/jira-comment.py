@@ -354,6 +354,12 @@ def edit(
     Use "-" to read from stdin (e.g., cat file.txt | jira-comment edit PROJ-123 12345 -).
     Linted for wiki-markup problems before posting (override with --force).
 
+    Dashes Jira would render as a strikethrough span (``{{mono}}-Word ... zu-``)
+    are escaped automatically before posting and reported on stderr; ``\\-``
+    prints as a plain hyphen. --no-auto-escape keeps the markup verbatim; a
+    deliberate strikethrough also needs --force, because the lint and the render
+    check each still refuse the span.
+
     Examples:
 
       jira-comment edit PROJ-123 12345 "Updated: fixed in commit abc123"

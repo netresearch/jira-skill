@@ -40,6 +40,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
 
 from lib import markup  # noqa: E402
+from lib.preview import RenderVerdict  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 _ORACLE = json.loads((FIXTURES / "strikethrough_oracle.json").read_text(encoding="utf-8"))
@@ -476,30 +477,64 @@ class TestEscaperTerminates:
 
 
 class TestCommentCliWiring:
-    """The repair must be reachable from `jira-comment add`, not just importable."""
+    """The repair must reach the POSTED text, not merely be importable.
+
+    The previous version of this class called ``_repair_markup`` directly and
+    called that "wiring". Deleting the call from ``add`` and ``edit`` reddened
+    nothing — a review checked. These drive the real Click command and assert
+    on the argument the client was handed, once per command, because ``edit``
+    is the one a refactor drops silently.
+    """
 
     @staticmethod
-    def _repair_markup():
+    def _module():
         import importlib.util
 
         path = Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts/workflow/jira-comment.py"
-        spec = importlib.util.spec_from_file_location("jira_comment_under_test", path)
+        spec = importlib.util.spec_from_file_location("jira_comment_wiring_under_test", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        return module._repair_markup
+        return module
 
-    def test_add_repairs_by_default(self):
-        repair = self._repair_markup()
-        assert repair("Die {{a}}-Extensions, jede zu- und abschaltbar", auto_escape=True) == (
-            "Die {{a}}\\-Extensions, jede zu- und abschaltbar"
-        )
+    def _run(self, args):
+        from unittest import mock
 
-    def test_no_auto_escape_leaves_the_text_alone(self):
-        repair = self._repair_markup()
-        text = "Die {{a}}-Extensions, jede zu- und abschaltbar"
-        assert repair(text, auto_escape=False) == text
+        import click.testing
 
-    def test_clean_text_is_untouched(self):
-        repair = self._repair_markup()
+        module = self._module()
+        client = mock.MagicMock()
+        client.with_context = mock.Mock()
+        client.issue_add_comment.return_value = {"id": "1"}
+        client.issue_edit_comment.return_value = {"id": "1"}
+        with (
+            mock.patch.object(module, "LazyJiraClient", return_value=client),
+            mock.patch.object(module, "preflight_render", return_value=RenderVerdict(True, [])),
+            mock.patch.object(module, "check_mentions_cli", return_value=None),
+        ):
+            result = click.testing.CliRunner().invoke(module.cli, args)
+        return result, client
+
+    RAW = "Die {{a}}-Extensions, jede zu- und abschaltbar"
+    REPAIRED = "Die {{a}}\\-Extensions, jede zu- und abschaltbar"
+
+    def test_add_posts_the_repaired_text(self):
+        result, client = self._run(["add", "PROJ-123", self.RAW])
+        assert result.exit_code == 0, result.output
+        client.issue_add_comment.assert_called_once_with("PROJ-123", self.REPAIRED)
+
+    def test_edit_posts_the_repaired_text(self):
+        result, client = self._run(["edit", "PROJ-123", "42", self.RAW])
+        assert result.exit_code == 0, result.output
+        client.issue_edit_comment.assert_called_once_with("PROJ-123", "42", self.REPAIRED)
+
+    def test_no_auto_escape_posts_the_text_verbatim(self):
+        # --force is needed too: the lint refuses the surviving span on its own.
+        result, client = self._run(["add", "PROJ-123", self.RAW, "--no-auto-escape", "--force"])
+        assert result.exit_code == 0, result.output
+        client.issue_add_comment.assert_called_once_with("PROJ-123", self.RAW)
+
+    def test_clean_text_is_posted_unchanged(self):
         text = "journalctl -b -p crit zeigt die Fehler"
-        assert repair(text, auto_escape=True) == text
+        result, client = self._run(["add", "PROJ-123", text])
+        assert result.exit_code == 0, result.output
+        client.issue_add_comment.assert_called_once_with("PROJ-123", text)
