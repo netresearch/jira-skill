@@ -172,52 +172,74 @@ class TestInlineEmphasis:
         assert any("starts mid-word" in f for f in lint_wiki_markup(german))
 
 
-class TestFlagDash:
-    """A whitespace-preceded dash run opens a strikethrough span outside code
-    blocks. The trigger is: whitespace (or a ``{{`` opener), one or more ``-``,
-    then a word character."""
+class TestStrikethroughDash:
+    """Only a dash pair Jira actually renders as ``<del>`` is a finding.
 
-    def test_flags_in_prose_flagged(self):
-        assert any("strikethrough span" in f for f in lint_wiki_markup("checked with --strict and --no-global"))
+    Every expectation here is recorded in ``tests/fixtures/strikethrough_oracle.json``;
+    ``tests/test_strikethrough.py`` checks the grammar clause by clause against
+    that fixture. What is pinned here is the *lint*: which of those spans
+    reaches the caller as a finding.
 
-    def test_flag_inside_monospace_flagged(self):
-        # Text effects apply INSIDE {{...}} - {{--strict}} is just as broken.
-        assert any("strikethrough span" in f for f in lint_wiki_markup("green under {{--strict}} today"))
+    These cases used to assert the opposite. The old rule flagged any
+    whitespace-preceded dash run followed by a word character, which made every
+    CLI flag a finding - and the live renderer disagrees: a dash that leads a
+    word can never CLOSE a span, so two flags cannot pair with each other. Add
+    a trailing-dash word later on the line and they do become one, which is the
+    case below that must stay flagged.
+    """
+
+    def test_flags_in_prose_are_clean(self):
+        assert lint_wiki_markup("checked with --strict and --no-global") == []
+
+    def test_flag_inside_monospace_is_clean(self):
+        assert lint_wiki_markup("green under {{--strict}} today") == []
+
+    def test_single_dash_option_is_clean(self):
+        assert lint_wiki_markup("an empty {{journalctl -b -p crit}}") == []
+
+    def test_lone_single_dash_option_is_clean(self):
+        assert lint_wiki_markup("run it with -v for verbose output") == []
+
+    def test_digit_after_dash_is_clean(self):
+        assert lint_wiki_markup("offset by -5 seconds") == []
+
+    def test_flag_paired_with_a_trailing_dash_is_flagged(self):
+        # The one shape in which a flag IS dangerous: something later on the
+        # line ends a word with a dash and closes the span the flag opened.
+        findings = lint_wiki_markup("a paragraph with -v and a trailing word- here")
+        assert any("renders struck through" in f for f in findings)
+
+    def test_monospace_boundary_is_flagged(self):
+        # netresearch/jira-skill#226: `}}` is a non-word character, so the dash
+        # after an inline element opens a span - the case the old rule missed.
+        findings = lint_wiki_markup("Die {{nr-pforum}}-Extensions, jede zu- und abschaltbar")
+        assert any("renders struck through" in f for f in findings)
+
+    def test_german_elliptical_compound_alone_is_clean(self):
+        assert lint_wiki_markup("Module sind zu- und abschaltbar, das bleibt Prosa") == []
 
     def test_escaped_flag_is_clean(self):
         assert lint_wiki_markup("green under {{\\-\\-strict}} and \\-\\-no-global today") == []
 
     def test_dash_typography_is_clean(self):
-        # Em/en-dash typography: no word character after the dash run.
         assert lint_wiki_markup("a --- b and c -- d stay prose") == []
-
-    def test_single_dash_option_flagged(self):
-        # A single dash opens a span too, so two of them are a matched pair:
-        # `journalctl -b -p crit` strikes through everything between -b and -p.
-        assert any("strikethrough span" in f for f in lint_wiki_markup("an empty {{journalctl -b -p crit}}"))
-
-    def test_lone_single_dash_option_flagged(self):
-        # Flagged even without a visible partner: the next dash may arrive in a
-        # later sentence of the same rendered paragraph.
-        assert any("strikethrough span" in f for f in lint_wiki_markup("run it with -v for verbose output"))
 
     def test_escaped_single_dash_is_clean(self):
         assert lint_wiki_markup("compare {{uptime \\-s}} against the mtime") == []
 
-    def test_digit_after_dash_flagged(self):
-        # "word character", not "letter": a digit closes the shape as well.
-        assert any("strikethrough span" in f for f in lint_wiki_markup("offset by -5 seconds"))
-
     def test_list_bullet_is_clean(self):
-        # A dash bullet is followed by a space, not a word character.
         assert lint_wiki_markup("- first item\n- second item") == []
 
     def test_hyphenated_word_is_clean(self):
-        # No leading whitespace before the dash.
         assert lint_wiki_markup("the Round-1 review on 2026-09-04 stays prose") == []
 
     def test_flags_inside_code_block_clean(self):
         assert lint_wiki_markup("{code:bash}\nvalidator --strict --no-global *.json\n{code}") == []
+
+    def test_span_inside_quote_block_is_flagged(self):
+        # {quote}/{panel} are not verbatim: Jira parses text effects in them.
+        findings = lint_wiki_markup("{quote}\na {{m}}-x- b\n{quote}")
+        assert any("renders struck through" in f for f in findings)
 
     def test_single_dash_inside_code_block_clean(self):
         assert lint_wiki_markup("{code}\njournalctl -b -p crit\n{code}") == []

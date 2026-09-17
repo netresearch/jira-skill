@@ -25,16 +25,13 @@ Catches the most damaging authoring mistakes before text is sent to Jira:
   Content inside ``{{monospace}}`` and ``[links]`` is ignored. Known blind spot:
   a bare trailing-underscore prefix (``tx_news_``) is flagged like broken
   emphasis - wrap identifiers in ``{{monospace}}`` to silence it.
-- Dashes that open a strikethrough span, outside code blocks. Jira parses
-  ``-text-`` as strikethrough; the opening dash run needs only whitespace (or a
-  ``{{`` monospace opener - text effects apply INSIDE ``{{...}}``, verified
-  against Jira Server 9.12) before it and a word character after it, so a pair
-  of such dashes strikes through everything between them. This is NOT limited
-  to double-dash flags: a single-dash option opens a span too, which makes
-  ``journalctl -b -p crit`` a matched pair. Escaped dashes (``\\-``) are
-  literal and pass; em/en-dash typography (``---``, ``--`` before a non-word
-  character) and list bullets (``- item``) never match, and a dash inside a
-  word (``Round-1``) has no leading whitespace and never matches either.
+- Dashes that Jira renders as a strikethrough span, outside code blocks.
+  ``find_strikethrough_spans`` below implements the ``-text-`` grammar as
+  measured against a live Jira Server 9.12 wiki renderer - not as a heuristic,
+  and not as a guess, but as a deliberate SUPERSET of it: it may report a span
+  the renderer would not draw, never miss one it would (see that function for
+  the two documented exceptions). ``escape_strikethrough`` repairs the same
+  spans mechanically, so callers can fix rather than bounce.
 
 Escaped tags (\\{code\\}), inline-monospace lookalikes ({{code}}) and
 *other* tags inside an open block are ignored. An occurrence of the
@@ -81,18 +78,262 @@ _MIDWORD_EMPHASIS_RES = {
     "*": re.compile(r"(?<=\w)\*[^\s*]+\*" + _EMPH_CLOSE),
 }
 
-# Dash that opens a Jira strikethrough span. Scanned on the RAW line (not the
-# monospace-blanked copy): text effects apply INSIDE {{...}}, so {{--strict}}
-# is just as broken as bare --strict. The caller strips \- escapes before
-# matching (an escaped dash is a literal).
+# ─────────────────────────────────────────────────────────────────────────────
+# Strikethrough (`-text-`) — the grammar, measured rather than guessed
 #
-# The opener is ANY run of dashes preceded by whitespace (or a {{ opener) and
-# followed by a word character — a single-dash option like `-s` opens a span
-# exactly as `--strict` does, so `journalctl -b -p crit` is a matched pair.
-# Requiring a word character after the run keeps em/en-dash typography (`---`,
-# `-- `) and list bullets (`- item`) out of scope, and a dash inside a word
-# (`Round-1`, `2026-09-04`) never matches for want of the leading whitespace.
-_FLAG_DASH_RE = re.compile(r"(?:^|\s|\{\{)-+\w")
+# Every rule below is pinned by two fixtures recorded from the live Jira
+# Server 9.12 wiki renderer (POST /rest/api/1.0/render):
+# tests/fixtures/strikethrough_oracle.json (209 curated cases with their HTML)
+# and tests/fixtures/strikethrough_corpus.json (5732 generated ones).
+# `scripts/verify-render-oracle.py --live` re-records the first and
+# `scripts/generate-strikethrough-corpus.py` the second, so "verified against
+# 9.12" is a command, not a sentence. The generator exists because the two
+# previous hand-derived versions of this rule were both wrong, and the second
+# was wrong while passing 168 hand-picked cases.
+#
+# The predecessor of this code was a single regex that flagged any
+# whitespace-preceded dash run followed by a word character. It was wrong in
+# both directions, which is why Jira kept mangling text that had passed the
+# lint while the lint kept bouncing text Jira renders fine:
+#
+#   * FALSE POSITIVE, the common case: `journalctl -b -p crit` renders
+#     literally. A dash that LEADS a word can never close a span (a closer
+#     needs a non-space before it), so two flags cannot pair with each other.
+#     They are NOT harmless in general: add a trailing-dash word later on the
+#     same line and `-b ... zu-` is struck end to end.
+#   * FALSE NEGATIVE, the damaging case: `{{nr-pforum}}-Extensions ... zu- und`
+#     is struck through end to end (issue #226). Any inline element's closing
+#     punctuation - `}}`, `*`, `_`, `]`, `!`, `{color}` - is a non-word
+#     character and therefore a valid opener boundary, and a German elliptical
+#     compound (`zu- und`) is a valid closer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _is_escaped(line: str, pos: int) -> bool:
+    """True when the character at ``pos`` is neutralised by a preceding backslash.
+
+    Backslash parity is deliberately ignored: Jira treats the dash as literal
+    in both ``\\-`` and ``\\\\-`` (the latter because ``\\\\`` is its
+    forced-line-break macro), and over-reading an escape can only ever cost a
+    redundant escape, never a missed span.
+    """
+    return pos > 0 and line[pos - 1] == "\\"
+
+
+def _is_word_char(ch: str) -> bool:
+    """Jira's word class for text effects: Unicode letters and digits only.
+
+    Measured, because this is where a regex ``\\w`` would be wrong in both
+    directions: ``Gr(oe)sse-x- y`` and ``a(ae)-x- y`` stay literal (a non-ASCII
+    letter IS a word character), while ``a_-x- y`` opens a span (``_`` is NOT).
+    """
+    return ch.isalnum()
+
+
+# Regions Jira resolves into a single element BEFORE text effects run, so a
+# dash inside them is never a delimiter. Measured: the `/-/` in a GitLab URL is
+# inert inside `[MR|https://host/g/p/-/merge_requests/5]` and in the same URL
+# written bare, and in `!-x.png!` - but the SAME `/-/` in plain prose
+# (`a /-/ zu- b`) does open a span. Escaping a dash inside a URL would break
+# the link, so these must be masked out before scanning.
+#
+# `{{monospace}}` is deliberately NOT in this list: text effects do apply
+# inside it (`{{-x-}}` comes back struck), which is the one place the old
+# implementation was right.
+# A region only resolves at a boundary, and one that does NOT resolve leaves
+# its dashes live - masking it anyway would be a false negative, the direction
+# that mangles text. The boundary class is ASCII alphanumerics, measured:
+# `x ahttp://…/-/b- y` comes back struck (not autolinked, so `/-/` is prose),
+# while `x _http://…/-/b- y` and `x ähttp://…/-/b- y` are clean (autolinked).
+_PROTECTED_RE = re.compile(
+    r"""
+    (?<![A-Za-z0-9])
+    (?:
+      \[[^\]\n]*\]              # [text|target] and [target] link syntax
+    | (?:https?|ftp)://\S+      # bare URL - Jira autolinks it up to whitespace
+    | mailto:\S+
+    | ![^\s!]+!                 # !image.png! / !attachment! (no spaces inside)
+    )
+    """,
+    re.VERBOSE,
+)
+
+_MASK = "\x01"  # not a word character, so a masked region still ends a boundary
+# (\x01 rather than NUL: the awk mirror in validate-jira-syntax.sh cannot carry
+# a NUL through a string, and the two implementations are pinned to each other.)
+
+
+def _mask_protected(line: str) -> str:
+    """Blank out protected regions, preserving length so indices stay valid.
+
+    Two regions written back to back do not both resolve - Jira renders the
+    first and leaves the second as literal text, dashes and all
+    (`[t|http://h/a/-/b][t|http://h/a/-/b]` comes back with the second one
+    struck through). So a match that begins exactly where the previous one
+    ended is skipped rather than masked.
+    """
+    out = list(line)
+    previous_end = -1
+    for match in _PROTECTED_RE.finditer(line):
+        if match.start() == previous_end:
+            continue
+        out[match.start() : match.end()] = _MASK * (match.end() - match.start())
+        previous_end = match.end()
+    return "".join(out)
+
+
+def find_strikethrough_spans(line: str) -> list[tuple[int, int]]:
+    """Return ``(opener, closer)`` index pairs Jira renders struck through.
+
+    One line at a time - a span never crosses a newline. The caller is
+    responsible for skipping ``{code}``/``{noformat}`` content, where dashes
+    are literal.
+
+    The grammar, measured against Jira Server 9.12:
+
+    * **Opener** - an unescaped ``-`` at line start or after a non-word
+      character, followed by a character that is neither whitespace nor another
+      dash. The boundary is why ``{{mono}}-Extensions`` opens a span and
+      ``Round-1`` does not: ``}`` is a non-word character, ``d`` is not.
+    * **Closer** - the first *valid* closer after it: an unescaped ``-`` not
+      preceded by whitespace and followed by a non-word character or line end.
+      A dash that fails those conditions is skipped, not fatal - which is why
+      ``journalctl -b -p crit … zu-`` IS struck end to end while
+      ``journalctl -b -p crit`` on its own is not: a dash that leads a word can
+      never close, so flags alone have no closer at all.
+
+    In a dash run the opener is the last dash and the closer the first, so
+    ``a --foo-- b`` strikes ``foo`` and leaves the outer dashes literal.
+
+    **This is a superset, on purpose.** Jira abandons an opener whose body
+    begins with a single character followed by a dash (``a -a-b- z`` renders
+    literally, while ``a -ab-cd- z`` is struck); that quirk is recorded in the
+    fixture but not modelled, because the only cost of predicting a span Jira
+    would not draw is one redundant ``\\-``, which renders as a plain hyphen,
+    whereas the cost of missing one is mangled text. ``tests/test_strikethrough.py``
+    pins both directions: zero false negatives against the recorded corpus, and
+    the list of known over-predictions, so neither can grow unnoticed.
+
+    **It is not exact, and cannot be.** Jira substitutes autolinked issue keys
+    before text effects run, so ``OPS-899-x … zu-`` is struck on an instance
+    where OPS-899 exists and clean on one where it does not - the same string,
+    two renderings. No source-level model can decide that. The pre-flight
+    render check in ``jira-comment.py`` is what covers it.
+    """
+    spans: list[tuple[int, int]] = []
+    scan = _mask_protected(line)
+    n = len(scan)
+    i = 0
+    while i < n:
+        if scan[i] != "-" or _is_escaped(scan, i):
+            i += 1
+            continue
+        # Opener: boundary before, and neither whitespace nor a dash after.
+        if i > 0 and _is_word_char(scan[i - 1]):
+            i += 1
+            continue
+        if i + 1 >= n or scan[i + 1].isspace() or scan[i + 1] == "-":
+            i += 1
+            continue
+
+        closer = _find_closer(scan, i)
+        if closer is None:
+            i += 1
+            continue
+        spans.append((i, closer))
+        i = closer + 1
+    return spans
+
+
+def _find_closer(scan: str, opener: int) -> int | None:
+    """First index after ``opener`` holding a dash that can close a span."""
+    n = len(scan)
+    for j in range(opener + 2, n):
+        if scan[j] != "-" or _is_escaped(scan, j):
+            continue
+        if scan[j - 1].isspace():
+            continue
+        if j + 1 < n and _is_word_char(scan[j + 1]):
+            continue
+        return j
+    return None
+
+
+def _escape_dash_run(line: str, opener: int) -> str:
+    """Backslash-escape the whole dash run that ``opener`` belongs to.
+
+    Escaping the opener alone is not enough, and the gap is easy to miss: in
+    ``{{--strict}} foo bar-`` the opener is the SECOND dash, and neutralising
+    just that one promotes the first to opener - the span survives, measured.
+    Escaping the run closes it. ``\\-`` renders as a plain hyphen, so the
+    repair is invisible to the reader.
+    """
+    start = opener
+    while start > 0 and line[start - 1] == "-" and not _is_escaped(line, start - 1):
+        start -= 1
+    end = opener
+    while end + 1 < len(line) and line[end + 1] == "-":
+        end += 1
+    run = line[start : end + 1].replace("-", "\\-")
+    return line[:start] + run + line[end + 1 :]
+
+
+# Only these two render their content verbatim. {quote} and {panel} still parse
+# text effects (measured: `{panel}\na {{m}}-x- b\n{panel}` comes back with a
+# <del>), so a dash inside them is exactly as dangerous as one in bare prose.
+_VERBATIM_TAGS = ("code", "noformat")
+_VERBATIM_RE = re.compile(r"^\s*(?<!\\)\{(" + "|".join(_VERBATIM_TAGS) + r")(?::[^}\n]*)?\}\s*$")
+
+
+def _split_verbatim(text: str):
+    """Yield ``(line, is_verbatim)`` for every line, tracking {code}/{noformat}.
+
+    A tag line is itself reported as verbatim: it is markup, not prose, and
+    neither the dash scan nor the escaper has any business rewriting it.
+    """
+    open_tag: str | None = None
+    for line in text.split("\n"):
+        m = _VERBATIM_RE.match(line)
+        if open_tag is not None:
+            yield line, True
+            if m is not None and m.group(1) == open_tag:
+                open_tag = None
+        elif m is not None:
+            open_tag = m.group(1)
+            yield line, True
+        else:
+            yield line, False
+
+
+def escape_strikethrough(text: str) -> str:
+    """Neutralise every dash Jira would read as a strikethrough opener.
+
+    Returns text that renders identically to what the author meant: ``\\-`` is
+    a plain hyphen on the page. Content inside ``{code}``/``{noformat}`` is
+    left untouched, where a dash is literal already.
+
+    Escaping is iterated to a fixed point per line, because repairing one span
+    can expose the next: in ``a -x- -y- b`` the second pair only becomes
+    reachable once the first stops consuming its dashes.
+
+    The loop stops if an iteration fails to change the line. Every escape
+    strictly reduces the number of unescaped dashes, so that cannot happen
+    today - but this runs in the posting path, where a future edit that made
+    the repair a no-op would otherwise hang the caller rather than fail it.
+    (Not hypothetical: neutering ``_escape_dash_run`` in a mutation run hung
+    the whole test suite.) A line the repair cannot converge on is left as it
+    is and reported by ``lint_wiki_markup``, which callers run afterwards.
+    """
+    out: list[str] = []
+    for line, verbatim in _split_verbatim(text):
+        if not verbatim:
+            while spans := find_strikethrough_spans(line):
+                repaired = _escape_dash_run(line, spans[0][0])
+                if repaired == line:
+                    break
+                line = repaired
+        out.append(line)
+    return "\n".join(out)
 
 
 def lint_wiki_markup(text: str) -> list[str]:
@@ -101,8 +342,25 @@ def lint_wiki_markup(text: str) -> list[str]:
     counts = dict.fromkeys(BLOCK_TAGS, 0)
     in_block: str | None = None
 
+    # Verbatim tracking is separate from the block-balance state machine below:
+    # that one guards all four tags, while only {code}/{noformat} suppress text
+    # effects. Inside a {quote} or {panel} a dash still strikes through.
+    verbatim_flags = [v for _, v in _split_verbatim(text)]
+
     for lineno, line in enumerate(text.split("\n"), 1):
         matches = list(_TAG_RE.finditer(line))
+
+        # Runs before the in_block short-circuit: {quote}/{panel} content is
+        # skipped by that state machine but is NOT verbatim to Jira.
+        if not verbatim_flags[lineno - 1]:
+            for opener, closer in find_strikethrough_spans(line):
+                findings.append(
+                    f"line {lineno}: {line[opener : closer + 1]!r} renders struck through - "
+                    f"Jira reads a dash after a non-word character as a strikethrough "
+                    f"opener (an inline element's closing {{{{}}}}, *, _, ] or ! counts) "
+                    f"and a dash before one as the closer; escape it as \\- (a "
+                    f"backslash-escaped dash still prints as a plain hyphen)"
+                )
 
         if in_block is not None:
             # Inside a block, only the matching closing tag is markup;
@@ -144,18 +402,6 @@ def lint_wiki_markup(text: str) -> list[str]:
                     f"boundary (e.g. '{marker}Wort{marker}', not "
                     f"'Prefix{marker}Wort{marker}'): {stripped[:80]!r}"
                 )
-
-        # A whitespace-preceded dash run renders struck through, even inside
-        # {{monospace}} - scan the raw line with \- escapes removed (an escaped
-        # dash is a literal). Single-dash options count, not just --flags.
-        if _FLAG_DASH_RE.search(line.replace("\\-", "")):
-            findings.append(
-                f"line {lineno}: dash opens a strikethrough span - Jira parses "
-                f"-text- as strikethrough, even inside {{{{...}}}} monospace, and a "
-                f"single-dash option opens one too, so a pair (e.g. '-b ... -p') "
-                f"strikes through everything between them; escape every dash as "
-                f"\\-foo (e.g. {{{{\\-\\-strict}}}}, {{{{\\-s}}}}): {stripped[:80]!r}"
-            )
 
         if not matches:
             continue

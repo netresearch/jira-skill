@@ -22,9 +22,40 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
-from lib.markup import lint_ticket_language, lint_wiki_markup
+from lib.markup import escape_strikethrough, lint_ticket_language, lint_wiki_markup
 from lib.output import error, extract_adf_text, format_output, success, warning
 from lib.users import check_mentions_cli, person_label
+
+
+def _repair_markup(comment_text: str, auto_escape: bool) -> str:
+    """Escape dashes Jira would render as strikethrough, and say what changed.
+
+    This runs before the lint, and it is the reason the lint should now be
+    quiet about dashes: a strikethrough span is not a judgement call, it is a
+    mechanical defect with a mechanical repair. ``\\-`` prints as a plain
+    hyphen, so the posted text reads exactly as written.
+
+    Reporting the repair on stderr is deliberate - a silent rewrite of the
+    user's text would be worse than the bug. ``--no-auto-escape`` turns it off,
+    for the rare case where the strikethrough is intended.
+    """
+    if not auto_escape:
+        return comment_text
+    repaired = escape_strikethrough(comment_text)
+    if repaired == comment_text:
+        return comment_text
+    changed = [
+        (n, before, after)
+        for n, (before, after) in enumerate(zip(comment_text.split("\n"), repaired.split("\n"), strict=True), 1)
+        if before != after
+    ]
+    warning(
+        f"auto-escaped {len(changed)} line(s) that Jira would have rendered struck through "
+        f"(\\- prints as a plain hyphen; use --no-auto-escape to keep the markup as written)"
+    )
+    for n, _before, after in changed[:5]:
+        warning(f"  line {n}: {after.strip()[:100]!r}")
+    return repaired
 
 
 def _check_markup(comment_text: str, force: bool, issue_key: str | None = None) -> None:
@@ -91,9 +122,14 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("issue_key")
 @click.argument("comment_text")
 @click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option(
+    "--no-auto-escape",
+    is_flag=True,
+    help="Do not escape dashes Jira would render as strikethrough (keep the markup verbatim)",
+)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions: bool):
+def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: bool, no_verify_mentions: bool):
     """Add a comment to an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -109,6 +145,10 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions:
 
     Block tags ({code}, {noformat}, {quote}, {panel}) must stand alone on
     their own line; literal mentions in prose must be escaped (\\{code\\}).
+
+    Dashes Jira would render as a strikethrough span (``{{mono}}-Word ... zu-``)
+    are escaped automatically before posting and reported on stderr; ``\\-``
+    prints as a plain hyphen. Pass --no-auto-escape to keep the markup verbatim.
     The comment is linted for this before posting (override with --force).
 
     [~username] mentions are verified against Jira before posting, so no
@@ -163,6 +203,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions:
             )
             sys.exit(1)
 
+    comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
@@ -189,9 +230,16 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_verify_mentions:
 @click.argument("comment_id")
 @click.argument("comment_text")
 @click.option("--force", is_flag=True, help="Post despite wiki-markup lint findings")
+@click.option(
+    "--no-auto-escape",
+    is_flag=True,
+    help="Do not escape dashes Jira would render as strikethrough (keep the markup verbatim)",
+)
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
-def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, no_verify_mentions: bool):
+def edit(
+    ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, no_auto_escape: bool, no_verify_mentions: bool
+):
     """Edit an existing comment on an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -248,6 +296,7 @@ def edit(ctx, issue_key: str, comment_id: str, comment_text: str, force: bool, n
             )
             sys.exit(1)
 
+    comment_text = _repair_markup(comment_text, auto_escape=not no_auto_escape)
     _check_markup(comment_text, force, issue_key)
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 

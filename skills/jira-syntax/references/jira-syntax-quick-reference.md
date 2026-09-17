@@ -261,19 +261,25 @@ Three ways to write the literal token safely, in order of preference:
 
 The backslash escape is the official Jira mechanism; the rephrase is editorial; the `{{monospace}}` wrap renders fine but is disliked by teams that reserve monospace for actual code spans rather than inline references.
 
-### Common gotcha: command flags struck through by `-text-`
+### Common gotcha: prose struck through by `-text-`
 
-`-text-` is strikethrough, and the opening dash run needs only whitespace before it and a **word character** after it. Prose that mentions command flags hands the parser exactly that shape: in `checked with --strict and --no-global`, the dash before `strict` opens the effect, a later dash (here inside `no-global`) closes it, and everything between renders struck through. Text effects apply *inside* `{{...}}` monospace too (verified against the Jira Server 9.12 wiki renderer), so `{{--strict}}` does **not** protect the dashes.
+`-text-` is strikethrough. The grammar below is measured against a live Jira Server 9.12 wiki renderer and recorded in `tests/fixtures/strikethrough_oracle.json`; it is not a rule of thumb, and an earlier version of this section stated it wrongly in both directions.
 
-**This is not limited to double-dash flags.** A single dash opens a span just as well, so any two single-dash options in one line are a matched pair: `journalctl -b -p crit` opens at `-b` and closes at `-p`. The trigger, stated once:
+> **opener** — an unescaped `-` at line start or after a **non-word character**, followed by neither whitespace nor another dash
+> **closer** — the next unescaped `-`, not preceded by whitespace, followed by a non-word character or line end
+> **body** — anything in between; a dash that fails the closer conditions is skipped over, not fatal
 
-> whitespace (or a `{{` opener) · one or more `-` · a word character
+Two consequences are worth stating on their own, because both are the opposite of what the shape suggests.
 
-Everything else is exempt and must not be escaped: em/en-dash typography (`---`, or `--` followed by a space), list bullets (`- item`), and dashes inside a word (`Round-1`, `2026-09-04`), which have no leading whitespace.
+**A pair of CLI flags is not a span — on its own.** `journalctl -b -p crit` renders literally, and so do `--strict ... -v` and `offset by -5 seconds`, because a dash that *leads* a word can never close a span, so flags cannot pair with each other. They are not immune, though: put a trailing-dash word anywhere later on the same line and the flag becomes the opener — `journalctl -b -p crit zeigt die Fehler; das Modul ist zu- und abschaltbar.` is struck from `-b` to `zu-`.
 
-Backslash-escape every dash of the token, inside or outside monospace: `{{\-\-strict}}`, `\-\-strict` and `{{\-s}}` render as literal `--strict` / `-s` (each `\-` reaches the rendered HTML as a `&#45;` entity). Dashes inside `{code}` and `{noformat}` blocks render literally and must not be escaped — which is the cheapest fix of all: put the command in a `{code}` block and the question does not arise.
+**The real trap is a dash after an inline element, closed by a trailing-dash word.** Any inline element's closing punctuation — `}}`, `*`, `_`, `]`, `!`, `{color}` — is a non-word character, so `{{nr-pforum}}-Extensions` opens a span; a German elliptical compound (`zu- und abschaltbar`) or any other word ending in a dash then closes it, and everything between renders struck through. German prose produces this shape routinely. A single flag also becomes dangerous once such a closer appears later on the same line: `with -v and a trailing word- here`.
 
-A quick sanity check before posting: run `skills/jira-syntax/scripts/validate-jira-syntax.sh <file>` on your draft (from the repo root). The script verifies that the six paired macros (`code`, `panel`, `color`, `noformat`, `quote`, `anchor`) are balanced — every opener matches a closer, even with a language tag like `{code:bash}` — and catches Markdown leakage (` ``` ` fences, `[text](url)` links, `` `code` `` spans), language declarations Jira Server does not recognise, malformed table headers, and unescaped dash runs (`--strict`, `-s`) outside code blocks that would render struck through.
+Exempt, and not to be escaped: a dash inside a word (`Round-1`, `2026-09-04`, `Größe-x`), a leading dash with no closer anywhere on the line, em/en-dash typography (`---`, `--`), list bullets (`- item`), Unicode dashes (`–`, `—`), and anything inside `{code}`/`{noformat}`. `{quote}` and `{panel}` are **not** exempt — Jira parses text effects inside them.
+
+The fix is to backslash-escape the whole dash run that opens the span: `{{nr-pforum}}\-Extensions`. A `\-` reaches the rendered HTML as `&#45;` and prints as a plain hyphen, so the reader sees no difference. Escaping only part of a run does not work: in `{{--strict}}` the opener is the *second* dash, and neutralising just that one promotes the first — write `{{\-\-strict}}`. Putting the command in a `{code}` block avoids the question entirely.
+
+You normally do not have to do any of this by hand. `jira-comment.py add`/`edit` escape these spans automatically before posting and report on stderr which lines they changed (`--no-auto-escape` keeps the markup verbatim). For a draft that does not go through those scripts, run `skills/jira-syntax/scripts/validate-jira-syntax.sh <file>` on it (from the repo root). The script verifies that the six paired macros (`code`, `panel`, `color`, `noformat`, `quote`, `anchor`) are balanced — every opener matches a closer, even with a language tag like `{code:bash}` — and catches Markdown leakage (` ``` ` fences, `[text](url)` links, `` `code` `` spans), language declarations Jira Server does not recognise, malformed table headers, and dash pairs outside code blocks that would render struck through.
 
 ## Checklist Markers
 
