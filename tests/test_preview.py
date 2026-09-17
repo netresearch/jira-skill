@@ -55,8 +55,8 @@ class FakeSession:
 @pytest.fixture
 def server_env(monkeypatch):
     monkeypatch.setattr(
-        "lib.preview.load_env",
-        lambda env_file=None: {"JIRA_URL": "https://jira.example.de", "JIRA_PERSONAL_TOKEN": "t"},
+        "lib.preview.load_config",
+        lambda **kwargs: {"JIRA_URL": "https://jira.example.de", "JIRA_PERSONAL_TOKEN": "t"},
     )
 
 
@@ -116,20 +116,20 @@ class TestDegradesInsteadOfBlocking:
     """Every failure path must be reported as unavailable, never as clean."""
 
     def test_missing_url(self, monkeypatch):
-        monkeypatch.setattr("lib.preview.load_env", lambda env_file=None: {})
+        monkeypatch.setattr("lib.preview.load_config", lambda **kwargs: {})
         verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
         assert not verdict.available and "JIRA_URL" in verdict.reason
 
     def test_cloud_instance_is_skipped(self, monkeypatch):
         monkeypatch.setattr(
-            "lib.preview.load_env",
-            lambda env_file=None: {"JIRA_URL": "https://acme.atlassian.net", "JIRA_PERSONAL_TOKEN": "t"},
+            "lib.preview.load_config",
+            lambda **kwargs: {"JIRA_URL": "https://acme.atlassian.net", "JIRA_PERSONAL_TOKEN": "t"},
         )
         verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
         assert not verdict.available and "Server/DC" in verdict.reason
 
     def test_no_credentials(self, monkeypatch):
-        monkeypatch.setattr("lib.preview.load_env", lambda env_file=None: {"JIRA_URL": "https://jira.example.de"})
+        monkeypatch.setattr("lib.preview.load_config", lambda **kwargs: {"JIRA_URL": "https://jira.example.de"})
         # No session passed, so the credential branch is the one under test.
         verdict = preflight_render("x")
         assert not verdict.available and "credentials" in verdict.reason
@@ -195,47 +195,54 @@ class TestTargetsTheSameInstanceAsTheWrite:
     the verdict comes back clean on precisely the case this module exists for.
     """
 
-    def test_env_file_is_passed_to_the_loader(self, monkeypatch):
+    def test_all_three_arguments_reach_the_loader(self, monkeypatch):
+        """The client resolves a profile BY ISSUE KEY even with no --profile.
+
+        An earlier version only consulted profiles when --profile was given, so
+        `jira-comment.py add OPS-899 "..."` wrote to the key-resolved instance
+        and previewed against ~/.env.jira. All three go to load_config now -
+        the loader LazyJiraClient itself uses.
+        """
         seen = {}
 
-        def fake_load_env(env_file=None):
-            seen["env_file"] = env_file
-            return {"JIRA_URL": "https://jira.example.de", "JIRA_PERSONAL_TOKEN": "t"}
+        def fake_load_config(profile=None, env_file=None, issue_key=None, **kwargs):
+            seen.update(profile=profile, env_file=env_file, issue_key=issue_key)
+            return {"JIRA_URL": "https://other.example.de", "JIRA_PERSONAL_TOKEN": "t"}
 
-        monkeypatch.setattr("lib.preview.load_env", fake_load_env)
-        preflight_render(
-            "Extensions abschaltbar", env_file="/tmp/other.env", session=FakeSession(FakeResponse(200, CLEAN_HTML))
-        )
-        assert seen["env_file"] == "/tmp/other.env"
-
-    def test_profile_resolves_through_the_profile_store(self, monkeypatch):
-        seen = {}
-
-        def fake_resolve(issue_key=None, profile=None, **kwargs):
-            seen["issue_key"], seen["profile"] = issue_key, profile
-            return {"url": "https://other.example.de", "personal_token": "t"}
-
-        monkeypatch.setattr("lib.preview.resolve_profile", fake_resolve)
-        monkeypatch.setattr(
-            "lib.preview.profile_to_config",
-            lambda prof: {"JIRA_URL": prof["url"], "JIRA_PERSONAL_TOKEN": "t"},
-        )
-        monkeypatch.setattr(
-            "lib.preview.load_env",
-            lambda env_file=None: pytest.fail("load_env must not be used when a profile is given"),
-        )
+        monkeypatch.setattr("lib.preview.load_config", fake_load_config)
         session = FakeSession(FakeResponse(200, CLEAN_HTML))
-        preflight_render("Extensions abschaltbar", issue_key="OPS-899", profile="other", session=session)
-        assert seen == {"issue_key": "OPS-899", "profile": "other"}
+        preflight_render(
+            "Extensions abschaltbar",
+            issue_key="OPS-899",
+            profile="other",
+            env_file="/tmp/other.env",
+            session=session,
+        )
+        assert seen == {"profile": "other", "env_file": "/tmp/other.env", "issue_key": "OPS-899"}
         assert session.calls[0][0].startswith("https://other.example.de")
 
-    def test_unusable_profile_degrades_instead_of_raising(self, monkeypatch):
+    def test_issue_key_alone_still_reaches_the_loader(self, monkeypatch):
+        seen = {}
+
+        def fake_load_config(**kwargs):
+            seen.update(kwargs)
+            return {"JIRA_URL": "https://jira.example.de", "JIRA_PERSONAL_TOKEN": "t"}
+
+        monkeypatch.setattr("lib.preview.load_config", fake_load_config)
+        preflight_render(
+            "Extensions abschaltbar", issue_key="OPS-899", session=FakeSession(FakeResponse(200, CLEAN_HTML))
+        )
+        assert seen["issue_key"] == "OPS-899"
+
+    def test_unusable_config_carries_the_reason(self, monkeypatch):
+        """A broken profile store and an unset JIRA_URL are different problems."""
         monkeypatch.setattr(
-            "lib.preview.resolve_profile",
-            lambda **kwargs: (_ for _ in ()).throw(ValueError("no such profile")),
+            "lib.preview.load_config",
+            lambda **kwargs: (_ for _ in ()).throw(ValueError("profile 'missing' is ambiguous")),
         )
         verdict = preflight_render("x", profile="missing", session=FakeSession(FakeResponse(200, CLEAN_HTML)))
-        assert not verdict.available and "JIRA_URL" in verdict.reason
+        assert not verdict.available
+        assert "ambiguous" in verdict.reason, verdict.reason
 
 
 class TestCommentCliWiring:

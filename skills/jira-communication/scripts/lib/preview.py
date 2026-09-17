@@ -19,19 +19,23 @@ failure path returns "unknown" and says why, and the caller degrades to the
 lexical check.
 """
 
+import html
 import re
 from dataclasses import dataclass
 from typing import Any
 
 import requests
 
-from lib.config import is_cloud_url, load_env, profile_to_config, resolve_profile
+from lib.config import is_cloud_url, load_config
 
 RENDER_PATH = "/rest/api/1.0/render"
 DEFAULT_TIMEOUT = 10
 
 _DEL_RE = re.compile(r"<del>(.*?)</del>", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
+# Jira macro syntax, stripped before looking for echoed prose: {code}, {color:red},
+# {{monospace}}, [text|url], !image.png!.
+_MACRO_RE = re.compile(r"\{\{.*?\}\}|\{[^}\n]*\}|\[[^\]\n]*\]|![^\s!]+!")
 
 
 @dataclass
@@ -71,26 +75,39 @@ def _looks_like_render_output(body: str, source: str) -> bool:
     lowered = body.lower()
     if "<html" in lowered or "<!doctype" in lowered:
         return False
-    words = sorted(re.findall(r"[A-Za-z\u00c0-\u024f]{4,}", source), key=len, reverse=True)
+    # Words are taken from the PROSE, with macro syntax removed first. A macro
+    # name is not echoed - the renderer consumes it - so `{color:red}ok{color}`
+    # or `!screenshot.png!` would otherwise be rejected as "not render output",
+    # and an image-only comment is an ordinary Jira comment.
+    prose = _MACRO_RE.sub(" ", source)
+    words = re.findall(r"[A-Za-z\u00c0-\u024f]{4,}", prose)
     if not words:
-        return True  # nothing long enough to look for; the fragment check stands
-    return words[0].lower() in _plain(body).lower()
+        return True  # nothing to look for; the document check above stands alone
+    # ANY surviving word, not all of them and not the longest: the renderer
+    # entity-escapes non-ASCII (`Übersicht` comes back as `&Uuml;bersicht`), so
+    # requiring a specific word would fail on ordinary German prose.
+    plain = html.unescape(_plain(body)).lower()
+    return any(word.lower() in plain for word in words)
 
 
-def _resolve_config(issue_key: str | None, env_file: str | None, profile: str | None) -> dict:
-    """Config for the SAME instance the write will go to.
+def _resolve_config(issue_key: str | None, env_file: str | None, profile: str | None) -> tuple[dict, str]:
+    """Config for the SAME instance the write will go to, or the reason there is none.
 
-    Mirrors what LazyJiraClient does, because a preview rendered against a
-    different Jira is worse than no preview: the issue key does not resolve
-    there, the autolink substitution never fires, and the verdict comes back
-    clean on exactly the case this module exists to catch.
+    This calls ``load_config`` - the loader ``LazyJiraClient`` itself uses -
+    rather than reimplementing part of it. An earlier version only consulted
+    profiles when ``--profile`` was given explicitly, which missed the common
+    case entirely: ``jira-comment.py add OPS-899 "..."`` resolves a profile BY
+    ISSUE KEY in the client and fell back to ``~/.env.jira`` here. A preview
+    rendered against a different Jira is worse than no preview - the key does
+    not resolve there, the autolink substitution never fires, and the verdict
+    comes back clean on exactly the case this module exists to catch.
     """
-    if profile:
-        try:
-            return profile_to_config(resolve_profile(issue_key=issue_key, profile=profile))
-        except (ValueError, KeyError, OSError):
-            return {}
-    return load_env(env_file)
+    try:
+        return load_config(profile=profile, env_file=env_file, issue_key=issue_key), ""
+    except (ValueError, KeyError, OSError, FileNotFoundError) as exc:
+        # Carry the reason: "profiles.json is unreadable" and "JIRA_URL is not
+        # set" are different problems and the message is what gets acted on.
+        return {}, f"could not resolve the Jira config: {type(exc).__name__}: {exc}"
 
 
 def preflight_render(
@@ -108,7 +125,9 @@ def preflight_render(
     list with ``available=True`` means the instance itself says the markup is
     clean - the strongest statement available short of posting it.
     """
-    config = _resolve_config(issue_key, env_file, profile)
+    config, problem = _resolve_config(issue_key, env_file, profile)
+    if problem:
+        return RenderVerdict(False, [], problem)
     base_url = config.get("JIRA_URL")
     if not base_url:
         return RenderVerdict(False, [], "JIRA_URL is not configured")
