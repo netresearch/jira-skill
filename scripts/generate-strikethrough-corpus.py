@@ -53,6 +53,12 @@ RENDER_PATH = "/rest/api/1.0/render"
 # and one of each protected region (link, bare URL, image) carrying a literal
 # `/-/` - the shape a GitLab merge-request URL has.
 #
+# Two of the tokens put U+00A0 INSIDE a region. A review found that the bare
+# `\u00a0` token could never produce that shape - pairs and triples cannot fit
+# region + NBSP + live-dash tail - so the corpus certified a real divergence as
+# clean: the awk mirror let a region swallow the dashes after an NBSP. A class
+# the alphabet cannot express is a class the corpus cannot defend.
+#
 # `§` and U+00A0 are here because a review found both classes unrepresented:
 # the awk mirror lost the opener boundary on non-ASCII SYMBOLS under LC_ALL=C,
 # and Python read U+00A0 as whitespace and dropped a closer Jira accepts. NBSP
@@ -76,7 +82,9 @@ TOKENS = [
     "{{m}}",
     "[t|https://x.de/a/-/b]",
     "https://x.de/a/-/b",
+    "https://x.de/a\u00a0/-/b",
     "!i.png!",
+    "!-x\u00a0y!",
     "*b*",
     "1",
 ]

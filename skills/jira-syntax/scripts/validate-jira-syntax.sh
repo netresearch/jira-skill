@@ -197,12 +197,17 @@ validate_file() {
     # one pass. Keep them.)
     dash_hits=$(LC_ALL="$scan_locale" awk '
         function fold(line) {
-            # NBSP folds to punctuation, NOT to a space: Jira treats U+00A0 as
-            # an ordinary character, so `a -x<NBSP>- y` IS struck through
-            # (measured) while `a -x - y` is not. gawk excludes U+00A0 from
-            # [[:space:]] in both locales, so without this the two
-            # implementations disagree even under UTF-8.
-            gsub(/\xc2\xa0/, "\"", line)
+            # NBSP becomes \002, a sentinel that is neither space nor word.
+            # It has to be BOTH at once, because Jira treats U+00A0 as two
+            # different things: an ordinary character for the dash delimiters
+            # (`a -x<NBSP>- y` IS struck through, measured) and a terminator
+            # for the URL autolinker (`https://h/a<NBSP>/-/b` links only
+            # `https://h/a`). Python gets this from `\s` matching U+00A0 while
+            # _is_delimiter_space does not; here \002 is excluded from the
+            # region classes below and from isword(). Folding it to a space
+            # instead would break the delimiters, and folding it to punctuation
+            # - which this did - let a region swallow the dashes after it.
+            gsub(/\xc2\xa0/, "\002", line)
             gsub(/\xe2\x80\x9e|\xe2\x80\x9c|\xe2\x80\x9d|\xe2\x80\x98|\xe2\x80\x99|\xe2\x80\x9a/, "\"", line)
             gsub(/\xc2\xab|\xc2\xbb|\xe2\x80\xb9|\xe2\x80\xba/, "\"", line)
             gsub(/\xe2\x80\x93|\xe2\x80\x94|\xe2\x80\x90|\xe2\x80\xa6|\xe2\x80\xa2/, "\"", line)
@@ -216,7 +221,7 @@ validate_file() {
         # The \001 test comes first: a masked region must read as a boundary, and a
         # control character is neither space nor punct, so it would otherwise
         # count as a word character and swallow the opener after a link.
-        function isword(c) { return (c != "" && c != "\001" && c !~ /[[:space:][:punct:]]/) }
+        function isword(c) { return (c != "" && c != "\001" && c != "\002" && c !~ /[[:space:][:punct:]]/) }
         # Replace protected regions with \001, preserving length. Mirrors
         # _mask_protected() in lib/markup.py: a bare URL, mailto or image needs
         # an ASCII non-alphanumeric before it (one glued to a word is not
@@ -229,7 +234,7 @@ validate_file() {
             prev_end = 0
             while (pos <= length(line)) {
                 rest = substr(line, pos)
-                if (!match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^][:space:]{}|]+)|(mailto:[^][:space:]{}|]+)|(![^[:space:]!]+!)/)) {
+                if (!match(rest, /(\[[^]\n]*\])|((https?|ftp):\/\/[^][:space:]{}|\002]+)|(mailto:[^][:space:]{}|\002]+)|(![^[:space:]!\002]+!)/)) {
                     out = out rest
                     break
                 }
@@ -246,7 +251,7 @@ validate_file() {
                 # anywhere. In both cases the region is not a region, so the
                 # scan resumes one character in - which is what the Python
                 # regex does by simply not matching there.
-                if (before == "\\" || (kind != "[" && (before ~ /[A-Za-z0-9]/ || (kind != "!" && before == "|")))) {
+                if (before == "\\" || (kind != "[" && (before ~ /[A-Za-z0-9]/ || (kind != "!" && (before == "|" || before == "!"))))) {
                     out = out substr(line, pos, RSTART)
                     pos = start + 1
                     continue
@@ -309,7 +314,19 @@ validate_file() {
         }
         /^[[:space:]]*```/ { infence = !infence; next }
         opentag != "" || infence { next }
-        strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content" | head -3)
+        strikes(fold($0)) { printf "%d:%s\n", NR, $0 }' <<< "$content")
+    local dash_rc=$?
+    # awk's status must not be swallowed by the pipe: a scan that never ran
+    # (no awk, a syntax error, a killed process) produces no hits, and no hits
+    # is what a clean draft looks like. That is the same "a failure reads as
+    # clean" shape RenderVerdict.available exists to prevent on the Python
+    # side, and it is an ERROR here rather than silence.
+    if [ "$dash_rc" -ne 0 ]; then
+        error "The dash-strikethrough scan did not run (awk exited $dash_rc) - this draft was NOT checked for spans Jira would render struck through."
+        dash_hits=""
+    else
+        dash_hits=$(printf '%s\n' "$dash_hits" | grep -v '^$' | head -3)
+    fi
     # AWK-DASH-SCAN-END
     if [ -n "$dash_hits" ]; then
         warning "Found a dash pair that renders struck through outside a code block — Jira reads a dash after a non-word character (including the {{}}, *, _, ] or ! that ends an inline element) as a strikethrough opener, and a dash before one as the closer. Escape the opener as \\-foo; a backslash-escaped dash still prints as a plain hyphen."

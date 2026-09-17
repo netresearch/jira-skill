@@ -79,8 +79,10 @@ def _repair_markup(comment_text: str, auto_escape: bool) -> str:
     hyphen, so the posted text reads exactly as written.
 
     Reporting the repair on stderr is deliberate - a silent rewrite of the
-    user's text would be worse than the bug. ``--no-auto-escape`` turns it off,
-    for the rare case where the strikethrough is intended.
+    user's text would be worse than the bug. ``--no-auto-escape`` turns it off -
+    but not on its own: the lint and the render check each refuse the surviving
+    span independently, so a deliberate strikethrough needs
+    ``--no-auto-escape --force``.
     """
     if not auto_escape:
         return comment_text
@@ -168,7 +170,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.option(
     "--no-auto-escape",
     is_flag=True,
-    help="Do not escape dashes Jira would render as strikethrough (keep the markup verbatim)",
+    help="Do not escape dashes Jira would render as strikethrough; add --force to actually post the span",
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context
@@ -191,7 +193,9 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: boo
 
     Dashes Jira would render as a strikethrough span (``{{mono}}-Word ... zu-``)
     are escaped automatically before posting and reported on stderr; ``\\-``
-    prints as a plain hyphen. Pass --no-auto-escape to keep the markup verbatim.
+    prints as a plain hyphen. --no-auto-escape keeps the markup verbatim; a
+    deliberate strikethrough also needs --force, because the lint and the render
+    check each still refuse the span.
     The comment is linted for this before posting (override with --force).
 
     [~username] mentions are verified against Jira before posting, so no
@@ -243,7 +247,7 @@ def add(ctx, issue_key: str, comment_text: str, force: bool, no_auto_escape: boo
 @click.option(
     "--no-auto-escape",
     is_flag=True,
-    help="Do not escape dashes Jira would render as strikethrough (keep the markup verbatim)",
+    help="Do not escape dashes Jira would render as strikethrough; add --force to actually post the span",
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
 @click.pass_context

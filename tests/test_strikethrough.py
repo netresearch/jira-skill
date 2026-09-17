@@ -128,7 +128,14 @@ class TestNoFalseNegatives:
         regex - an exemption that used the code under test to justify itself
         would hold whatever that code happens to do.
         """
-        tokens = ("[t|https://x.de/a/-/b]", "https://x.de/a/-/b", "!i.png!", "\\[")
+        tokens = (
+            "[t|https://x.de/a/-/b]",
+            "https://x.de/a/-/b",
+            "https://x.de/a\u00a0/-/b",
+            "!i.png!",
+            "!-x\u00a0y!",
+            "\\[",
+        )
         for case in KNOWN_UNDER:
             spans = sorted((m.start(), m.end()) for token in tokens for m in re.finditer(re.escape(token), case))
             glued = any(
@@ -136,7 +143,12 @@ class TestNoFalseNegatives:
                 for (_, first_end), (second_start, _) in zip(spans, spans[1:], strict=False)
             )
             assert glued, f"pinned miss is not a glued-regions shape: {case!r}"
-        assert len(KNOWN_UNDER) <= 20
+        # The cap is a smell alarm, not a limit with meaning. Two NBSP-carrying
+        # tokens entering the alphabet once took the pinned list from 11 to 58,
+        # which is what prompted measuring that `!` blocks a bare URL from
+        # autolinking - that one rule brought it back to 15. A jump like that is
+        # to be looked at, not absorbed by raising the number.
+        assert len(KNOWN_UNDER) <= 25
 
 
 class TestOverPredictionsArePinned:

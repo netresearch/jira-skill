@@ -170,9 +170,11 @@ def _is_word_char(ch: str) -> bool:
 # lot. Stopping too late is the dangerous direction, because the mask then
 # swallows real markup and hides the dashes in it.
 #
-# A bare URL after a pipe is NOT autolinked - Jira expects that shape inside
+# A bare URL after a pipe or an exclamation mark is NOT autolinked - Jira expects that shape inside
 # [text|url], so standalone it stays literal and its dashes stay live
-# (`x a|https://h/a/-/b zu- y` comes back struck). A backslash-escaped bracket
+# (`x a|https://h/a/-/b zu- y` and `x !https://h/a/-/b zu- y` both come back
+# struck, while `]`, `}` and `*` before the same URL leave it linked).
+# A backslash-escaped bracket
 # or bang is not a macro either, so its content is ordinary prose.
 #
 # A region only resolves at a boundary, and one that does NOT resolve leaves
@@ -185,8 +187,8 @@ _PROTECTED_RE = re.compile(
     (?<!\\)
     (?:
       \[[^\]\n]*\]                              # a square-bracketed link
-    | (?<![A-Za-z0-9|])(?:https?|ftp)://[^\s{}\]|]+   # bare URL - needs a boundary
-    | (?<![A-Za-z0-9|])mailto:[^\s{}\]|]+
+    | (?<![A-Za-z0-9|!])(?:https?|ftp)://[^\s{}\]|]+  # bare URL - needs a boundary
+    | (?<![A-Za-z0-9|!])mailto:[^\s{}\]|]+
     | (?<![A-Za-z0-9])![^\s!]+!                  # image or attachment
     )
     """,
