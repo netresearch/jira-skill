@@ -15,6 +15,7 @@ text the client was handed - not on a helper call, because "the helper exists"
 was true the whole time the descriptions were unguarded.
 """
 
+import contextlib
 import sys
 from pathlib import Path
 from unittest import mock
@@ -51,20 +52,44 @@ SURFACES = [
 
 def _run(script, folder, argv, mock_client=None):
     module = load_script(script, folder)
-    client = mock_client or make_mock_client()
-    # A transition reads the available transitions before posting its comment;
-    # the shared mock returns a bare Mock, which is not iterable.
-    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
-    # `path` walks from the current status, so it reads one before transitioning.
-    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
-    client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
+    client = mock_client or _stocked_client()
     runner = click.testing.CliRunner()
-    with (
-        mock.patch.object(module, "LazyJiraClient", return_value=client),
-        mock.patch.object(module, "check_mentions_cli", return_value=None),
-    ):
+    with _driving(module, client):
         result = runner.invoke(module.cli, argv)
     return result, client
+
+
+def _stocked_client():
+    """One mock answering what any of the seven commands reads before writing.
+
+    The walker reads a status and a transition list, `create issue` reads back
+    the created key. Building this per test is what made two setups identical
+    line for line.
+    """
+    client = make_mock_client()
+    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
+    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
+    client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
+    return client
+
+
+@contextlib.contextmanager
+def _driving(module, client, render=None):
+    """Patch the client, the mention gate and - optionally - the renderer.
+
+    ``render`` is applied inside the test body, which is what lets it win over
+    the autouse ``_no_live_render`` fixture in conftest.
+    """
+    patches = [
+        mock.patch.object(module, "LazyJiraClient", return_value=client),
+        mock.patch.object(module, "check_mentions_cli", return_value=None),
+    ]
+    if render is not None:
+        patches.append(mock.patch.object(markup_cli, "preflight_render", render))
+    with contextlib.ExitStack() as stack:
+        for patch in patches:
+            stack.enter_context(patch)
+        yield
 
 
 def _find_marker(value):
@@ -162,16 +187,8 @@ def test_the_selected_profile_reaches_the_render_preview(name, script, folder, a
         return RenderVerdict(False, [], "stubbed")
 
     module = load_script(script, folder)
-    client = make_mock_client()
-    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
-    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
-    client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
     runner = click.testing.CliRunner()
-    with (
-        mock.patch.object(module, "LazyJiraClient", return_value=client),
-        mock.patch.object(module, "check_mentions_cli", return_value=None),
-        mock.patch.object(markup_cli, "preflight_render", _record),
-    ):
+    with _driving(module, _stocked_client(), render=_record):
         result = runner.invoke(module.cli, ["--profile", "tenant-b", "--env-file", str(env_path), *argv])
 
     assert result.exit_code == 0, f"{name}: {result.output}"
@@ -189,8 +206,7 @@ def test_the_walker_gates_before_it_moves_the_issue():
     test in this file green - which is why this case exists.
     """
     module = load_script("jira-transition", "workflow")
-    client = make_mock_client()
-    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
+    client = _stocked_client()
     # Two hops: Open -> In Progress -> Done. Only the second is final.
     client.get_issue_transitions.side_effect = [
         [{"id": "11", "name": "Start", "to": {"name": "In Progress"}}],
@@ -214,9 +230,7 @@ def test_the_walker_verifies_mentions_too():
     nothing would notice it being dropped from the walker again.
     """
     module = load_script("jira-transition", "workflow")
-    client = make_mock_client()
-    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
-    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
+    client = _stocked_client()
     runner = click.testing.CliRunner()
     with (
         mock.patch.object(module, "LazyJiraClient", return_value=client),
@@ -251,16 +265,8 @@ def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, 
         return RenderVerdict(False, [], "stubbed")
 
     module = load_script(script, folder)
-    client = make_mock_client()
-    client.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": {"name": "Done"}}]
-    client.issue.return_value = {"fields": {"status": {"name": "Open"}}}
-    client.create_issue.return_value = {"key": "PROJ-1", "id": "1"}
     runner = click.testing.CliRunner()
-    with (
-        mock.patch.object(module, "LazyJiraClient", return_value=client),
-        mock.patch.object(module, "check_mentions_cli", return_value=None),
-        mock.patch.object(markup_cli, "preflight_render", _record),
-    ):
+    with _driving(module, _stocked_client(), render=_record):
         result = runner.invoke(module.cli, [*argv, "--dry-run"])
 
     assert result.exit_code == 0, f"{name}: {result.output}"
