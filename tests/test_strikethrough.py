@@ -37,11 +37,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/jira-communication/scripts"))
 
-from lib.markup import (  # noqa: E402
-    escape_strikethrough,
-    find_strikethrough_spans,
-    lint_wiki_markup,
-)
+from lib import markup  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 _ORACLE = json.loads((FIXTURES / "strikethrough_oracle.json").read_text(encoding="utf-8"))
@@ -62,11 +58,16 @@ _DEL_RE = re.compile(r"<del>(.*?)</del>", re.S)
 _VERBATIM_RE = re.compile(r"^\s*\{(code|noformat)(?::[^}\n]*)?\}\s*$")
 
 
-def _spans_in(markup: str) -> list[tuple[str, tuple[int, int]]]:
-    """Every predicted span in ``markup``, as (line, span), skipping verbatim blocks."""
+def _spans_in(source: str) -> list[tuple[str, tuple[int, int]]]:
+    """Every predicted span in ``source``, as (line, span), skipping verbatim blocks.
+
+    The parameter is ``source`` rather than ``markup`` on purpose: this module
+    imports ``lib.markup`` under that name, and a parameter shadowing it makes
+    every call inside this function resolve against a string.
+    """
     found: list[tuple[str, tuple[int, int]]] = []
     open_tag = None
-    for line in markup.split("\n"):
+    for line in source.split("\n"):
         match = _VERBATIM_RE.match(line)
         if open_tag is not None:
             if match is not None and match.group(1) == open_tag:
@@ -75,7 +76,7 @@ def _spans_in(markup: str) -> list[tuple[str, tuple[int, int]]]:
         if match is not None:
             open_tag = match.group(1)
             continue
-        found += [(line, span) for span in find_strikethrough_spans(line)]
+        found += [(line, span) for span in markup.find_strikethrough_spans(line)]
     return found
 
 
@@ -123,13 +124,13 @@ class TestNoFalseNegatives:
         would hold whatever that code happens to do.
         """
         tokens = ("[t|https://x.de/a/-/b]", "https://x.de/a/-/b", "!i.png!")
-        for markup in KNOWN_UNDER:
-            spans = sorted((m.start(), m.end()) for token in tokens for m in re.finditer(re.escape(token), markup))
+        for case in KNOWN_UNDER:
+            spans = sorted((m.start(), m.end()) for token in tokens for m in re.finditer(re.escape(token), case))
             glued = any(
-                not re.search(r"\s", markup[first_end:second_start])
+                not re.search(r"\s", case[first_end:second_start])
                 for (_, first_end), (second_start, _) in zip(spans, spans[1:], strict=False)
             )
-            assert glued, f"pinned miss is not a glued-regions shape: {markup!r}"
+            assert glued, f"pinned miss is not a glued-regions shape: {case!r}"
         assert len(KNOWN_UNDER) <= 20
 
 
@@ -149,8 +150,8 @@ class TestOverPredictionsArePinned:
         # by a dash: `a -a-b- z` renders literally while `a -ab-cd- z` is
         # struck. Not modelled - the cost of predicting it is one redundant
         # escape, and a rule nobody can explain is a worse liability.
-        assert find_strikethrough_spans("a -a-b- z")
-        assert find_strikethrough_spans("a -ab-cd- z")
+        assert markup.find_strikethrough_spans("a -a-b- z")
+        assert markup.find_strikethrough_spans("a -ab-cd- z")
 
 
 class TestAgainstCuratedOracle:
@@ -170,13 +171,13 @@ class TestAgainstCuratedOracle:
 
     @pytest.mark.parametrize("case", CASES, ids=_ids(CASES))
     def test_escaper_removes_every_span(self, case):
-        assert _spans_in(escape_strikethrough(case["markup"])) == []
+        assert _spans_in(markup.escape_strikethrough(case["markup"])) == []
 
 
 class TestEscaperClearsTheWholeCorpus:
     @pytest.mark.parametrize("case", CORPUS_CASES, ids=_ids(CORPUS_CASES))
     def test_no_span_survives_the_repair(self, case):
-        assert _spans_in(escape_strikethrough(case["markup"])) == []
+        assert _spans_in(markup.escape_strikethrough(case["markup"])) == []
 
 
 class TestRegressionsFromIssue226:
@@ -191,17 +192,17 @@ class TestRegressionsFromIssue226:
     def test_plain_prose_is_not_flagged(self):
         # Jira renders this one literally (recorded), so a finding here would be
         # the false positive that made the old lint unusable on German prose.
-        assert find_strikethrough_spans(self.OPS_899) == []
+        assert markup.find_strikethrough_spans(self.OPS_899) == []
 
     def test_monospace_boundary_opens_a_span(self):
         # `}}` is a non-word character, so the dash after it opens; `zu-` closes.
-        assert len(find_strikethrough_spans(self.MONOSPACE)) == 1
-        assert any("renders struck through" in f for f in lint_wiki_markup(self.MONOSPACE))
+        assert len(markup.find_strikethrough_spans(self.MONOSPACE)) == 1
+        assert any("renders struck through" in f for f in markup.lint_wiki_markup(self.MONOSPACE))
 
     def test_escaper_fixes_the_monospace_case(self):
-        fixed = escape_strikethrough(self.MONOSPACE)
+        fixed = markup.escape_strikethrough(self.MONOSPACE)
         assert fixed == "Die {{nr-pforum-*}}\\-Extensions waren gedacht, jede für sich zu- und abschaltbar."
-        assert lint_wiki_markup(fixed) == []
+        assert markup.lint_wiki_markup(fixed) == []
 
 
 class TestCliFlagsAlone:
@@ -223,8 +224,8 @@ class TestCliFlagsAlone:
         ],
     )
     def test_no_closer_means_no_finding(self, text):
-        assert find_strikethrough_spans(text) == []
-        assert lint_wiki_markup(text) == []
+        assert markup.find_strikethrough_spans(text) == []
+        assert markup.lint_wiki_markup(text) == []
 
     @pytest.mark.parametrize(
         "text",
@@ -234,7 +235,7 @@ class TestCliFlagsAlone:
         ],
     )
     def test_a_trailing_dash_later_on_the_line_does(self, text):
-        assert find_strikethrough_spans(text)
+        assert markup.find_strikethrough_spans(text)
 
 
 class TestProtectedRegions:
@@ -248,100 +249,100 @@ class TestProtectedRegions:
     GITLAB = "[MR|https://git.netresearch.de/g/p/-/merge_requests/5] ist zu- und abschaltbar"
 
     def test_link_body_is_not_a_span(self):
-        assert find_strikethrough_spans(self.GITLAB) == []
+        assert markup.find_strikethrough_spans(self.GITLAB) == []
 
     def test_link_body_is_not_escaped(self):
-        assert escape_strikethrough(self.GITLAB) == self.GITLAB
+        assert markup.escape_strikethrough(self.GITLAB) == self.GITLAB
 
     def test_bare_url_is_protected(self):
         text = "Siehe https://x.de/a/-/b und das Modul zu- und abschaltbar"
-        assert find_strikethrough_spans(text) == []
-        assert escape_strikethrough(text) == text
+        assert markup.find_strikethrough_spans(text) == []
+        assert markup.escape_strikethrough(text) == text
 
     def test_image_macro_is_protected(self):
-        assert find_strikethrough_spans("!-x.png! zu- foo") == []
+        assert markup.find_strikethrough_spans("!-x.png! zu- foo") == []
 
     def test_dash_in_link_text_is_protected(self):
-        assert find_strikethrough_spans("[Text mit -x|https://x.de] und zu- foo") == []
+        assert markup.find_strikethrough_spans("[Text mit -x|https://x.de] und zu- foo") == []
 
     def test_the_same_slash_dash_slash_in_prose_is_not(self):
         # Without the URL around it, `/-/` is an ordinary opener - measured.
-        assert find_strikethrough_spans("a /-/ zu- b")
+        assert markup.find_strikethrough_spans("a /-/ zu- b")
 
     def test_url_glued_to_a_word_is_not_autolinked_and_stays_live(self):
         # Jira does not autolink `ahttp://...`, so its dashes are prose.
-        assert find_strikethrough_spans("x ahttp://x.de/a/-/b- y")
+        assert markup.find_strikethrough_spans("x ahttp://x.de/a/-/b- y")
 
     def test_monospace_is_not_protected(self):
         # The one place the old implementation was right: text effects DO
         # apply inside {{...}}.
-        assert find_strikethrough_spans("{{-x-}} y")
-        assert find_strikethrough_spans("{{--strict}} foo bar- z")
+        assert markup.find_strikethrough_spans("{{-x-}} y")
+        assert markup.find_strikethrough_spans("{{--strict}} foo bar- z")
 
 
 class TestGrammarClauses:
     """One test per clause, so a regression names which rule broke."""
 
     def test_opener_needs_a_non_word_boundary(self):
-        assert find_strikethrough_spans("word-x- y") == []
-        assert find_strikethrough_spans("pre1-x- y") == []
-        assert find_strikethrough_spans("a_-x- y") == [(2, 4)]
+        assert markup.find_strikethrough_spans("word-x- y") == []
+        assert markup.find_strikethrough_spans("pre1-x- y") == []
+        assert markup.find_strikethrough_spans("a_-x- y") == [(2, 4)]
 
     def test_non_ascii_letters_are_word_characters(self):
-        assert find_strikethrough_spans("Größe-x- y") == []
-        assert find_strikethrough_spans("a -x-ä y") == []
+        assert markup.find_strikethrough_spans("Größe-x- y") == []
+        assert markup.find_strikethrough_spans("a -x-ä y") == []
 
     def test_closer_needs_a_non_space_before_it(self):
-        assert find_strikethrough_spans("a -x - y") == []
+        assert markup.find_strikethrough_spans("a -x - y") == []
 
     def test_closer_needs_a_non_word_after_it(self):
-        assert find_strikethrough_spans("pre -x-y z") == []
-        assert find_strikethrough_spans("pre -x- y") == [(4, 6)]
+        assert markup.find_strikethrough_spans("pre -x-y z") == []
+        assert markup.find_strikethrough_spans("pre -x- y") == [(4, 6)]
 
     def test_an_invalid_closer_is_skipped_not_fatal(self):
         # The defect the 168-case fixture missed: `-p` cannot close (space
         # before it), so the scan must carry on to `zu-` rather than give up.
-        assert find_strikethrough_spans("a -b -p crit zu- z") == [(2, 15)]
+        assert markup.find_strikethrough_spans("a -b -p crit zu- z") == [(2, 15)]
 
     def test_escaped_dash_in_the_body_does_not_break_the_span(self):
-        assert len(find_strikethrough_spans("a -x \\- y- b")) == 1
+        assert len(markup.find_strikethrough_spans("a -x \\- y- b")) == 1
 
     def test_end_of_line_closes_a_span(self):
-        assert find_strikethrough_spans("a -x-") == [(2, 4)]
+        assert markup.find_strikethrough_spans("a -x-") == [(2, 4)]
 
     def test_in_a_run_the_last_dash_opens_and_the_first_closes(self):
-        assert find_strikethrough_spans("a --foo-- b") == [(3, 7)]
+        assert markup.find_strikethrough_spans("a --foo-- b") == [(3, 7)]
 
     def test_escaped_dashes_are_literal(self):
-        assert find_strikethrough_spans("a \\-x- b") == []
+        assert markup.find_strikethrough_spans("a \\-x- b") == []
 
     def test_unicode_dashes_are_inert(self):
-        assert find_strikethrough_spans("a –x– b") == []
-        assert find_strikethrough_spans("a —x— b") == []
+        assert markup.find_strikethrough_spans("a –x– b") == []
+        assert markup.find_strikethrough_spans("a —x— b") == []
 
 
 class TestEscaperMechanics:
     def test_whole_dash_run_is_escaped(self):
         # Escaping only the opener would promote the first dash of the run to
         # opener and leave the span alive - measured, see _escape_dash_run.
-        assert escape_strikethrough("{{--strict}} foo bar- z") == "{{\\-\\-strict}} foo bar- z"
+        assert markup.escape_strikethrough("{{--strict}} foo bar- z") == "{{\\-\\-strict}} foo bar- z"
 
     def test_repeated_spans_all_get_fixed(self):
-        assert escape_strikethrough("a -x- and -y- b") == "a \\-x- and \\-y- b"
+        assert markup.escape_strikethrough("a -x- and -y- b") == "a \\-x- and \\-y- b"
 
     def test_clean_text_is_returned_unchanged(self):
         for case in CASES:
             if not _spans_in(case["markup"]):
-                assert escape_strikethrough(case["markup"]) == case["markup"]
+                assert markup.escape_strikethrough(case["markup"]) == case["markup"]
 
     def test_verbatim_blocks_are_left_alone(self):
         text = "{code}\na -x- b\n{code}"
-        assert escape_strikethrough(text) == text
+        assert markup.escape_strikethrough(text) == text
 
     def test_quote_and_panel_are_not_verbatim(self):
         # Jira parses text effects inside {quote}/{panel} (recorded), so the
         # escaper must reach into them.
-        assert escape_strikethrough("{panel}\na {{m}}-x- b\n{panel}") == "{panel}\na {{m}}\\-x- b\n{panel}"
+        assert markup.escape_strikethrough("{panel}\na {{m}}-x- b\n{panel}") == "{panel}\na {{m}}\\-x- b\n{panel}"
 
 
 class TestEscaperTerminates:
@@ -353,8 +354,6 @@ class TestEscaperTerminates:
     """
 
     def test_a_non_progressing_repair_does_not_loop(self, monkeypatch):
-        import lib.markup as markup
-
         monkeypatch.setattr(markup, "_escape_dash_run", lambda line, opener: line)
         text = "Die {{a}}-Extensions, jede zu- und abschaltbar"
         assert markup.escape_strikethrough(text) == text

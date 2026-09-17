@@ -149,10 +149,10 @@ _PROTECTED_RE = re.compile(
     r"""
     (?<![A-Za-z0-9])
     (?:
-      \[[^\]\n]*\]              # [text|target] and [target] link syntax
+      \[[^\]\n]*\]              # a square-bracketed link, with or without a pipe
     | (?:https?|ftp)://\S+      # bare URL - Jira autolinks it up to whitespace
     | mailto:\S+
-    | ![^\s!]+!                 # !image.png! / !attachment! (no spaces inside)
+    | ![^\s!]+!                 # an exclamation-delimited image or attachment
     )
     """,
     re.VERBOSE,
