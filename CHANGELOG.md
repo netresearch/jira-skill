@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.32.0] - 2026-09-18
+
 ### Fixed
 
 - The dash-strikethrough rule was a guess, and it was wrong in both directions. It is now a grammar measured against a live Jira Server 9.12 wiki renderer, and the defect it detects is repaired rather than reported ([#226](https://github.com/netresearch/jira-skill/issues/226)). The old rule flagged any whitespace-preceded dash run followed by a word character. **False positive, the common one:** `journalctl -b -p crit` renders literally on its own, and so do `--strict ... -v` and `offset by -5 seconds` — a dash that *leads* a word can never close a span, so two flags cannot pair with each other. Five tests and a section of the quick reference asserted the opposite, which is why drafts kept being bounced for text Jira renders fine. **False negative, the damaging one:** `{{nr-pforum}}-Extensions ... zu- und abschaltbar` is struck through end to end — any inline element's closing punctuation (`}}`, `*`, `_`, `]`, `!`, `{color}`) is a non-word character and therefore a valid opener, and a German elliptical compound is a valid closer. A flag is not immune either: add a trailing-dash word later on the same line and `-b ... zu-` is one span
@@ -877,7 +879,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.31.3...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.0...HEAD
+[3.32.0]: https://github.com/netresearch/jira-skill/compare/v3.31.3...v3.32.0
 [3.31.3]: https://github.com/netresearch/jira-skill/compare/v3.31.2...v3.31.3
 [3.31.2]: https://github.com/netresearch/jira-skill/compare/v3.31.1...v3.31.2
 [3.31.1]: https://github.com/netresearch/jira-skill/compare/v3.31.0...v3.31.1
