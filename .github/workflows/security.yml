@@ -1,9 +1,7 @@
 name: Security
 
 # Aggregated security scans for skill repos:
-#   gitleaks         — secret scanning. The job and the reusable keep the
-#                      historical `gitleaks` name; the scan itself runs
-#                      betterleaks, which is OSS and needs no license.
+#   betterleaks      — secret scanning (OSS, needs no license).
 #   zizmor           — static analysis of this repo's own workflows.
 #   dependency-review — on pull requests only.
 #   composer-audit   — `composer audit` AND an Opengrep SAST scan; the called
@@ -26,8 +24,8 @@ on:
 permissions: {}
 
 jobs:
-  gitleaks:
-    uses: netresearch/.github/.github/workflows/gitleaks.yml@main
+  betterleaks:
+    uses: netresearch/.github/.github/workflows/betterleaks.yml@main
     permissions:
       contents: read
       security-events: write

@@ -14,3 +14,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    # Merge with the org App so the merge commit gets a CI run (#450).
+    # Only these two secrets are passed, not `secrets: inherit`.
+    secrets:
+      merge-app-id: ${{ secrets.PROJECT_APP_ID }}
+      merge-app-private-key: ${{ secrets.PROJECT_APP_PRIVATE_KEY }}
