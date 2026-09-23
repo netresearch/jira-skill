@@ -12,7 +12,7 @@ same class of bug kept coming back.
 One ``<del>`` in the answer is not a text effect at all: Jira draws a link to a
 RESOLVED issue with the key struck through inside its anchor, as status
 styling. That shape is unwrapped before the spans are collected, so mentioning
-a closed ticket is not a finding while a real span next to or around the link
+a resolved issue is not a finding while a real span next to or around the link
 still is.
 
 This module asks instead of predicting. ``POST /rest/api/1.0/render`` is the
@@ -38,15 +38,18 @@ RENDER_PATH = "/rest/api/1.0/render"
 DEFAULT_TIMEOUT = 10
 
 _DEL_RE = re.compile(r"<del>(.*?)</del>", re.S)
-_TAG_RE = re.compile(r"<[^>]+>")
+# A tag, with quoted attribute values taken whole: an issue link's title is the
+# issue summary, and a literal `>` in it must not end the tag.
+_ATTRS = r"""(?:[^>"']|"[^"]*"|'[^']*')*"""
+_TAG_RE = re.compile(rf"<{_ATTRS}>")
 # Jira draws a link to a RESOLVED issue with its key in <del>, inside the
 # anchor: `<a class="issue-link" data-issue-key="K"><del>K</del></a>`. That is
 # issue-status styling, not text-effect markup; escaping cannot change it, and
-# reporting it refused every comment that mentioned a closed ticket. A genuine
+# reporting it refused every comment that mentioned a resolved issue. A genuine
 # span is always outside the anchor (around it or next to it), so only the
 # exact shape is unwrapped: an issue-link anchor whose whole content is
 # `<del>` + its own data-issue-key + `</del>`.
-_RESOLVED_ISSUE_LINK_RE = re.compile(r"(<a\b[^>]*>)<del>([^<]*)</del></a>")
+_RESOLVED_ISSUE_LINK_RE = re.compile(rf"(<a\b{_ATTRS}>)<del>([^<]*)</del></a>")
 _CLASS_ISSUE_LINK_RE = re.compile(r"""\bclass=["'](?:[^"']*\s)?issue-link(?:\s[^"']*)?["']""")
 _DATA_ISSUE_KEY_RE = re.compile(r"""\bdata-issue-key=["']([^"']+)["']""")
 

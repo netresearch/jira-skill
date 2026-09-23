@@ -164,6 +164,16 @@ class TestResolvedIssueStyling:
         mismatched = '<a href="x" class="issue-link" data-issue-key="PROJ-1"><del>other</del></a>'
         assert self._struck(f"<p>see {mismatched} here</p>") == ["other"]
 
+    def test_gt_inside_a_quoted_title_does_not_cut_the_anchor(self, server_env):
+        # The title carries the issue summary; a literal `>` in it must not end
+        # the tag, or the resolved <del> survives and truncates the outer span.
+        link = '<a href="x" title="timeout > 30s" class="issue-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
+        assert self._struck(f"<p><del>X {link} Y</del></p>") == ["X PROJ-1 Y"]
+
+    def test_several_classes_and_single_quotes_are_recognised(self, server_env):
+        link = "<a href='x' class='jira issue-link' data-issue-key='PROJ-1'><del>PROJ-1</del></a>"
+        assert self._struck(f"<p>see {link} here</p>") == []
+
     def test_del_inside_a_non_issue_link_is_reported(self, server_env):
         external = '<a href="x" class="external-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
         assert self._struck(f"<p>see {external} here</p>") == ["PROJ-1"]

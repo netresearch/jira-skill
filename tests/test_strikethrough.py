@@ -53,11 +53,20 @@ CASES = _ORACLE["cases"]
 # assertion reads the rendered HTML. Duplicated from lib.preview on purpose,
 # like _DEL_RE below: a bug in the production helper must not hide itself by
 # being used on both sides of the assertion.
-_RESOLVED_ISSUE_LINK_RE = re.compile(
-    r"""(<a\b(?=[^>]*\bclass="issue-link")(?=[^>]*\bdata-issue-key="([^"]+)")[^>]*>)<del>\2</del></a>"""
-)
+_Q = r"""(?:"[^"]*"|'[^']*')"""
+_ANCHOR = rf"""<a\b(?:[^>"']|{_Q})*>"""
+_RESOLVED_ISSUE_LINK_RE = re.compile(rf"({_ANCHOR})<del>([^<]*)</del></a>")
+
+
+def _unwrap_resolved(match: re.Match) -> str:
+    anchor, text = match.group(1), match.group(2)
+    is_issue_link = re.search(r"""\bclass=(["'])(?:(?!\1).)*\bissue-link\b(?:(?!\1).)*\1""", anchor)
+    key = re.search(r"""\bdata-issue-key=(["'])(.*?)\1""", anchor)
+    return f"{anchor}{text}</a>" if is_issue_link and key and key.group(2) == text else match.group(0)
+
+
 for _case in CASES:
-    _case["rendered"] = _RESOLVED_ISSUE_LINK_RE.sub(r"\1\2</a>", _case["rendered"])
+    _case["rendered"] = _RESOLVED_ISSUE_LINK_RE.sub(_unwrap_resolved, _case["rendered"])
 # Two flat lists, not one list of objects: at ~9000 cases the per-object
 # scaffolding was most of the file. Splitting them up front also means no test
 # enters a case and returns without asserting, which reads as a pass.

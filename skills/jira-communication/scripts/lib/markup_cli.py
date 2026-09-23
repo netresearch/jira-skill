@@ -184,11 +184,12 @@ def check_rendering(
 
     The lexical repair handles what a model of the grammar CAN handle. This
     handles what it cannot, and the gap is not academic: Jira substitutes
-    autolinked issue keys before text effects run, so
-    ``{{OPS-899-Divergenzanalyse.pdf}}`` comes back with the key struck through
-    on an instance where OPS-899 exists and clean on one where it does not.
-    Escaping the dash does not help - measured - because the opener is
-    positioned relative to the substituted link, not the source text.
+    autolinked issue keys before text effects run, so ``OPS-899-x und zu- und``
+    comes back with ``x und zu`` struck through on an instance where OPS-899
+    exists and clean on one where it does not: the opener is positioned
+    relative to the substituted link, not the source text. A resolved issue's
+    key drawn in ``<del>`` inside its own link is status styling, and
+    ``preflight_render`` does not report it.
 
     Advisory by construction. An unreachable, slow or absent renderer (the
     endpoint is Server/DC only) prints one warning and gets out of the way; it
