@@ -9,6 +9,12 @@ renderings, decided by state that lives in the Jira database. No source-level
 model can decide it, and a better regex will not change that - which is why the
 same class of bug kept coming back.
 
+One ``<del>`` in the answer is not a text effect at all: Jira draws a link to a
+RESOLVED issue with the key struck through inside its anchor, as status
+styling. That shape is unwrapped before the spans are collected, so mentioning
+a closed ticket is not a finding while a real span next to or around the link
+still is.
+
 This module asks instead of predicting. ``POST /rest/api/1.0/render`` is the
 endpoint behind Jira's own "preview" button on Server/DC, so the answer is the
 renderer's, not ours.
@@ -33,9 +39,33 @@ DEFAULT_TIMEOUT = 10
 
 _DEL_RE = re.compile(r"<del>(.*?)</del>", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
+# Jira draws a link to a RESOLVED issue with its key in <del>, inside the
+# anchor: `<a class="issue-link" data-issue-key="K"><del>K</del></a>`. That is
+# issue-status styling, not text-effect markup; escaping cannot change it, and
+# reporting it refused every comment that mentioned a closed ticket. A genuine
+# span is always outside the anchor (around it or next to it), so only the
+# exact shape is unwrapped: an issue-link anchor whose whole content is
+# `<del>` + its own data-issue-key + `</del>`.
+_RESOLVED_ISSUE_LINK_RE = re.compile(r"(<a\b[^>]*>)<del>([^<]*)</del></a>")
+_CLASS_ISSUE_LINK_RE = re.compile(r"""\bclass=["'](?:[^"']*\s)?issue-link(?:\s[^"']*)?["']""")
+_DATA_ISSUE_KEY_RE = re.compile(r"""\bdata-issue-key=["']([^"']+)["']""")
+
 # Jira macro syntax, stripped before looking for echoed prose: {code}, {color:red},
 # {{monospace}}, [text|url], !image.png!.
 _MACRO_RE = re.compile(r"\{\{.*?\}\}|\{[^}\n]*\}|\[[^\]\n]*\]|![^\s!]+!")
+
+
+def _unwrap_resolved_issue_links(body: str) -> str:
+    """Drop the resolved-issue ``<del>`` so only text-effect spans remain."""
+
+    def unwrap(match: re.Match) -> str:
+        anchor, text = match.group(1), match.group(2)
+        key = _DATA_ISSUE_KEY_RE.search(anchor)
+        if _CLASS_ISSUE_LINK_RE.search(anchor) and key and key.group(1) == text:
+            return f"{anchor}{text}</a>"
+        return match.group(0)
+
+    return _RESOLVED_ISSUE_LINK_RE.sub(unwrap, body)
 
 
 @dataclass
@@ -172,4 +202,5 @@ def preflight_render(
         # never produce.
         return RenderVerdict(False, [], "response does not look like render output")
 
-    return RenderVerdict(True, [_plain(m) for m in _DEL_RE.findall(response.text)])
+    body = _unwrap_resolved_issue_links(response.text)
+    return RenderVerdict(True, [_plain(m) for m in _DEL_RE.findall(body)])

@@ -47,6 +47,17 @@ _ORACLE = json.loads((FIXTURES / "strikethrough_oracle.json").read_text(encoding
 _CORPUS = json.loads((FIXTURES / "strikethrough_corpus.json").read_text(encoding="utf-8"))
 
 CASES = _ORACLE["cases"]
+# Jira draws a link to a RESOLVED issue with its key in <del> inside the anchor
+# (`<a class="issue-link" data-issue-key="K"><del>K</del></a>`). That is
+# issue-status styling, not a text-effect span, so it is removed before any
+# assertion reads the rendered HTML. Duplicated from lib.preview on purpose,
+# like _DEL_RE below: a bug in the production helper must not hide itself by
+# being used on both sides of the assertion.
+_RESOLVED_ISSUE_LINK_RE = re.compile(
+    r"""(<a\b(?=[^>]*\bclass="issue-link")(?=[^>]*\bdata-issue-key="([^"]+)")[^>]*>)<del>\2</del></a>"""
+)
+for _case in CASES:
+    _case["rendered"] = _RESOLVED_ISSUE_LINK_RE.sub(r"\1\2</a>", _case["rendered"])
 # Two flat lists, not one list of objects: at ~9000 cases the per-object
 # scaffolding was most of the file. Splitting them up front also means no test
 # enters a case and returns without asserting, which reads as a pass.
@@ -186,13 +197,12 @@ class TestOverPredictionsArePinned:
 # is exactly where a miss would hide. Both directions are therefore listed by
 # name here and asserted to be complete.
 ORACLE_KNOWN_MISSES = {
-    # Autolinked issue keys: Jira substitutes OPS-899 before text effects run,
-    # so the boundary exists only on an instance where that key resolves. No
-    # source-level model can see it - lib/preview.py is the answer to these.
-    "Die Analyse ({{OPS-899-Divergenzanalyse.pdf}} / {{.md}}) prüft alles.",
-    "Die Analyse ({{OPS-899\\-Divergenzanalyse.pdf}} / {{.md}}) prüft alles.",
-    "Die Analyse {{OPS-899-Divergenzanalyse.pdf}} ok",
-    "Die Analyse OPS-899-Divergenzanalyse ok",
+    # An autolinked issue key: Jira substitutes OPS-899 before text effects
+    # run, so the boundary after it exists only on an instance where that key
+    # resolves. No source-level model can see it - lib/preview.py is the answer.
+    # The other OPS-899 cases in the oracle render the key in <del> only
+    # because the issue is resolved; that styling is removed at load (above),
+    # so they are clean rather than misses.
     "OPS-899-x und zu- und",
 }
 
