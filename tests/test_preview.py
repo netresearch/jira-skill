@@ -24,9 +24,13 @@ from lib.preview import RenderVerdict, preflight_render  # noqa: E402
 
 STRUCK_HTML = "<p>Die <tt>nr-pforum</tt><del>Extensions, jede zu</del> und abschaltbar</p>"
 CLEAN_HTML = "<p>journalctl -b -p crit zeigt die Fehler</p>"
-# What the live instance returns for `{{OPS-899-Divergenzanalyse.pdf}}`: the
-# autolinked key is struck through, and escaping the dash does not change it.
-AUTOLINK_HTML = '<p>Die <tt><a href="x" class="issue-link"><del>OPS-899</del></a>-Divergenzanalyse.pdf</tt> ok</p>'
+# What the live instance returns for `{{OPS-899-Divergenzanalyse.pdf}}` (see the
+# oracle): OPS-899 is resolved, so Jira draws its key in <del> inside the anchor.
+# That is issue-status styling, and escaping the dash does not change it.
+AUTOLINK_HTML = (
+    '<p>Die <tt><a href="x" class="issue-link" data-issue-key="OPS-899"><del>OPS-899</del></a>'
+    "-Divergenzanalyse.pdf</tt> ok</p>"
+)
 
 
 class FakeResponse:
@@ -91,11 +95,18 @@ class TestPreflightRender:
         assert verdict.available
         assert verdict.struck == ["Extensions, jede zu"]
 
-    def test_autolinked_issue_key_is_caught(self, server_env):
-        """The case the lexical model cannot reach, and the reason this exists."""
+    def test_resolved_issue_key_alone_is_not_struck(self, server_env):
+        """Jira's "resolved" styling of an issue link is not text-effect markup.
+
+        The oracle shows OPS-899's key wrapped in ``<del>`` inside its own
+        anchor; that is how Jira draws any resolved issue, with or without a
+        dash after it, and escaping cannot change it. Reporting it refused
+        every comment that mentioned a resolved issue.
+        """
         session = FakeSession(FakeResponse(200, AUTOLINK_HTML))
         verdict = preflight_render("Die {{OPS-899-Divergenzanalyse.pdf}} ok", session=session)
-        assert verdict.struck == ["OPS-899"]
+        assert verdict.available
+        assert verdict.struck == []
 
     def test_markup_inside_del_is_stripped(self, server_env):
         session = FakeSession(FakeResponse(200, "<p><del>a <tt>b</tt> c</del></p>"))
@@ -110,6 +121,76 @@ class TestPreflightRender:
         session = FakeSession(FakeResponse(200, CLEAN_HTML))
         preflight_render("x", session=session)
         assert session.calls[0][1]["json"]["rendererType"] == "atlassian-wiki-renderer"
+
+
+class TestResolvedIssueStyling:
+    """Shapes measured on a Server/DC renderer, attributes shortened.
+
+    PROJ-1 is resolved (its key comes back as ``<del>KEY</del>`` inside the
+    anchor), PROJ-2 is open. A genuine span always sits outside the anchor.
+    """
+
+    RESOLVED = '<a href="x" title="t" class="issue-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
+    OPEN = '<a href="x" title="t" class="issue-link" data-issue-key="PROJ-2">PROJ-2</a>'
+
+    def _struck(self, rendered):
+        return preflight_render("x", session=FakeSession(FakeResponse(200, rendered))).struck
+
+    def test_resolved_key_in_prose_is_clean(self, server_env):
+        assert self._struck(f"<p>see {self.RESOLVED} here</p>") == []
+
+    def test_open_key_is_clean(self, server_env):
+        assert self._struck(f"<p>see {self.OPEN} here</p>") == []
+
+    def test_several_resolved_keys_are_clean(self, server_env):
+        assert self._struck(f"<p>see {self.RESOLVED}, {self.RESOLVED} and {self.OPEN} here</p>") == []
+
+    def test_span_wrapping_a_resolved_key_is_reported(self, server_env):
+        # `-PROJ-1-`
+        assert self._struck(f"<p><del>{self.RESOLVED}</del></p>") == ["PROJ-1"]
+
+    def test_span_containing_a_resolved_key_is_reported_whole(self, server_env):
+        # `a -struck PROJ-1 text- b`
+        assert self._struck(f"<p>a <del>struck {self.RESOLVED} text</del> b</p>") == ["struck PROJ-1 text"]
+
+    def test_span_right_after_a_resolved_key_is_reported(self, server_env):
+        # `PROJ-1-x und zu- und`: the autolink boundary case, still caught
+        assert self._struck(f"<p>{self.RESOLVED}<del>x und zu</del> und</p>") == ["x und zu"]
+
+    def test_attribute_order_does_not_matter(self, server_env):
+        swapped = '<a data-issue-key="PROJ-1" href="x" class="issue-link"><del>PROJ-1</del></a>'
+        assert self._struck(f"<p>see {swapped} here</p>") == []
+
+    def test_del_whose_text_is_not_the_anchor_key_is_reported(self, server_env):
+        mismatched = '<a href="x" class="issue-link" data-issue-key="PROJ-1"><del>other</del></a>'
+        assert self._struck(f"<p>see {mismatched} here</p>") == ["other"]
+
+    def test_gt_inside_a_quoted_title_does_not_cut_the_anchor(self, server_env):
+        # The title carries the issue summary; a literal `>` in it must not end
+        # the tag, or the resolved <del> survives and truncates the outer span.
+        link = '<a href="x" title="timeout > 30s" class="issue-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
+        assert self._struck(f"<p><del>X {link} Y</del></p>") == ["X PROJ-1 Y"]
+
+    def test_several_classes_and_single_quotes_are_recognised(self, server_env):
+        link = "<a href='x' class='jira issue-link' data-issue-key='PROJ-1'><del>PROJ-1</del></a>"
+        assert self._struck(f"<p>see {link} here</p>") == []
+
+    @pytest.mark.parametrize("klass", ["my-issue-link", "issue-link-x", "not-issue-link-at-all"])
+    def test_issue_link_must_be_a_whole_class_token(self, server_env, klass):
+        link = f'<a href="x" class="{klass}" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
+        assert self._struck(f"<p>see {link} here</p>") == ["PROJ-1"]
+
+    def test_attribute_names_must_match_whole(self, server_env):
+        # `data-class` is not `class`, `x-data-issue-key` is not `data-issue-key`
+        for link in (
+            '<a href="x" data-class="issue-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>',
+            '<a href="x" class="issue-link" x-data-issue-key="PROJ-1"><del>PROJ-1</del></a>',
+        ):
+            assert self._struck(f"<p>see {link} here</p>") == ["PROJ-1"]
+
+    def test_del_inside_a_non_issue_link_is_reported(self, server_env):
+        external = '<a href="x" class="external-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
+        assert self._struck(f"<p>see {external} here</p>") == ["PROJ-1"]
 
 
 class TestDegradesInsteadOfBlocking:
