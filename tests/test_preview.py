@@ -101,7 +101,7 @@ class TestPreflightRender:
         The oracle shows OPS-899's key wrapped in ``<del>`` inside its own
         anchor; that is how Jira draws any resolved issue, with or without a
         dash after it, and escaping cannot change it. Reporting it refused
-        every comment that mentioned a closed ticket.
+        every comment that mentioned a resolved issue.
         """
         session = FakeSession(FakeResponse(200, AUTOLINK_HTML))
         verdict = preflight_render("Die {{OPS-899-Divergenzanalyse.pdf}} ok", session=session)
@@ -173,6 +173,11 @@ class TestResolvedIssueStyling:
     def test_several_classes_and_single_quotes_are_recognised(self, server_env):
         link = "<a href='x' class='jira issue-link' data-issue-key='PROJ-1'><del>PROJ-1</del></a>"
         assert self._struck(f"<p>see {link} here</p>") == []
+
+    @pytest.mark.parametrize("klass", ["my-issue-link", "issue-link-x", "not-issue-link-at-all"])
+    def test_issue_link_must_be_a_whole_class_token(self, server_env, klass):
+        link = f'<a href="x" class="{klass}" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
+        assert self._struck(f"<p>see {link} here</p>") == ["PROJ-1"]
 
     def test_del_inside_a_non_issue_link_is_reported(self, server_env):
         external = '<a href="x" class="external-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'

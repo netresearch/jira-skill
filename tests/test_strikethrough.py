@@ -60,7 +60,9 @@ _RESOLVED_ISSUE_LINK_RE = re.compile(rf"({_ANCHOR})<del>([^<]*)</del></a>")
 
 def _unwrap_resolved(match: re.Match) -> str:
     anchor, text = match.group(1), match.group(2)
-    is_issue_link = re.search(r"""\bclass=(["'])(?:(?!\1).)*\bissue-link\b(?:(?!\1).)*\1""", anchor)
+    # `issue-link` as a whitespace-delimited class token, as in production:
+    # `my-issue-link` or `issue-link-x` must not count.
+    is_issue_link = re.search(r"""\bclass=(["'])(?:(?:(?!\1).)*\s)?issue-link(?:\s(?:(?!\1).)*)?\1""", anchor)
     key = re.search(r"""\bdata-issue-key=(["'])(.*?)\1""", anchor)
     return f"{anchor}{text}</a>" if is_issue_link and key and key.group(2) == text else match.group(0)
 

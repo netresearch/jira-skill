@@ -39,7 +39,10 @@ DEFAULT_TIMEOUT = 10
 
 _DEL_RE = re.compile(r"<del>(.*?)</del>", re.S)
 # A tag, with quoted attribute values taken whole: an issue link's title is the
-# issue summary, and a literal `>` in it must not end the tag.
+# issue summary, and a literal `>` in it must not end the tag. Scope is the
+# renderer's own output, which quotes every attribute: a tag with a stray,
+# unpaired quote does not match and stays in the text. For the unwrap that
+# means the marker is kept and reported, the safe direction.
 _ATTRS = r"""(?:[^>"']|"[^"]*"|'[^']*')*"""
 _TAG_RE = re.compile(rf"<{_ATTRS}>")
 # Jira draws a link to a RESOLVED issue with its key in <del>, inside the
