@@ -53,8 +53,11 @@ _TAG_RE = re.compile(rf"<{_ATTRS}>")
 # exact shape is unwrapped: an issue-link anchor whose whole content is
 # `<del>` + its own data-issue-key + `</del>`.
 _RESOLVED_ISSUE_LINK_RE = re.compile(rf"(<a\b{_ATTRS}>)<del>([^<]*)</del></a>")
-_CLASS_ISSUE_LINK_RE = re.compile(r"""\bclass=["'](?:[^"']*\s)?issue-link(?:\s[^"']*)?["']""")
-_DATA_ISSUE_KEY_RE = re.compile(r"""\bdata-issue-key=["']([^"']+)["']""")
+# Attribute values by exact attribute name: `(?<![\w-])` keeps `data-class=`
+# from reading as `class=`. The class list is then split into tokens rather
+# than matched by a pattern, so `my-issue-link` is not `issue-link`.
+_CLASS_ATTR_RE = re.compile(r"""(?<![\w-])class=(["'])(.*?)\1""")
+_DATA_ISSUE_KEY_RE = re.compile(r"""(?<![\w-])data-issue-key=(["'])(.*?)\1""")
 
 # Jira macro syntax, stripped before looking for echoed prose: {code}, {color:red},
 # {{monospace}}, [text|url], !image.png!.
@@ -66,8 +69,10 @@ def _unwrap_resolved_issue_links(body: str) -> str:
 
     def unwrap(match: re.Match) -> str:
         anchor, text = match.group(1), match.group(2)
+        classes = _CLASS_ATTR_RE.search(anchor)
         key = _DATA_ISSUE_KEY_RE.search(anchor)
-        if _CLASS_ISSUE_LINK_RE.search(anchor) and key and key.group(1) == text:
+        is_issue_link = classes is not None and "issue-link" in classes.group(2).split()
+        if is_issue_link and key and key.group(2) == text:
             return f"{anchor}{text}</a>"
         return match.group(0)
 

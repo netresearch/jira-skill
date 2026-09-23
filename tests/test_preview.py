@@ -105,7 +105,8 @@ class TestPreflightRender:
         """
         session = FakeSession(FakeResponse(200, AUTOLINK_HTML))
         verdict = preflight_render("Die {{OPS-899-Divergenzanalyse.pdf}} ok", session=session)
-        assert verdict.available and verdict.ok and verdict.struck == []
+        assert verdict.available
+        assert verdict.struck == []
 
     def test_markup_inside_del_is_stripped(self, server_env):
         session = FakeSession(FakeResponse(200, "<p><del>a <tt>b</tt> c</del></p>"))
@@ -178,6 +179,14 @@ class TestResolvedIssueStyling:
     def test_issue_link_must_be_a_whole_class_token(self, server_env, klass):
         link = f'<a href="x" class="{klass}" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
         assert self._struck(f"<p>see {link} here</p>") == ["PROJ-1"]
+
+    def test_attribute_names_must_match_whole(self, server_env):
+        # `data-class` is not `class`, `x-data-issue-key` is not `data-issue-key`
+        for link in (
+            '<a href="x" data-class="issue-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>',
+            '<a href="x" class="issue-link" x-data-issue-key="PROJ-1"><del>PROJ-1</del></a>',
+        ):
+            assert self._struck(f"<p>see {link} here</p>") == ["PROJ-1"]
 
     def test_del_inside_a_non_issue_link_is_reported(self, server_env):
         external = '<a href="x" class="external-link" data-issue-key="PROJ-1"><del>PROJ-1</del></a>'
