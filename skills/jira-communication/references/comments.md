@@ -115,3 +115,5 @@ Working-path checks get ONE summary line at most; the non-working path gets the 
 ## Consolidate progress updates — edit, don't append
 
 When iterative work on one issue produces multiple status updates, edit the prior comment instead of adding a new one. Watchers and QA reviewers are notified per comment and must wade through progress chatter to find the current state. Reserve new comments for genuinely separate story beats that build on (not restate) earlier ones.
+
+Never point at another comment by position. Comment order is a per-user preference (`jira.issue.actions.order`, `asc` or `desc`, readable via `GET /rest/api/2/mypreferences?key=jira.issue.actions.order`), so "my comment above" names a different comment, or none, for the next reader. Refer to a comment by its heading, its content or its timestamp — "the QA comment (`h3. QA - passed`)", "the deploy comment of 2026-09-01". Inside a single comment, "above" and "below" are fine: one comment renders top to bottom. Editing the original comment avoids the reference altogether.
