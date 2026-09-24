@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.32.2] - 2026-09-24
+
 ### Added
 
-- The jira-syntax quick reference lists what each status marker draws, taken from the render endpoint of Jira Server 9.12, and names the marker for a pending step in a review: `(i) pending: …`. In a review comment `(x)` already means a blocking failure, and `(-)` renders as a red no-entry sign; three of seven tickets in one maintenance window marked pending steps with `(-)`. `SKILL.md` gains the matching row under Common Mistakes, and the jira-syntax evals gain `pending_step_marker_in_review`.
+- The jira-syntax quick reference lists what each status marker draws, taken from the render endpoint of Jira Server 9.12, and names the marker for a pending step in a review: `(i) pending: …`. In a review comment `(x)` already means a blocking failure, and `(-)` renders as a red no-entry sign; three of seven tickets in one maintenance window marked pending steps with `(-)`. `SKILL.md` gains the matching row under Common Mistakes, and the jira-syntax evals gain `pending_step_marker_in_review` ([#260](https://github.com/netresearch/jira-skill/pull/260)).
 
 ## [3.32.1] - 2026-09-24
 
@@ -889,7 +891,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.2...HEAD
+[3.32.2]: https://github.com/netresearch/jira-skill/compare/v3.32.1...v3.32.2
 [3.32.1]: https://github.com/netresearch/jira-skill/compare/v3.32.0...v3.32.1
 [3.32.0]: https://github.com/netresearch/jira-skill/compare/v3.31.3...v3.32.0
 [3.31.3]: https://github.com/netresearch/jira-skill/compare/v3.31.2...v3.31.3
