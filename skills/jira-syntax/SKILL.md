@@ -75,6 +75,7 @@ posting command.
 | `MR !42` (bare GitLab ref) | `[MR 42\|url]` or full `group/project!42` — a bare `!…!` is image markup |
 | `(/)` on an open/proposed item | `(x)` — `(/)` renders as a green check (done); use `(x)` for open items |
 | `( )` as a checkbox | `(x)` — `( )` is not a macro and renders literally |
+| `(-)` or `(x)` on a pending step in a review | `(i) pending: …` — `(-)` renders as a red no-entry sign, and in a review `(x)` means a failure |
 
 ## Integration with jira-communication Skill
 

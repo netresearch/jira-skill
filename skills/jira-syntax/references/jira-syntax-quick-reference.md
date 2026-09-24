@@ -297,6 +297,29 @@ item, `(x)` for an open one. Use them only with that meaning.
 * (x) Rollback procedure documented
 ```
 
+What each marker draws, from the render endpoint of Jira Server 9.12:
+
+| Markup | Icon | Reads as |
+| --- | --- | --- |
+| `(/)` | green check (`check.png`) | done |
+| `(x)` | red cross (`error.png`) | failed, or open in a plain checklist |
+| `(!)` | warning triangle (`warning.png`) | needs attention |
+| `(i)` | blue info (`information.png`) | note |
+| `(?)` | question mark (`help_16.png`) | unclear |
+| `(off)` | grey light bulb (`lightbulb.png`) | not applicable, inactive |
+| `(-)` | red no-entry sign (`forbidden.png`) | forbidden |
+
+In a review or QA comment, `(x)` already means a blocking failure, so it cannot also
+mean "not done yet". Mark a step that is still pending with `(i)` and the word
+"pending", or with a plain bullet. Never use `(-)` for it: the red no-entry sign
+reads as "must not be done". Three of seven tickets in one maintenance window marked
+pending steps that way.
+
+```
+* (/) Service updated to 19.4.1
+* (i) pending: runner manager, after the service is verified
+```
+
 ## Ask the renderer instead of reasoning about it
 
 Jira renders wiki markup server-side, and it will tell you what it is going to do — for any markup, before anything is posted:

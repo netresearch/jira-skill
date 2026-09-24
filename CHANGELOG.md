@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The jira-syntax quick reference lists what each status marker draws, taken from the render endpoint of Jira Server 9.12, and names the marker for a pending step in a review: `(i) pending: …`. In a review comment `(x)` already means a blocking failure, and `(-)` renders as a red no-entry sign; three of seven tickets in one maintenance window marked pending steps with `(-)`. `SKILL.md` gains the matching row under Common Mistakes, and the jira-syntax evals gain `pending_step_marker_in_review`.
+
 ## [3.32.1] - 2026-09-24
 
 ### Fixed
