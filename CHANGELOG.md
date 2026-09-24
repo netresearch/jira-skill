@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.32.1] - 2026-09-24
+
 ### Fixed
 
 - The render preflight no longer refuses a comment for mentioning a resolved issue ([#256](https://github.com/netresearch/jira-skill/issues/256)). Jira draws a link to a resolved issue as `<a class="issue-link" data-issue-key="K"><del>K</del></a>`: status styling, not a text effect, and no rephrasing or escaping changes it, so the only way past was `--force`, which also silenced a genuine span in the same text. `preflight_render` now unwraps exactly that shape (an `issue-link` anchor whose whole content is `<del>` around its own `data-issue-key`) before collecting spans; a span around the link (`-PROJ-1-`), containing it, or right after it (`PROJ-1-x und zu- und`) is still reported. Tags are matched with quoted attribute values taken whole, because the link's `title` carries the issue summary and a literal `>` in it would otherwise end the tag early, leave the marker in place and truncate a genuine span around the link. The strikethrough suite applies an independently written equivalent of that normalisation to the curated oracle, which shrinks `ORACLE_KNOWN_MISSES` from five cases to the one genuine autolink-boundary case: the other four were the resolved styling alone, with nothing struck
@@ -883,7 +885,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.1...HEAD
+[3.32.1]: https://github.com/netresearch/jira-skill/compare/v3.32.0...v3.32.1
 [3.32.0]: https://github.com/netresearch/jira-skill/compare/v3.31.3...v3.32.0
 [3.31.3]: https://github.com/netresearch/jira-skill/compare/v3.31.2...v3.31.3
 [3.31.2]: https://github.com/netresearch/jira-skill/compare/v3.31.1...v3.31.2
