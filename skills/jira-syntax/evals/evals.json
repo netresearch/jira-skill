@@ -70,5 +70,27 @@
         "pattern": "\\{code\\}[^\\n]*[A-Za-z]"
       }
     ]
+  },
+  {
+    "name": "pending_step_marker_in_review",
+    "prompt": "Write a short Jira QA review comment in wiki markup with two status lines: the GitLab service update is done, and the runner manager update is still pending until the service is verified.",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "\\(/\\)[^\\n]*[Ss]ervice"
+      },
+      {
+        "type": "content",
+        "pattern": "\\(i\\)[^\\n]*[Pp]ending"
+      },
+      {
+        "type": "not_content",
+        "pattern": "\\(-\\)"
+      },
+      {
+        "type": "not_content",
+        "pattern": "\\(x\\)[^\\n]*[Pp]ending"
+      }
+    ]
   }
 ]
