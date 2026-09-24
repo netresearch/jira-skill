@@ -73,7 +73,7 @@
   },
   {
     "name": "pending_step_marker_in_review",
-    "prompt": "Write a short Jira QA review comment in wiki markup with two status lines: the GitLab service update is done, and the runner manager update is still pending until the service is verified.",
+    "prompt": "Write a short Jira QA review comment in wiki markup with two status lines. Use a status icon on each line: the GitLab service update is done, and the runner manager update is still pending until the service is verified.",
     "assertions": [
       {
         "type": "content",
