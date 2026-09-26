@@ -535,6 +535,38 @@ class TestFetchWorklogsTempoAccount:
         assert payload["from"] == "2026-04-01"
         assert payload["to"] == "2026-04-30"
 
+    def test_first_request_sends_no_paging_fields(self):
+        # Tempo Timesheets 4 on Jira Server answers HTTP 500 to "limit" or "offset"
+        # in the search body, so --tempo-account failed on every call.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        post_response = mock.MagicMock()
+        post_response.json.return_value = []
+        mock_client._session.post.return_value = post_response
+
+        _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
+        payload = mock_client._session.post.call_args.kwargs["json"]
+        assert "limit" not in payload
+        assert "offset" not in payload
+
+    def test_paging_without_metadata_offset_advances(self):
+        # metadata that says "more" but names no offset or limit must still move on
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        page = mock.MagicMock()
+        page.json.return_value = {"results": SAMPLE_TEMPO_RESPONSE[:1], "metadata": {"hasMore": True}}
+        last = mock.MagicMock()
+        last.json.return_value = {"results": SAMPLE_TEMPO_RESPONSE[:1], "metadata": {}}
+        offsets = []
+
+        def post(url, json, timeout):
+            offsets.append(json.get("offset"))
+            return page if len(offsets) < 3 else last
+
+        mock_client._session.post.side_effect = post
+        _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
+        assert offsets == [None, 1, 2]
+
     def test_empty_result(self):
         mock_client = mock.MagicMock()
         mock_client.url = "https://jira.example.com"
