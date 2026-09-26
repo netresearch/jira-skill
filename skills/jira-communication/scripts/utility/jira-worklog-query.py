@@ -419,7 +419,7 @@ def fetch_worklogs_tempo_account(
         if next_offset is not None:
             payload["offset"] = next_offset
         elif metadata.get("next") or metadata.get("hasMore"):
-            payload["offset"] = metadata.get("offset", 0) + metadata.get("limit", len(entries))
+            payload["offset"] = metadata.get("offset", payload.get("offset", 0)) + metadata.get("limit", len(entries))
         else:
             break
     else:

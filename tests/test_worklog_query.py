@@ -549,6 +549,24 @@ class TestFetchWorklogsTempoAccount:
         assert "limit" not in payload
         assert "offset" not in payload
 
+    def test_paging_without_metadata_offset_advances(self):
+        # metadata that says "more" but names no offset or limit must still move on
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        page = mock.MagicMock()
+        page.json.return_value = {"results": SAMPLE_TEMPO_RESPONSE[:1], "metadata": {"hasMore": True}}
+        last = mock.MagicMock()
+        last.json.return_value = {"results": SAMPLE_TEMPO_RESPONSE[:1], "metadata": {}}
+        offsets = []
+
+        def post(url, json, timeout):
+            offsets.append(json.get("offset"))
+            return page if len(offsets) < 3 else last
+
+        mock_client._session.post.side_effect = post
+        _mod.fetch_worklogs_tempo_account(mock_client, "2026-04-01", "2026-04-30", ["ACME"])
+        assert offsets == [None, 1, 2]
+
     def test_empty_result(self):
         mock_client = mock.MagicMock()
         mock_client.url = "https://jira.example.com"
