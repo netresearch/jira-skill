@@ -387,6 +387,11 @@ def fetch_worklogs_tempo_account(
     workers) is only reachable through ``POST /worklogs/search`` with
     ``accountKey``. Returns ``(worklogs, issue_map)`` in the same shape as
     :func:`fetch_worklogs_tempo`.
+
+    The first request carries no ``limit`` or ``offset``: Tempo Timesheets 4 on
+    Jira Server answers HTTP 500 to either field in this body and returns every
+    matching worklog as a plain list without them. An offset is only sent when a
+    server answers with paging metadata.
     """
     base_url = client.url.rstrip("/")
     url = f"{base_url}/rest/tempo-timesheets/4/worklogs/search"
@@ -394,8 +399,6 @@ def fetch_worklogs_tempo_account(
         "from": from_date,
         "to": to_date,
         "accountKey": account_keys,
-        "limit": 1000,
-        "offset": 0,
     }
 
     all_worklogs: list[dict] = []
@@ -416,7 +419,7 @@ def fetch_worklogs_tempo_account(
         if next_offset is not None:
             payload["offset"] = next_offset
         elif metadata.get("next") or metadata.get("hasMore"):
-            payload["offset"] = metadata.get("offset", 0) + metadata.get("limit", payload["limit"])
+            payload["offset"] = metadata.get("offset", 0) + metadata.get("limit", len(entries))
         else:
             break
     else:
