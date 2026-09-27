@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.32.3] - 2026-09-27
+
 ### Fixed
 
 - `jira-worklog-query.py --tempo-account` returns the account's worklogs instead of failing with HTTP 500. The request to `POST /rest/tempo-timesheets/4/worklogs/search` no longer sends `limit` or `offset`, which Tempo Timesheets 4 on Jira Server rejects in that body; without them it answers with a plain list of every matching worklog. An offset is still sent when a server answers with paging metadata, and the next offset falls back to the page length when the metadata names no `limit`. New test `test_first_request_sends_no_paging_fields` ([#266](https://github.com/netresearch/jira-skill/pull/266))
@@ -900,7 +902,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.2...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.3...HEAD
+[3.32.3]: https://github.com/netresearch/jira-skill/compare/v3.32.2...v3.32.3
 [3.32.2]: https://github.com/netresearch/jira-skill/compare/v3.32.1...v3.32.2
 [3.32.1]: https://github.com/netresearch/jira-skill/compare/v3.32.0...v3.32.1
 [3.32.0]: https://github.com/netresearch/jira-skill/compare/v3.31.3...v3.32.0
