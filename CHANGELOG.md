@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-worklog-query.py --tempo-account` returns the account's worklogs instead of failing with HTTP 500. The request to `POST /rest/tempo-timesheets/4/worklogs/search` no longer sends `limit` or `offset`, which Tempo Timesheets 4 on Jira Server rejects in that body; without them it answers with a plain list of every matching worklog. An offset is still sent when a server answers with paging metadata, and the next offset falls back to the page length when the metadata names no `limit`. New test `test_first_request_sends_no_paging_fields` ([#266](https://github.com/netresearch/jira-skill/pull/266))
+- The same Tempo account search pages on from the current request's offset when the paging metadata says there is more but names no offset. It computed the next offset from 0 before, so pages of equal size repeated until `MAX_PAGES` aborted the query ([#266](https://github.com/netresearch/jira-skill/pull/266))
+
+### Documentation
+
+- `references/comments.md`: never refer to another Jira comment as "above" or "below". Comment order is a per-user preference (`jira.issue.actions.order`, `asc` or `desc`, readable via `GET /rest/api/2/mypreferences?key=jira.issue.actions.order`), so a positional reference names a different comment, or none, for the next reader. Name a comment by its heading, content or timestamp instead; inside a single comment "above" and "below" stay fine, and editing the original comment avoids the reference altogether ([#264](https://github.com/netresearch/jira-skill/pull/264))
+
 ## [3.32.2] - 2026-09-24
 
 ### Added
