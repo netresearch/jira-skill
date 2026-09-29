@@ -32,8 +32,8 @@ uv run --no-project --with pytest --with atlassian-python-api --with click --wit
 # Both ruff gates, at repo scope, pinned to the version CI uses.
 # `check` and `format --check` are SEPARATE gates: a rename that changes line
 # length can pass the first and fail the second.
-uvx --no-build ruff@0.16.0 check .
-uvx --no-build ruff@0.16.0 format --check $(git ls-files '*.py')
+uvx --no-build ruff@0.16.9 check .
+uvx --no-build ruff@0.16.9 format --check $(git ls-files '*.py')
 
 # Markdown
 npx --yes markdownlint-cli2 "**/*.md"
