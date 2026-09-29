@@ -302,6 +302,24 @@ cd skills/jira-communication
 uv run scripts/core/jira-issue.py get PROJ-123
 ```
 
+## Governance and policies
+
+This repository follows the Netresearch organisation policies:
+
+- [Governance](https://github.com/netresearch/.github/blob/main/GOVERNANCE.md): ownership, roles, how decisions are made and disputes resolved, and continuity.
+- [Roadmap](https://github.com/netresearch/.github/blob/main/ROADMAP.md): planned and explicitly excluded work for the coming year.
+- [Handling of dependency and code analysis findings](https://github.com/netresearch/.github/blob/main/SECURITY.md#handling-of-dependency-and-code-analysis-findings): thresholds, deadlines and the exception process for dependency (SCA) and static analysis (SAST) findings.
+- [Secret management](https://github.com/netresearch/.github/blob/main/SECURITY.md#secret-management): how CI and release credentials are stored, accessed and rotated.
+- [Access roster](https://github.com/netresearch/.github/blob/main/docs/access-roster.md): who holds administrative access to this repository and the organisation.
+
+The security assurance case for this plugin (how Jira credentials are read and where they are sent, trust boundaries, countermeasures and limits) is in [docs/SECURITY-ASSURANCE.md](docs/SECURITY-ASSURANCE.md).
+
+Checks that run in this repository:
+
+- Every pull request: Skill Validation (`lint.yml` and `validate.yml`: skill structure, plugin manifest sync, markdownlint, yamllint, actionlint, JSON syntax, version parity, ShellCheck, ruff; `validate.yml` runs ShellCheck at style severity) and Eval Validation (`eval-validate.yml`).
+- Pull requests to `main`: CI (`ci.yml`: the pytest suite on Python 3.10 to 3.14 and bandit at severity medium over the scripts), CodeQL for `actions` and `python` (`codeql.yml`), `security.yml` with Betterleaks (secret scanning), zizmor (workflow static analysis), dependency review (fails on vulnerabilities of severity high or above), Composer Audit and Opengrep SAST (fails on findings of severity WARNING or above), Harness Verification (`harness-verify.yml`) and Template Drift (`check-template-drift.yml`).
+- Weekly: Dependency Audit (`dependency-audit.yml`) runs pip-audit over the PEP 723 dependencies of `skills/jira-communication/scripts`. Dependency review does not read PEP 723 blocks, so vulnerabilities in the Python dependencies are found by this weekly run, not per pull request.
+
 ## License
 
 MIT
