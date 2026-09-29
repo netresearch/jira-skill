@@ -24,7 +24,7 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.client import AuthenticationError, LazyJiraClient, SessionExpiredError, _sanitize_error
+from lib.client import JIRA_TIMEOUT, AuthenticationError, LazyJiraClient, SessionExpiredError, _sanitize_error
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -133,7 +133,7 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
         # atlassian-python-api has no public method for issue move/edit.
         # Using _session directly is intentional; version range (>=3.41.0,<4) in
         # PEP 723 header guards against breaking changes across major versions.
-        response = client._session.put(url, json=update_fields)
+        response = client._session.put(url, json=update_fields, timeout=JIRA_TIMEOUT)
 
         if response.status_code == 204:
             # Verify the update actually applied (defense against silent failures)

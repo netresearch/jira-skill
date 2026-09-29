@@ -74,3 +74,19 @@ class TestSubtaskTypeRejection:
 
         assert result.exit_code == 0, result.output
         assert "Sub: Task → Sub: Bug" in result.output
+
+
+class TestRequestTimeout:
+    def test_put_carries_the_client_timeout(self):
+        """The raw session PUT bypasses the library's timeout; it must pass its own."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+
+        result, _ = _run(["issue", "FX-1095", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 0, result.output
+        assert mc._session.put.call_args.kwargs.get("timeout") == _mod.JIRA_TIMEOUT
