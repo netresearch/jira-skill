@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Jira wiki-markup lint helpers.
 
 Catches the most damaging authoring mistakes before text is sent to Jira:

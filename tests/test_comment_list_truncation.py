@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """`jira-comment list` must say on stderr when it is showing part of a history.
 
 The notice used to be a `print()` in the table branch only. A caller piping the

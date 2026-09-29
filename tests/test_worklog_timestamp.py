@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for ``normalize_iso_timestamp`` in ``core/jira-worklog.py``.
 
 Jira's worklog API wants exactly ``YYYY-MM-DDTHH:MM:SS.sss+ZZZZ``; the helper

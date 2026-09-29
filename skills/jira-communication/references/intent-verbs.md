@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Intent verbs
 
 `jira-issue.py work / qa / qa-fail / act` — single-call context bundles for the four common intents.

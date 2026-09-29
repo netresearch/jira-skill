@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Helpers for Jira issue changelog / status-history analysis."""
 
 from datetime import datetime, timedelta

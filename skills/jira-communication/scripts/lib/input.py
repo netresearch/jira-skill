@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Stdin helpers for Jira CLI scripts that accept piped input.
 
 This module is the input-side companion to :mod:`lib.output`, which

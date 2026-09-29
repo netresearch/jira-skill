@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for lib.users (mention verification) and the shared CLI mention gate."""
 
 from unittest import mock

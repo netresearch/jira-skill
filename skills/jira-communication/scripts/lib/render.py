@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Terminal rendering of issue descriptions and comments.
 
 Shared by ``jira-issue.py`` (work / qa / qa-fail) and ``jira-qa-gather.py`` so

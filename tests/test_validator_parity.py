@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Parity between the two implementations of the dash-strikethrough rule.
 
 The rule lives twice: ``find_strikethrough_spans`` in

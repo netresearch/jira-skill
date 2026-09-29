@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """The pre-flight render check - the layer that asks instead of predicting.
 
 Every test here uses a fake HTTP session. The point of the module is a network

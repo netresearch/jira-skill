@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Cross-Project References to GitLab Resources
 
 When referencing GitLab merge requests, issues, tags, or commits **from a Jira description, comment, or worklog**, prefer the GitLab cross-project autolink syntax — even though Jira itself doesn't autolink GitLab paths, the cross-project form removes ambiguity for human readers and matches the convention used in GitLab itself.

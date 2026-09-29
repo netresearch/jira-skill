@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-move.py `issue` type-change verification messaging (#116).
 
 Jira's REST edit endpoint silently refuses some issue-type conversions

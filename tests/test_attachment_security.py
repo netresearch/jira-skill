@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-attachment.py security controls (SSRF, Path Traversal, TLS)."""
 
 import importlib.util

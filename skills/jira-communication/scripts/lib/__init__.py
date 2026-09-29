@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Shared utilities for Jira CLI scripts."""
 
 from .client import LazyJiraClient, get_jira_client, is_account_id

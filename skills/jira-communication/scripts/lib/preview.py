@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Ask the Jira instance how it will render a piece of wiki markup.
 
 The lexical model in ``lib.markup`` predicts what Jira does to dashes, and it

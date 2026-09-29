@@ -1,4 +1,6 @@
 <!-- Managed by agent: keep sections & order; edit content, not structure. Last updated: 2026-04-09 -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 
 # AGENTS.md (root)
 

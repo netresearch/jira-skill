@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Every surface that posts wiki markup runs the same three gates.
 
 The point of this file is the parametrisation, not any single case. The gates

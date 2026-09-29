@@ -1,2 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 "$(dirname "$0")/../Scripts/check-plugin-version.sh"

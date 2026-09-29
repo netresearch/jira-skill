@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-qa-gather.py body rendering.
 
 The bundle used to print metadata only (status, counts, links, URLs,

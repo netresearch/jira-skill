@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-issue.py `_print_issue` comment/parent/subtasks rendering (#127).
 
 The default human-readable formatter used to ignore `-f comment` (and

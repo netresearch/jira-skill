@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # No editorializing — inform, don't sell (tone, not wordlist)
 
 Applies to every written artifact: commit messages, PR/MR descriptions, review

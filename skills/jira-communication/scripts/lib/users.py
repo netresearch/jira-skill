@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """User lookup and [~username] mention verification helpers.
 
 Mentions posted with an unverified username render as dead text in Jira —

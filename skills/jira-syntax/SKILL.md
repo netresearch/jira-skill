@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: jira-syntax
 description: "Use when writing or formatting Jira descriptions, comments, or any text destined for Jira. Converts Markdown to Jira wiki markup, provides templates (bug reports, feature requests), and validates syntax before submission. Trigger on any Jira content authoring task."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"

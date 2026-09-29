@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-issue.py `update` read-after-write verification (#115).
 
 Jira's PUT /issue/{key} silently ignores some issuetype/project changes on
