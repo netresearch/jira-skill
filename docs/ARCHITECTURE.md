@@ -33,7 +33,8 @@ Declares the plugin's skills, version, and entry points for Claude Code discover
 User prompt (e.g., "search Jira for open bugs")
   -> Claude Code activates jira-communication skill
   -> Skill instructs agent to run appropriate Python script
-  -> Script reads credentials from ~/.env.jira
+  -> Script reads credentials from a profile in ~/.jira/profiles.json, or from
+     --env-file / ~/.env.jira / JIRA_* environment variables (lib/config.py)
   -> Script calls Jira REST API
   -> Structured output returned to agent
 ```
