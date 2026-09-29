@@ -12,3 +12,5 @@ jobs:
   validate:
     name: Skill Validation
     uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
+    with:
+      shellcheck-severity: style
