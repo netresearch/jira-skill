@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Smoke tests for CLI scripts — verify --help works and basic error handling.
 
 These tests use click.testing.CliRunner with mocked Jira clients to verify

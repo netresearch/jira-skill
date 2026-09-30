@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """The three markup gates every wiki-markup write goes through, as CLI helpers.
 
 ``lib/markup.py`` holds the grammar and knows nothing about the terminal;

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """JQL helper utilities.
 
 Keep all escaping/quoting logic centralized so callers don't hand-roll

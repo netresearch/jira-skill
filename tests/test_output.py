@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for output.py — extract_adf_text() and comment_to_text() helpers."""
 
 import sys

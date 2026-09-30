@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """The strikethrough grammar, checked against recorded Jira output.
 
 Two fixtures, both recorded from a live Jira Server 9.12 wiki renderer:

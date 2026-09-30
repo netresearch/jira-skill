@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-create's `project` command and the tempo-account script.
 
 Follows the same `mock.patch("lib.client.get_jira_client", ...)` pattern used

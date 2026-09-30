@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Jira Wiki Markup Syntax - Quick Reference
 
 Complete reference for Jira's wiki markup syntax to ensure proper formatting in tickets, comments, and descriptions.

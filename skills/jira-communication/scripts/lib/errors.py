@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Typed Jira transport errors and error-message sanitization.
 
 Lives in its own module so that both ``lib.client`` (which raises these from

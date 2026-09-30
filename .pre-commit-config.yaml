@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Pre-commit hooks — embodies the CI/Hook Parity Principle for this repo.
 #
 # Every hook below ALSO runs in CI (via the reusable validate.yml workflow

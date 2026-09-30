@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 
 # Jira Wiki Markup Syntax Validator
 # Checks text for common Jira syntax errors and suggests corrections

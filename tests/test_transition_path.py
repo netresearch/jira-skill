@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-transition.py `path` — greedy workflow walker.
 
 `path` collapses a multi-stage transition chain into one command by running

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-transition.py `find_matching_transition` — tolerant name resolver.
 
 Jira transitions are often labelled with emoji prefixes (e.g. "✅ Resolve"), so

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for ``lib.markup.lint_wiki_markup`` — the wiki-markup linter."""
 
 import sys

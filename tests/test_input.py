@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for ``lib.input.read_stdin_utf8`` — the UTF-8-correct stdin reader."""
 
 import sys

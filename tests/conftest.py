@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Shared test harness for the Jira CLI script tests.
 
 Each CLI script is a standalone file (PEP 723, loaded by path rather than

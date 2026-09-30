@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for jira-setup.py — write_profile() and validate_credentials()."""
 
 import importlib.util
