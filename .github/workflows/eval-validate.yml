@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: Eval Validation
 
 # Runs the skill's eval suite via the skill-repo-skill reusable. The reusable
@@ -6,7 +8,7 @@ name: Eval Validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 permissions: {}

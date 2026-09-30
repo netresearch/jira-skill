@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: OpenSSF Scorecard
 
 # Closes the skill-repo security gap: supply-chain posture scoring (branch
@@ -6,7 +8,7 @@ name: OpenSSF Scorecard
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   schedule:
     - cron: '0 0 * * 0'
   workflow_dispatch:
