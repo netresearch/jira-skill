@@ -47,7 +47,7 @@ The repository ships no server component and no container image. It keeps no dat
 
 | Threat | Countermeasure | Evidence |
 | --- | --- | --- |
-| Jira Cloud answers an attachment download with a redirect to its storage host | Exactly one redirect is followed, without credentials; a redirect to `http://` is refused; a further redirect is an error, so a redirect body is never saved as the file | `core/jira-attachment.py` (`_stream_to_path`); `tests/test_attachment_security.py` |
+| Jira Cloud answers an attachment download with a redirect to its storage host | Exactly one redirect is followed, without credentials; a further redirect is an error, so a redirect body is never saved as the file | `core/jira-attachment.py` (`_stream_to_path`); `tests/test_attachment_security.py` |
 | A download writes outside the intended directory (CWE-22) | Output paths and the `--dir` of `download-all` are resolved and must stay inside the current directory; Jira-supplied file names lose their path components; duplicate names are disambiguated instead of overwritten | `core/jira-attachment.py` (`validate_output_path`, `download_all`); `tests/test_attachment_security.py` |
 | A login or session-expiry page is taken for real data | Every response through the patched client session is checked: a CAPTCHA challenge, HTTP 401/403, and a `200` HTML page without an attachment disposition each raise a typed error | `lib/client.py` (`_handle_response`, `_patch_session_for_response_validation`); `tests/test_attachment_security.py`, `tests/test_client.py` |
 | A CAPTCHA response sends the user to a foreign login page | The login URL from the `X-Authentication-Denied-Reason` header is used only if its host equals the configured Jira host | `lib/client.py` (`_check_captcha_challenge`); `tests/test_client.py` |
@@ -75,7 +75,7 @@ Which of these checks must pass before a pull request can merge is set in the br
 
 ## What a user cannot expect
 
-- The configuration is trusted. A `JIRA_URL` starting with `http://` passes `validate_config`, and the credentials then travel unencrypted; use `https://`. Whoever can edit the configuration files or the `JIRA_*` environment variables can redirect the credentials.
+- The configuration is trusted. A `JIRA_URL` starting with `http://` passes `validate_config`, and the credentials then travel unencrypted. Whoever can edit the configuration files or the `JIRA_*` environment variables can redirect the credentials.
 - `download-all` downloads the `content` URL that the Jira server lists for each attachment; the server is trusted to list its own URLs.
 - `--debug` re-raises the original exception without `_sanitize_error`, and several scripts (for example `core/jira-search.py`, `core/jira-worklog.py`, `workflow/jira-transition.py`) print exception text unfiltered. `_sanitize_error` matches known key names; a credential in an unexpected format is not recognised.
 - Content returned from Jira (descriptions, comments, attachment names) is printed to the agent unchanged. Ticket text can contain instructions aimed at the agent; the scripts do not detect or remove them.
