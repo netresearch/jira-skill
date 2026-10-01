@@ -87,7 +87,7 @@ cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py ad
 cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 - --dry-run
 ```
 
-`--dry-run` works the same on `edit`. The preview runs the escape and the lint, so it shows the repaired text and refuses what a real post would refuse; it skips the render call and the mention lookup, which both go to the instance.
+`--dry-run` works the same on `edit`. The preview runs the escape and the lint, so it shows the repaired text and refuses what those two would refuse. It skips the render call and the mention lookup, which both go to the instance, so a struck-through render or an unknown `[~username]` only surfaces on the real post.
 
 Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
 

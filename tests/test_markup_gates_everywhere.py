@@ -434,3 +434,25 @@ def test_dry_run_honours_json_and_quiet(name, script, folder, argv, path, quiet_
         quiet = runner.invoke(module.cli, ["--quiet", *argv, "--dry-run"])
     assert quiet.exit_code == 0, f"{name}: {quiet.output}"
     assert quiet.stdout.strip() == quiet_line, f"{name}: --quiet printed {quiet.stdout!r}"
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_dry_run_skips_the_mention_lookup(name, script, folder, argv, path, quiet_line):
+    """The three new previews stay off the network for mentions too.
+
+    ``_driving`` stubs ``check_mentions_cli`` for every other test, so putting
+    the lookup back on the dry-run path left the suite green. Counted on the
+    attempt: the lookup must not be called at all.
+    """
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=_stocked_client()),
+        mock.patch.object(module, "check_mentions_cli") as mentions,
+    ):
+        result = runner.invoke(module.cli, [*argv, "--dry-run"])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert mentions.call_count == 0, f"{name}: --dry-run looked up mentions"
