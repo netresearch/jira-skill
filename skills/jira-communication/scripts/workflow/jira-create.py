@@ -199,6 +199,7 @@ def issue(
     if components:
         fields["components"] = [{"name": c.strip()} for c in components.split(",")]
 
+    extra_fields: dict = {}
     if fields_json:
         try:
             extra_fields = json.loads(fields_json)
