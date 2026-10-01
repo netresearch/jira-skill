@@ -76,16 +76,23 @@ def _read_comment_text(comment_text: str, usage: str) -> str:
 DRY_RUN_HELP = "Print the comment as it would be posted, after the escape and the lint, without posting it"
 
 
-def _print_dry_run(headline: str, intro: str, body: str) -> None:
+def _print_dry_run(ctx, headline: str, intro: str, record: dict) -> None:
     """Show what a real ``add`` or ``edit`` would send, and nothing else.
 
-    The body printed is the one the escape and the lint returned, so the
+    ``record["body"]`` is the text the escape and the lint returned, so the
     preview is the text a real write would post. Printing the raw argument
-    instead would show something the instance never receives.
+    instead would show something the instance never receives. ``--json``
+    gets the record itself, ``--quiet`` the body alone.
     """
+    if ctx.obj["json"]:
+        format_output({"dry_run": True, **record}, as_json=True)
+        return
+    if ctx.obj["quiet"]:
+        print(record["body"])
+        return
     warning(f"DRY RUN - {headline}")
     print(f"\n{intro}")
-    print(body)
+    print(record["body"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -195,7 +202,12 @@ def add(
         label="comment",
     )
     if dry_run:
-        _print_dry_run("No comment will be added", f"Would add to {issue_key}:", comment_text)
+        _print_dry_run(
+            ctx,
+            "No comment will be added",
+            f"Would add to {issue_key}:",
+            {"issue_key": issue_key, "body": comment_text},
+        )
         return
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
@@ -278,7 +290,10 @@ def edit(
     )
     if dry_run:
         _print_dry_run(
-            "No comment will be changed", f"Would replace comment {comment_id} on {issue_key} with:", comment_text
+            ctx,
+            "No comment will be changed",
+            f"Would replace comment {comment_id} on {issue_key} with:",
+            {"issue_key": issue_key, "comment_id": comment_id, "body": comment_text},
         )
         return
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)

@@ -19,6 +19,7 @@ was true the whole time the descriptions were unguarded.
 """
 
 import contextlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -389,3 +390,47 @@ def test_every_surface_offers_the_three_flags(name, script, folder, argv, attr):
     # The decorator applies them bottom-up, so their order in --help follows the
     # order they are listed in. Pinned because the code calls it deliberate.
     assert positions == sorted(positions), f"{name}: the three flags changed order in --help: {declared}"
+
+
+# The three surfaces whose dry run arrived in 2026-10, with where the previewed
+# body sits in the --json record and what --quiet prints.
+DRY_RUN_OUTPUT_MODES = [
+    ("comment-add", "jira-comment", "workflow", ["add", "PROJ-1", RAW], ("body",), REPAIRED),
+    ("comment-edit", "jira-comment", "workflow", ["edit", "PROJ-1", "42", RAW], ("body",), REPAIRED),
+    (
+        "worklog-comment",
+        "jira-worklog",
+        "core",
+        ["add", "PROJ-1", "2h", "--comment", RAW],
+        ("worklog", "comment"),
+        "2h",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_dry_run_honours_json_and_quiet(name, script, folder, argv, path, quiet_line):
+    """--json must stay parseable and --quiet minimal under --dry-run too.
+
+    The repair warning goes to stderr, so stdout alone is what a JSON consumer
+    reads; prose on stdout there is a broken contract, not a cosmetic issue.
+    """
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+
+    with _driving(module, _stocked_client()):
+        as_json = runner.invoke(module.cli, ["--json", *argv, "--dry-run"])
+    assert as_json.exit_code == 0, f"{name}: {as_json.output}"
+    record = json.loads(as_json.stdout)
+    assert record["dry_run"] is True, f"{name}: {record}"
+    value = record
+    for key in path:
+        value = value[key]
+    assert value == REPAIRED, f"{name}: the JSON preview carries unrepaired text"
+
+    with _driving(module, _stocked_client()):
+        quiet = runner.invoke(module.cli, ["--quiet", *argv, "--dry-run"])
+    assert quiet.exit_code == 0, f"{name}: {quiet.output}"
+    assert quiet.stdout.strip() == quiet_line, f"{name}: --quiet printed {quiet.stdout!r}"

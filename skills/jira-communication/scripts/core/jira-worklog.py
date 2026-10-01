@@ -168,8 +168,17 @@ def _build_worklog_data(time_spent: str, comment: str | None, started: str | Non
     return worklog_data
 
 
-def _print_dry_run(issue_key: str, worklog_data: dict) -> None:
-    """Show the worklog a real ``add`` would send, without sending it."""
+def _print_dry_run(ctx, issue_key: str, worklog_data: dict) -> None:
+    """Show the worklog a real ``add`` would send, without sending it.
+
+    ``--json`` gets the request body itself, ``--quiet`` the time spent alone.
+    """
+    if ctx.obj["json"]:
+        format_output({"dry_run": True, "issue_key": issue_key, "worklog": worklog_data}, as_json=True)
+        return
+    if ctx.obj["quiet"]:
+        print(worklog_data["timeSpent"])
+        return
     warning("DRY RUN - No worklog will be added")
     print(f"\nWould add worklog to {issue_key}: {worklog_data['timeSpent']}")
     print(f"  Started: {worklog_data['started']}")
@@ -237,7 +246,7 @@ def add(
         worklog_data = _build_worklog_data(time_spent, comment, started)
 
         if dry_run:
-            _print_dry_run(issue_key, worklog_data)
+            _print_dry_run(ctx, issue_key, worklog_data)
             return
 
         # Add worklog via REST API (using issue_add_json_worklog which accepts timeSpent string)
