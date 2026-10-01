@@ -214,7 +214,8 @@ def issue(
         print(f"  Type: {issue_type}")
         print(f"  Summary: {summary}")
         if description:
-            # In full: the preview exists to show the text a real create would post.
+            # In full: the preview exists to show the --description text a real
+            # create would post (a description in --fields-json bypasses the gates).
             print(f"  Description: {description}")
         if priority:
             print(f"  Priority: {priority}")
