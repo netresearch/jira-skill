@@ -155,6 +155,28 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     ctx.obj["profile"] = profile
 
 
+def _build_worklog_data(time_spent: str, comment: str | None, started: str | None) -> dict:
+    """The JSON body for issue_add_json_worklog, also what a --dry-run prints."""
+    worklog_data = {"timeSpent": time_spent}
+    if comment:
+        worklog_data["comment"] = comment
+    if started:
+        worklog_data["started"] = normalize_iso_timestamp(started)
+    else:
+        # Default to current time in local timezone (Jira format)
+        worklog_data["started"] = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S.000%z")
+    return worklog_data
+
+
+def _print_dry_run(issue_key: str, worklog_data: dict) -> None:
+    """Show the worklog a real ``add`` would send, without sending it."""
+    warning("DRY RUN - No worklog will be added")
+    print(f"\nWould add worklog to {issue_key}: {worklog_data['timeSpent']}")
+    print(f"  Started: {worklog_data['started']}")
+    if "comment" in worklog_data:
+        print(f"  Comment: {worklog_data['comment']}")
+
+
 @cli.command()
 @click.argument("issue_key")
 @click.argument("time_spent")
@@ -212,26 +234,10 @@ def add(
         check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
-        # Build worklog data for JSON API
-        worklog_data = {
-            "timeSpent": time_spent,
-        }
-
-        if comment:
-            worklog_data["comment"] = comment
-
-        if started:
-            worklog_data["started"] = normalize_iso_timestamp(started)
-        else:
-            # Default to current time in local timezone (Jira format)
-            worklog_data["started"] = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S.000%z")
+        worklog_data = _build_worklog_data(time_spent, comment, started)
 
         if dry_run:
-            warning("DRY RUN - No worklog will be added")
-            print(f"\nWould add worklog to {issue_key}: {time_spent}")
-            print(f"  Started: {worklog_data['started']}")
-            if comment:
-                print(f"  Comment: {comment}")
+            _print_dry_run(issue_key, worklog_data)
             return
 
         # Add worklog via REST API (using issue_add_json_worklog which accepts timeSpent string)
