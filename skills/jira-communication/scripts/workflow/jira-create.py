@@ -213,10 +213,10 @@ def issue(
         print(f"\nWould create issue in {project_key}:")
         print(f"  Type: {issue_type}")
         print(f"  Summary: {summary}")
-        if description:
-            # In full: the preview exists to show the --description text a real
-            # create would post (a description in --fields-json bypasses the gates).
-            print(f"  Description: {description}")
+        # In full, and from `fields`: the preview shows the description a real
+        # create would post, which --fields-json can replace without the gates.
+        if fields.get("description"):
+            print(f"  Description: {fields['description']}")
         if priority:
             print(f"  Priority: {priority}")
         if labels:
@@ -229,6 +229,8 @@ def issue(
             print(f"  Parent: {parent}")
         if components:
             print(f"  Components: {components}")
+        if fields_json:
+            print(f"  Fields: {extra_fields}")
         return
 
     try:

@@ -350,6 +350,25 @@ def test_create_preview_shows_a_repair_past_fifty_characters():
     assert f"Description: {long_repaired}\n" in result.stdout, result.stdout
 
 
+def test_create_preview_shows_the_description_fields_json_would_post():
+    """--fields-json is applied after --description and wins on the real create.
+
+    The preview printed the gated --description while the create would have
+    posted the ungated --fields-json text instead.
+    """
+    module = load_script("jira-create", "workflow")
+    runner = click.testing.CliRunner()
+    argv = ["issue", "PROJ", "Summary", "--type", "Task", "--description", RAW]
+    argv += ["--fields-json", '{"description": "from fields-json"}', "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, argv)
+
+    assert result.exit_code == 0, result.output
+    assert "Description: from fields-json\n" in result.stdout, result.stdout
+    assert "Fields: {'description': 'from fields-json'}" in result.stdout, result.stdout
+
+
 def test_create_renders_without_an_issue_key_but_lints_the_project():
     """The two gates on ``create issue`` need different keys, deliberately.
 
