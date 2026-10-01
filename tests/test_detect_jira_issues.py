@@ -76,6 +76,15 @@ class TestExtractIssueKeysDenylist:
         "EXAMPLE-99",
         "PROJ-123",  # literal doc placeholder
         "ABC-123",  # literal doc placeholder
+        "GPL-2.0",  # SPDX license identifiers
+        "AGPL-3.0",
+        "LGPL-2.1",
+        "MPL-2.0",
+        "EPL-2.0",
+        "EUPL-1.2",
+        "CDDL-1.0",
+        "BSL-1.0",  # Boost Software License
+        "BUSL-1.1",  # Business Source License
     ]
 
     REAL_KEYS = [
@@ -96,6 +105,19 @@ class TestExtractIssueKeysDenylist:
     def test_security_ids_filtered_real_key_kept_in_same_text(self):
         text = "CWE-918 and CVE-2024-1234 relate to NRS-4477 and UTF-8 / SHA-256 encoding"
         assert extract_issue_keys(text) == ["NRS-4477"]
+
+    def test_license_survey_line_detects_nothing(self):
+        """A license survey line names an SPDX identifier and no ticket.
+
+        Copied from the subagent report that made the prompt hook print
+        "Detected Jira issue reference(s): GPL-2" on 2026-09-29.
+        """
+        text = (
+            "- **„Open Core“ bei Planio:** Kern ist Redmine unter GPL-2.0, dazu "
+            "nicht veröffentlichte Planio-Funktionen. „proprietär“ wäre ebenso "
+            "vertretbar."
+        )
+        assert extract_issue_keys(text) == []
 
     def test_placeholder_filtered_from_url_too(self):
         """The PROJ-123 placeholder is filtered even inside a Jira /browse/ URL."""
