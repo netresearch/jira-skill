@@ -708,10 +708,15 @@ def update(
     if fields_json:
         try:
             extra_fields = json.loads(fields_json)
-            update_fields.update(extra_fields)
         except json.JSONDecodeError as e:
             error(f"Invalid JSON in --fields-json: {e}")
             sys.exit(1)
+        # As in jira-transition.py: a list or null would crash update() with a
+        # traceback, and a list of pairs would pass it as fields nobody wrote.
+        if not isinstance(extra_fields, dict):
+            error(f"--fields-json must be a JSON object, got {type(extra_fields).__name__}: {fields_json}")
+            sys.exit(1)
+        update_fields.update(extra_fields)
 
     if not update_fields:
         error("No fields specified for update")

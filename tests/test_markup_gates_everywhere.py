@@ -369,19 +369,26 @@ def test_create_preview_says_fields_json_wins():
     assert "--fields-json (wins over the values above): {'description': 'from fields-json'}" in result.stdout
 
 
-@pytest.mark.parametrize("document", ["[1]", "null", '[["description", "x"]]'])
-def test_create_refuses_fields_json_that_is_not_an_object(document):
+FIELDS_JSON_COMMANDS = [
+    ("create", "jira-create", "workflow", ["issue", "PROJ", "Summary", "--type", "Task"]),
+    ("update", "jira-issue", "core", ["update", "PROJ-1"]),
+]
+
+
+@pytest.mark.parametrize("document", ["[1]", "null", '[["summary", "x"]]'])
+@pytest.mark.parametrize("name,script,folder,head", FIELDS_JSON_COMMANDS, ids=[c[0] for c in FIELDS_JSON_COMMANDS])
+def test_fields_json_must_be_an_object(name, script, folder, head, document):
     """As jira-transition.py does: an error naming the argument, no traceback."""
-    module = load_script("jira-create", "workflow")
+    module = load_script(script, folder)
     runner = click.testing.CliRunner()
-    argv = ["issue", "PROJ", "Summary", "--type", "Task", "--fields-json", document, "--dry-run"]
+    argv = [*head, "--fields-json", document, "--dry-run"]
 
     with _driving(module, _stocked_client()):
         result = runner.invoke(module.cli, argv)
 
-    assert result.exit_code == 1, result.output
-    assert not isinstance(result.exception, TypeError), result.exception
-    assert "--fields-json must be a JSON object" in result.output, result.output
+    assert result.exit_code == 1, f"{name}: {result.output}"
+    assert not isinstance(result.exception, TypeError), f"{name}: {result.exception}"
+    assert "--fields-json must be a JSON object" in result.output, f"{name}: {result.output}"
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():
