@@ -462,3 +462,61 @@ def test_dry_run_skips_the_mention_lookup(name, script, folder, argv, path, quie
 
     assert result.exit_code == 0, f"{name}: {result.output}"
     assert mentions.call_count == 0, f"{name}: --dry-run looked up mentions"
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_real_write_still_looks_up_mentions(name, script, folder, argv, path, quiet_line):
+    """The other half of the test above: skipping is for the preview only.
+
+    The dry-run branch sits right in front of the lookup, so a condition that
+    drops it from the real write as well would pass the skip test alone.
+    """
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=_stocked_client()),
+        mock.patch.object(module, "check_mentions_cli", return_value=None) as mentions,
+    ):
+        result = runner.invoke(module.cli, argv)
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert mentions.call_count == 1, f"{name}: the real write skipped the mention lookup"
+
+
+def test_worklog_preview_shows_the_start_time():
+    """The start time decides which day a booking lands on.
+
+    It is the one value the worklog preview computes itself, so the text
+    preview must print the same ``started`` that the request body carries.
+    """
+    module = load_script("jira-worklog", "core")
+    runner = click.testing.CliRunner()
+    argv = ["add", "PROJ-1", "2h", "--started", "2026-09-30T09:15", "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        as_json = runner.invoke(module.cli, ["--json", *argv])
+        as_text = runner.invoke(module.cli, argv)
+
+    assert as_json.exit_code == 0, as_json.output
+    assert as_text.exit_code == 0, as_text.output
+    started = json.loads(as_json.stdout)["worklog"]["started"]
+    assert started.startswith("2026-09-30T09:15"), started
+    assert f"Started: {started}" in as_text.stdout, as_text.stdout
+
+
+def test_comment_edit_preview_names_the_comment():
+    """A preview of an edit must say which comment it would replace."""
+    module = load_script("jira-comment", "workflow")
+    runner = click.testing.CliRunner()
+    argv = ["edit", "PROJ-1", "42", RAW, "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        as_json = runner.invoke(module.cli, ["--json", *argv])
+        as_text = runner.invoke(module.cli, argv)
+
+    assert as_json.exit_code == 0, as_json.output
+    assert as_text.exit_code == 0, as_text.output
+    assert json.loads(as_json.stdout)["comment_id"] == "42"
+    assert "Would replace comment 42 on PROJ-1" in as_text.stdout, as_text.stdout
