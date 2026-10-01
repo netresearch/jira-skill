@@ -27,7 +27,7 @@ import re
 import click
 from lib.client import LazyJiraClient
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
-from lib.output import comment_to_text, error, format_output, success
+from lib.output import comment_to_text, error, format_output, success, warning
 from lib.users import check_mentions_cli, person_label
 
 # Trailing UTC offset in any ISO-8601 spelling: "Z", "+01:00" or "+0100".
@@ -164,6 +164,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 )
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification in --comment")
 @markup_options
+@click.option("--dry-run", is_flag=True, help="Show the worklog as it would be added, without adding it")
 @click.pass_context
 def add(
     ctx,
@@ -173,6 +174,7 @@ def add(
     started: str | None,
     no_verify_mentions: bool,
     gates: MarkupGates,
+    dry_run: bool,
 ):
     """Add worklog entry to an issue.
 
@@ -180,25 +182,34 @@ def add(
 
     TIME_SPENT: Time spent in Jira format (e.g., '2h 30m', '1d', '30m')
 
+    --dry-run prints the worklog as it would be added, with the comment after
+    the escape and the lint, and adds nothing. The render preview and the
+    mention lookup are skipped.
+
     Examples:
 
       jira-worklog add PROJ-123 "2h 30m" -c "Code review"
 
       jira-worklog add PROJ-123 "1d" --started "2025-01-15T09:00:00"
+
+      jira-worklog add PROJ-123 "2h" -c "Code review" --dry-run
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
-    # A worklog comment renders wiki markup — same gates as jira-comment add
+    # A worklog comment renders wiki markup — same gates as jira-comment add.
+    # Under --dry-run only the render call is dropped, so the preview shows the
+    # comment a real run would post.
     comment = guard_wiki_markup(
         comment,
-        gates=gates,
+        gates=gates.offline() if dry_run else gates,
         issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),
         label="worklog comment",
     )
-    check_mentions_cli(client, comment, skip=no_verify_mentions)
+    if not dry_run:
+        check_mentions_cli(client, comment, skip=no_verify_mentions)
 
     try:
         # Build worklog data for JSON API
@@ -214,6 +225,14 @@ def add(
         else:
             # Default to current time in local timezone (Jira format)
             worklog_data["started"] = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S.000%z")
+
+        if dry_run:
+            warning("DRY RUN - No worklog will be added")
+            print(f"\nWould add worklog to {issue_key}: {time_spent}")
+            print(f"  Started: {worklog_data['started']}")
+            if comment:
+                print(f"  Comment: {comment}")
+            return
 
         # Add worklog via REST API (using issue_add_json_worklog which accepts timeSpent string)
         result = client.issue_add_json_worklog(issue_key, worklog_data)

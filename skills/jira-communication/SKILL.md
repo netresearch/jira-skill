@@ -51,7 +51,7 @@ Every `--comment` and `--description` option that writes wiki markup runs three 
 2. **The markup and the ticket language are linted.** Block tags used inline (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level), unbalanced tag counts, and German prose on an English-only project each abort the write. `--force` turns the findings into warnings and posts anyway.
 3. **The text is rendered by the instance and refused if it comes back struck through.** This costs one API call per post and catches what no local check can — an autolinked issue key creates a boundary that exists only on an instance where that key resolves. A resolved issue's key, which Jira draws struck through as status styling, is not reported. `--no-preflight` skips it; an unreachable renderer warns once and posts anyway.
 
-`--force` posts despite any of the three. The flags are spelled the same on each command. Under `--dry-run` the escape and the lint still run — the preview shows the text a real write would post — while the render call does not. See `references/comments.md` for the details.
+`--force` posts despite any of the three. The flags are spelled the same on each command. All seven also take `--dry-run`: the escape and the lint still run — the preview shows the text a real write would post — while the render call and the write do not. See `references/comments.md` for the details.
 
 ## Basic Usage
 

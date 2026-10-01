@@ -155,8 +155,10 @@ def test_the_repair_reaches_every_surface(name, script, folder, argv, attr):
 # Carries MARKER so a surface that wrote anyway is caught by the same search.
 LINT_BAIT = "See {code} Extensions"
 
-# The four commands that offer --dry-run; the other three have no such flag.
-DRY_RUN_SURFACES = [s for s in SURFACES if s[1] in {"jira-transition", "jira-issue", "jira-create"}]
+# All seven offer --dry-run. Until 2026-10 `jira-comment add`/`edit` and
+# `jira-worklog add` did not, while SKILL.md described the preview for every
+# surface; an agent asking for one got "No such option" on four comments in a row.
+DRY_RUN_SURFACES = SURFACES
 
 
 @pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
@@ -303,8 +305,8 @@ def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, 
     than no preview. `update` and `create issue` ran the render call instead,
     reaching the network for a write that is not happening.
 
-    Only the four commands that HAVE --dry-run are covered: `jira-comment
-    add`/`edit` and `jira-worklog add` do not offer the flag at all.
+    The write itself is asserted on the attempt, not the outcome: the named
+    method must not have been called at all, whatever it would have returned.
     """
     calls = []
 
@@ -313,12 +315,15 @@ def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, 
         return RenderVerdict(False, [], "stubbed")
 
     module = load_script(script, folder)
+    client = _stocked_client()
     runner = click.testing.CliRunner()
-    with _driving(module, _stocked_client(), render=_record):
+    with _driving(module, client, render=_record):
         result = runner.invoke(module.cli, [*argv, "--dry-run"])
 
     assert result.exit_code == 0, f"{name}: {result.output}"
     assert calls == [], f"{name}: --dry-run called the renderer {len(calls)} time(s)"
+    assert getattr(client, attr).call_count == 0, f"{name}: --dry-run called {attr}"
+    assert _written_text(client, attr) is None, f"{name}: --dry-run handed the body to the client"
     # A prefix, not the whole string: `create issue` truncates its preview to 50
     # characters, so asserting the full body would fail for an unrelated reason
     # the moment the fixture grows.

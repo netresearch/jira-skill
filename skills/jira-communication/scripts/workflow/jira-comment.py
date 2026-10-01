@@ -73,6 +73,21 @@ def _read_comment_text(comment_text: str, usage: str) -> str:
     return comment_text
 
 
+DRY_RUN_HELP = "Print the comment as it would be posted, after the escape and the lint, without posting it"
+
+
+def _print_dry_run(headline: str, intro: str, body: str) -> None:
+    """Show what a real ``add`` or ``edit`` would send, and nothing else.
+
+    The body printed is the one the escape and the lint returned, so the
+    preview is the text a real write would post. Printing the raw argument
+    instead would show something the instance never receives.
+    """
+    warning(f"DRY RUN - {headline}")
+    print(f"\n{intro}")
+    print(body)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -113,6 +128,7 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("comment_text")
 @markup_options
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
+@click.option("--dry-run", is_flag=True, help=DRY_RUN_HELP)
 @click.pass_context
 def add(
     ctx,
@@ -120,6 +136,7 @@ def add(
     comment_text: str,
     gates: MarkupGates,
     no_verify_mentions: bool,
+    dry_run: bool,
 ):
     """Add a comment to an issue.
 
@@ -148,6 +165,10 @@ def add(
     separate user lookup is needed; an unknown username aborts with
     suggestions (skip with --no-verify-mentions).
 
+    --dry-run prints the comment exactly as it would be posted, after the
+    escape and the lint, and posts nothing. The render preview and the
+    mention lookup are skipped, because both call the instance.
+
     Examples:
 
       jira-comment add PROJ-123 "Fixed in commit abc123"
@@ -157,6 +178,8 @@ def add(
       jira-comment add PROJ-123 "[~jane.doe] please review"
 
       cat comment.txt | jira-comment add PROJ-123 -
+
+      cat comment.txt | jira-comment add PROJ-123 - --dry-run
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
@@ -165,12 +188,15 @@ def add(
 
     comment_text = guard_wiki_markup(
         comment_text,
-        gates=gates,
+        gates=gates.offline() if dry_run else gates,
         issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),
         label="comment",
     )
+    if dry_run:
+        _print_dry_run("No comment will be added", f"Would add to {issue_key}:", comment_text)
+        return
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
@@ -197,6 +223,7 @@ def add(
 @click.argument("comment_text")
 @markup_options
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
+@click.option("--dry-run", is_flag=True, help=DRY_RUN_HELP)
 @click.pass_context
 def edit(
     ctx,
@@ -205,6 +232,7 @@ def edit(
     comment_text: str,
     gates: MarkupGates,
     no_verify_mentions: bool,
+    dry_run: bool,
 ):
     """Edit an existing comment on an issue.
 
@@ -222,6 +250,9 @@ def edit(
     deliberate strikethrough also needs --force, because the lint and the render
     check each still refuse the span.
 
+    --dry-run prints the new text exactly as it would be posted and changes
+    nothing; the render preview and the mention lookup are skipped.
+
     Examples:
 
       jira-comment edit PROJ-123 12345 "Updated: fixed in commit abc123"
@@ -229,6 +260,8 @@ def edit(
       jira-comment edit PROJ-123 12345 "h3. Findings\\n\\nUpdated analysis"
 
       cat comment.txt | jira-comment edit PROJ-123 12345 -
+
+      cat comment.txt | jira-comment edit PROJ-123 12345 - --dry-run
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
@@ -237,12 +270,17 @@ def edit(
 
     comment_text = guard_wiki_markup(
         comment_text,
-        gates=gates,
+        gates=gates.offline() if dry_run else gates,
         issue_key=issue_key,
         env_file=ctx.obj.get("env_file"),
         profile=ctx.obj.get("profile"),
         label="comment",
     )
+    if dry_run:
+        _print_dry_run(
+            "No comment will be changed", f"Would replace comment {comment_id} on {issue_key} with:", comment_text
+        )
+        return
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:

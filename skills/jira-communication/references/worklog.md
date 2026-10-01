@@ -26,6 +26,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 1h30m \
 
 Time strings accept `Nw Nd Nh Nm Ns` combinations (Jira semantics, 8h workday).
 
+`--dry-run` prints the entry as it would be added, with its start time and the comment after the markup escape and lint, and adds nothing.
+
 ## `jira-worklog.py delete` — undo a booking
 
 Every `add` prints the new `Worklog ID`, and `list` shows the id of each entry — that id is the handle for `delete`. Use it to undo a booking made against the wrong issue, the wrong duration, or the wrong system (see above).
