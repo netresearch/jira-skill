@@ -325,10 +325,29 @@ def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, 
     assert calls == [], f"{name}: --dry-run called the renderer {len(calls)} time(s)"
     assert getattr(client, attr).call_count == 0, f"{name}: --dry-run called {attr}"
     assert _written_text(client, attr) is None, f"{name}: --dry-run handed the body to the client"
-    # A prefix, not the whole string: `create issue` truncates its preview to 50
-    # characters, so asserting the full body would fail for an unrelated reason
-    # the moment the fixture grows.
-    assert REPAIRED[:40] in result.output, f"{name}: the preview shows unrepaired text\n{result.output}"
+    # The whole body: a preview that cuts the text can hide the very repair it
+    # exists to show (`create issue` used to stop at 50 characters).
+    assert REPAIRED in result.output, f"{name}: the preview shows unrepaired or cut text\n{result.output}"
+
+
+def test_create_preview_shows_a_repair_past_fifty_characters():
+    """The create preview used to stop at 50 characters.
+
+    A repair further into the description was announced on stderr and never
+    shown, so the preview read like the posted text while hiding the change.
+    """
+    module = load_script("jira-create", "workflow")
+    runner = click.testing.CliRunner()
+    long_raw = "Eine lange Beschreibung mit vielen Woertern bis hierhin, dann " + RAW
+    long_repaired = "Eine lange Beschreibung mit vielen Woertern bis hierhin, dann " + REPAIRED
+
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(
+            module.cli, ["issue", "PROJ", "Summary", "--type", "Task", "--description", long_raw, "--dry-run"]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert f"Description: {long_repaired}\n" in result.stdout, result.stdout
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():

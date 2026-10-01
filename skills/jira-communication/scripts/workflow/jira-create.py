@@ -214,7 +214,8 @@ def issue(
         print(f"  Type: {issue_type}")
         print(f"  Summary: {summary}")
         if description:
-            print(f"  Description: {description[:50]}...")
+            # In full: the preview exists to show the text a real create would post.
+            print(f"  Description: {description}")
         if priority:
             print(f"  Priority: {priority}")
         if labels:
