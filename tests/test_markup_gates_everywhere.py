@@ -435,6 +435,12 @@ def test_dry_run_honours_json_and_quiet(name, script, folder, argv, path, quiet_
     assert quiet.exit_code == 0, f"{name}: {quiet.output}"
     assert quiet.stdout.strip() == quiet_line, f"{name}: --quiet printed {quiet.stdout!r}"
 
+    # Both flags: the real writes check --quiet first, so the preview must too.
+    with _driving(module, _stocked_client()):
+        both = runner.invoke(module.cli, ["--json", "--quiet", *argv, "--dry-run"])
+    assert both.exit_code == 0, f"{name}: {both.output}"
+    assert both.stdout.strip() == quiet_line, f"{name}: --json --quiet printed {both.stdout!r}"
+
 
 @pytest.mark.parametrize(
     "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
