@@ -82,13 +82,18 @@ EOF
 
 # Or from a file
 cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 -
+
+# Preview first: prints the body as it would be posted, posts nothing
+cat comment.txt | uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 - --dry-run
 ```
+
+`--dry-run` works the same on `edit`. The preview runs the escape and the lint, so it shows the repaired text and refuses what those two would refuse. It skips the render call and the mention lookup, which both go to the instance, so a struck-through render or an unknown `[~username]` only surfaces on the real post.
 
 Comments use Jira wiki markup — see the **jira-syntax** skill for formatting.
 
 ## Markup lint
 
-The three gates described here — escape, lint, render preview — run on every `--comment` and `--description` that writes wiki markup, not only on comments: `jira-comment.py add`/`edit`, `jira-transition.py do --comment`, `jira-transition.py path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`. Seven surfaces, and the three flags (`--force`, `--no-auto-escape`, `--no-preflight`) are spelled the same on each. The text below says "the body"; a description is checked identically. Two things are outside: a field written through `--fields-json`, which bypasses every gate by design, and the `--description` of `jira-version.py create`/`update`, where it is unverified whether Jira renders the field as wiki markup at all. `jira-transition path` IS gated; only the placement differs — it checks the comment before the FIRST transition rather than the final one it rides on, because a walk that aborted halfway would otherwise leave the issue in a status nobody chose. Under `--dry-run` the escape and the lint still run, so the preview prints what would be posted; only the render call is dropped.
+The three gates described here — escape, lint, render preview — run on every `--comment` and `--description` that writes wiki markup, not only on comments: `jira-comment.py add`/`edit`, `jira-transition.py do --comment`, `jira-transition.py path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`. Seven surfaces, and the three flags (`--force`, `--no-auto-escape`, `--no-preflight`) are spelled the same on each. The text below says "the body"; a description is checked identically. Two things are outside: a field written through `--fields-json`, which bypasses every gate by design, and the `--description` of `jira-version.py create`/`update`, where it is unverified whether Jira renders the field as wiki markup at all. `jira-transition path` IS gated; only the placement differs — it checks the comment before the FIRST transition rather than the final one it rides on, because a walk that aborted halfway would otherwise leave the issue in a status nobody chose. All seven take `--dry-run`. Under it the escape and the lint still run, so the preview prints what would be posted; the render call and the write are dropped.
 
 They lint the body before posting: inline block tags (`{code}`, `{noformat}`, `{quote}`, `{panel}` are block-level — a tag with other text on the same line opens a block mid-prose) and unbalanced tag counts abort with an error. Escape literal tag mentions as `\{code\}`. Override with `--force` (findings are then printed as warnings).
 

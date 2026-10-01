@@ -199,13 +199,19 @@ def issue(
     if components:
         fields["components"] = [{"name": c.strip()} for c in components.split(",")]
 
+    extra_fields: dict = {}
     if fields_json:
         try:
             extra_fields = json.loads(fields_json)
-            fields.update(extra_fields)
         except json.JSONDecodeError as e:
             error(f"Invalid JSON in --fields-json: {e}")
             sys.exit(1)
+        # As in jira-transition.py: a list or null would crash update() with a
+        # traceback, and a list of pairs would pass it as fields nobody wrote.
+        if not isinstance(extra_fields, dict):
+            error(f"--fields-json must be a JSON object, got {type(extra_fields).__name__}: {fields_json}")
+            sys.exit(1)
+        fields.update(extra_fields)
 
     # Dry run
     if dry_run:
@@ -214,7 +220,8 @@ def issue(
         print(f"  Type: {issue_type}")
         print(f"  Summary: {summary}")
         if description:
-            print(f"  Description: {description[:50]}...")
+            # In full: the preview exists to show the text a real create posts.
+            print(f"  Description: {description}")
         if priority:
             print(f"  Priority: {priority}")
         if labels:
@@ -227,6 +234,9 @@ def issue(
             print(f"  Parent: {parent}")
         if components:
             print(f"  Components: {components}")
+        if fields_json:
+            # Applied last, so these replace any of the values above, ungated.
+            print(f"  --fields-json (wins over the values above): {extra_fields}")
         return
 
     try:

@@ -19,6 +19,7 @@ was true the whole time the descriptions were unguarded.
 """
 
 import contextlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -155,8 +156,10 @@ def test_the_repair_reaches_every_surface(name, script, folder, argv, attr):
 # Carries MARKER so a surface that wrote anyway is caught by the same search.
 LINT_BAIT = "See {code} Extensions"
 
-# The four commands that offer --dry-run; the other three have no such flag.
-DRY_RUN_SURFACES = [s for s in SURFACES if s[1] in {"jira-transition", "jira-issue", "jira-create"}]
+# All seven offer --dry-run. Until 2026-10 `jira-comment add`/`edit` and
+# `jira-worklog add` did not, while SKILL.md described the preview for every
+# surface; an agent asking for one got "No such option" on four comments in a row.
+DRY_RUN_SURFACES = SURFACES
 
 
 @pytest.mark.parametrize("name,script,folder,argv,attr", SURFACES, ids=[s[0] for s in SURFACES])
@@ -303,8 +306,8 @@ def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, 
     than no preview. `update` and `create issue` ran the render call instead,
     reaching the network for a write that is not happening.
 
-    Only the four commands that HAVE --dry-run are covered: `jira-comment
-    add`/`edit` and `jira-worklog add` do not offer the flag at all.
+    The write itself is asserted on the attempt, not the outcome: the named
+    method must not have been called at all, whatever it would have returned.
     """
     calls = []
 
@@ -313,16 +316,79 @@ def test_dry_run_repairs_the_preview_without_calling_the_renderer(name, script, 
         return RenderVerdict(False, [], "stubbed")
 
     module = load_script(script, folder)
+    client = _stocked_client()
     runner = click.testing.CliRunner()
-    with _driving(module, _stocked_client(), render=_record):
+    with _driving(module, client, render=_record):
         result = runner.invoke(module.cli, [*argv, "--dry-run"])
 
     assert result.exit_code == 0, f"{name}: {result.output}"
     assert calls == [], f"{name}: --dry-run called the renderer {len(calls)} time(s)"
-    # A prefix, not the whole string: `create issue` truncates its preview to 50
-    # characters, so asserting the full body would fail for an unrelated reason
-    # the moment the fixture grows.
-    assert REPAIRED[:40] in result.output, f"{name}: the preview shows unrepaired text\n{result.output}"
+    assert getattr(client, attr).call_count == 0, f"{name}: --dry-run called {attr}"
+    assert _written_text(client, attr) is None, f"{name}: --dry-run handed the body to the client"
+    # The whole body: a preview that cuts the text can hide the very repair it
+    # exists to show (`create issue` used to stop at 50 characters).
+    assert REPAIRED in result.output, f"{name}: the preview shows unrepaired or cut text\n{result.output}"
+
+
+def test_create_preview_shows_a_repair_past_fifty_characters():
+    """The create preview used to stop at 50 characters.
+
+    A repair further into the description was announced on stderr and never
+    shown, so the preview read like the posted text while hiding the change.
+    """
+    module = load_script("jira-create", "workflow")
+    runner = click.testing.CliRunner()
+    long_raw = "Eine lange Beschreibung mit vielen Woertern bis hierhin, dann " + RAW
+    long_repaired = "Eine lange Beschreibung mit vielen Woertern bis hierhin, dann " + REPAIRED
+
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(
+            module.cli, ["issue", "PROJ", "Summary", "--type", "Task", "--description", long_raw, "--dry-run"]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert f"Description: {long_repaired}\n" in result.stdout, result.stdout
+
+
+def test_create_preview_says_fields_json_wins():
+    """--fields-json is applied after the flags and wins on the real create.
+
+    The preview printed the flags and never showed --fields-json, so it could
+    show one description, type or priority while the create sent another.
+    """
+    module = load_script("jira-create", "workflow")
+    runner = click.testing.CliRunner()
+    argv = ["issue", "PROJ", "Summary", "--type", "Task", "--description", RAW]
+    argv += ["--fields-json", '{"description": "from fields-json"}', "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, argv)
+
+    assert result.exit_code == 0, result.output
+    assert f"Description: {REPAIRED}\n" in result.stdout, result.stdout
+    assert "--fields-json (wins over the values above): {'description': 'from fields-json'}" in result.stdout
+
+
+FIELDS_JSON_COMMANDS = [
+    ("create", "jira-create", "workflow", ["issue", "PROJ", "Summary", "--type", "Task"]),
+    ("update", "jira-issue", "core", ["update", "PROJ-1"]),
+]
+
+
+@pytest.mark.parametrize("document", ["[1]", "null", '[["summary", "x"]]'])
+@pytest.mark.parametrize("name,script,folder,head", FIELDS_JSON_COMMANDS, ids=[c[0] for c in FIELDS_JSON_COMMANDS])
+def test_fields_json_must_be_an_object(name, script, folder, head, document):
+    """As jira-transition.py does: an error naming the argument, no traceback."""
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    argv = [*head, "--fields-json", document, "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, argv)
+
+    assert result.exit_code == 1, f"{name}: {result.output}"
+    assert not isinstance(result.exception, TypeError), f"{name}: {result.exception}"
+    assert "--fields-json must be a JSON object" in result.output, f"{name}: {result.output}"
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():
@@ -384,3 +450,147 @@ def test_every_surface_offers_the_three_flags(name, script, folder, argv, attr):
     # The decorator applies them bottom-up, so their order in --help follows the
     # order they are listed in. Pinned because the code calls it deliberate.
     assert positions == sorted(positions), f"{name}: the three flags changed order in --help: {declared}"
+
+
+# The three surfaces whose dry run arrived in 2026-10, with where the previewed
+# body sits in the --json record and what --quiet prints.
+DRY_RUN_OUTPUT_MODES = [
+    ("comment-add", "jira-comment", "workflow", ["add", "PROJ-1", RAW], ("body",), REPAIRED),
+    ("comment-edit", "jira-comment", "workflow", ["edit", "PROJ-1", "42", RAW], ("body",), REPAIRED),
+    (
+        "worklog-comment",
+        "jira-worklog",
+        "core",
+        ["add", "PROJ-1", "2h", "--comment", RAW],
+        ("worklog", "comment"),
+        "2h",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_dry_run_honours_json_and_quiet(name, script, folder, argv, path, quiet_line):
+    """--json must stay parseable and --quiet minimal under --dry-run too.
+
+    The repair warning goes to stderr, so stdout alone is what a JSON consumer
+    reads; prose on stdout there is a broken contract, not a cosmetic issue.
+    """
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+
+    with _driving(module, _stocked_client()):
+        as_json = runner.invoke(module.cli, ["--json", *argv, "--dry-run"])
+    assert as_json.exit_code == 0, f"{name}: {as_json.output}"
+    record = json.loads(as_json.stdout)
+    assert record["dry_run"] is True, f"{name}: {record}"
+    value = record
+    for key in path:
+        value = value[key]
+    assert value == REPAIRED, f"{name}: the JSON preview carries unrepaired text"
+
+    with _driving(module, _stocked_client()):
+        quiet = runner.invoke(module.cli, ["--quiet", *argv, "--dry-run"])
+    assert quiet.exit_code == 0, f"{name}: {quiet.output}"
+    assert quiet.stdout.strip() == quiet_line, f"{name}: --quiet printed {quiet.stdout!r}"
+
+    # Both flags: the real writes check --quiet first, so the preview must too.
+    with _driving(module, _stocked_client()):
+        both = runner.invoke(module.cli, ["--json", "--quiet", *argv, "--dry-run"])
+    assert both.exit_code == 0, f"{name}: {both.output}"
+    assert both.stdout.strip() == quiet_line, f"{name}: --json --quiet printed {both.stdout!r}"
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_dry_run_skips_the_mention_lookup(name, script, folder, argv, path, quiet_line):
+    """The three new previews stay off the network for mentions too.
+
+    ``_driving`` stubs ``check_mentions_cli`` for every other test, so putting
+    the lookup back on the dry-run path left the suite green. Counted on the
+    attempt: the lookup must not be called at all.
+    """
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=_stocked_client()),
+        mock.patch.object(module, "check_mentions_cli") as mentions,
+    ):
+        result = runner.invoke(module.cli, [*argv, "--dry-run"])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert mentions.call_count == 0, f"{name}: --dry-run looked up mentions"
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_real_write_still_looks_up_mentions(name, script, folder, argv, path, quiet_line):
+    """The other half of the test above: skipping is for the preview only.
+
+    The dry-run branch sits right in front of the lookup, so a condition that
+    drops it from the real write as well would pass the skip test alone.
+    """
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(module, "LazyJiraClient", return_value=_stocked_client()),
+        mock.patch.object(module, "check_mentions_cli", return_value=None) as mentions,
+    ):
+        result = runner.invoke(module.cli, argv)
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert mentions.call_count == 1, f"{name}: the real write skipped the mention lookup"
+
+
+def test_worklog_preview_shows_the_start_time():
+    """The start time decides which day a booking lands on.
+
+    It is the one value the worklog preview computes itself, so the text
+    preview must print the same ``started`` that the request body carries.
+    """
+    module = load_script("jira-worklog", "core")
+    runner = click.testing.CliRunner()
+    argv = ["add", "PROJ-1", "2h", "--started", "2026-09-30T09:15", "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        as_json = runner.invoke(module.cli, ["--json", *argv])
+        as_text = runner.invoke(module.cli, argv)
+
+    assert as_json.exit_code == 0, as_json.output
+    assert as_text.exit_code == 0, as_text.output
+    started = json.loads(as_json.stdout)["worklog"]["started"]
+    assert started.startswith("2026-09-30T09:15"), started
+    assert f"Started: {started}" in as_text.stdout, as_text.stdout
+
+
+def test_comment_edit_preview_names_the_comment():
+    """A preview of an edit must say which comment it would replace."""
+    module = load_script("jira-comment", "workflow")
+    runner = click.testing.CliRunner()
+    argv = ["edit", "PROJ-1", "42", RAW, "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        as_json = runner.invoke(module.cli, ["--json", *argv])
+        as_text = runner.invoke(module.cli, argv)
+
+    assert as_json.exit_code == 0, as_json.output
+    assert as_text.exit_code == 0, as_text.output
+    assert json.loads(as_json.stdout)["comment_id"] == "42"
+    assert "Would replace comment 42 on PROJ-1" in as_text.stdout, as_text.stdout
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_dry_run_text_preview_says_nothing_was_written(name, script, folder, argv, path, quiet_line):
+    """Without the banner the text preview reads like a confirmation."""
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, [*argv, "--dry-run"])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert "DRY RUN" in result.stderr, f"{name}: no dry-run banner in {result.stderr!r}"
