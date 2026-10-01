@@ -83,6 +83,7 @@ class TestExtractIssueKeysDenylist:
         "EPL-2.0",
         "EUPL-1.2",
         "CDDL-1.0",
+        "BSL-1.1",  # Business Source License
     ]
 
     REAL_KEYS = [
