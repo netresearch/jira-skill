@@ -350,11 +350,11 @@ def test_create_preview_shows_a_repair_past_fifty_characters():
     assert f"Description: {long_repaired}\n" in result.stdout, result.stdout
 
 
-def test_create_preview_shows_the_description_fields_json_would_post():
-    """--fields-json is applied after --description and wins on the real create.
+def test_create_preview_says_fields_json_wins():
+    """--fields-json is applied after the flags and wins on the real create.
 
-    The preview printed the gated --description while the create would have
-    posted the ungated --fields-json text instead.
+    The preview printed the flags and never showed --fields-json, so it could
+    show one description, type or priority while the create sent another.
     """
     module = load_script("jira-create", "workflow")
     runner = click.testing.CliRunner()
@@ -365,8 +365,23 @@ def test_create_preview_shows_the_description_fields_json_would_post():
         result = runner.invoke(module.cli, argv)
 
     assert result.exit_code == 0, result.output
-    assert "Description: from fields-json\n" in result.stdout, result.stdout
-    assert "Fields: {'description': 'from fields-json'}" in result.stdout, result.stdout
+    assert f"Description: {REPAIRED}\n" in result.stdout, result.stdout
+    assert "--fields-json (wins over the values above): {'description': 'from fields-json'}" in result.stdout
+
+
+@pytest.mark.parametrize("document", ["[1]", "null", '[["description", "x"]]'])
+def test_create_refuses_fields_json_that_is_not_an_object(document):
+    """As jira-transition.py does: an error naming the argument, no traceback."""
+    module = load_script("jira-create", "workflow")
+    runner = click.testing.CliRunner()
+    argv = ["issue", "PROJ", "Summary", "--type", "Task", "--fields-json", document, "--dry-run"]
+
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, argv)
+
+    assert result.exit_code == 1, result.output
+    assert not isinstance(result.exception, TypeError), result.exception
+    assert "--fields-json must be a JSON object" in result.output, result.output
 
 
 def test_create_renders_without_an_issue_key_but_lints_the_project():
