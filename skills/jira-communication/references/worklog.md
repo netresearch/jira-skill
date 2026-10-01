@@ -110,7 +110,7 @@ When two totals for the same account still differ, check first whether the two t
 1. Collect the issue keys behind each total (the account search returns `issue.key` per worklog) and diff the two sets.
 2. For the issues only one side sees, check the other token's rights: `GET /rest/api/2/mypermissions?projectKey=<KEY>&permissions=BROWSE_PROJECTS` for the project, and the issue's `security` field (read with the token that does see it) for an issue security level.
 
-In the case this was measured on, 112 h of 1,288 h were missing: 110.3 h sat on two issues with an issue security level that hid them from the token's user, and 1.7 h in a project it could not browse. Compared issue by issue, every other issue matched to the hour.
+In the case this was measured on, 112 h of the 1,288 h the user's token found in the account search were missing from the technical user's per-issue count: 110.3 h sat on two issues with an issue security level that hid them from the technical user, and 1.7 h in a project it could not browse. Compared issue by issue, every other issue matched to the hour.
 
 ## Relative dates
 
