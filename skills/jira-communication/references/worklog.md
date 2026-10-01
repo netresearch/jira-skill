@@ -78,7 +78,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py \
 
 > **Requires Tempo Timesheets on Jira Server/DC** — the whole Tempo backend (`--tempo-account`, `--backend tempo`, and `--backend auto`'s detection) talks to `/rest/tempo-timesheets/4`. Tempo **Cloud** exposes a different API (`api.tempo.io`) and is **not** supported: `--tempo-account`/`--backend tempo` fail with a clear message, and `--backend auto` falls back to the JQL backend.
 
-Why this exists: the plain worklog query (JQL or the Tempo `/worklogs` endpoint) can only filter by **worker**, issue, project or date — **not by Tempo account**. Time a customer books via a standby/support package is often logged by someone else on an issue you wouldn't guess, so a per-issue or per-user query silently returns nothing. Under the hood `--tempo-account` calls `POST /rest/tempo-timesheets/4/worklogs/search` with an `accountKey` array — the only endpoint that resolves a whole account. When a wrapper flag is missing, reach for the underlying REST before concluding the data is unreachable:
+Why this exists: the plain worklog query (JQL or the Tempo `/worklogs` endpoint) can only filter by **worker**, issue, project or date — **not by Tempo account**. Time a customer books via a standby/support package is often logged by someone else on an issue you wouldn't guess, so a per-issue or per-user query silently returns nothing. Under the hood `--tempo-account` calls `POST /rest/tempo-timesheets/4/worklogs/search` with an `accountKey` array — the only endpoint that filters by account directly. It returns only the worklogs Tempo lets the token's user see, which for a technical user can be its own and nobody else's (see [When the account search comes back short](#when-the-account-search-comes-back-short)). When a wrapper flag is missing, reach for the underlying REST before concluding the data is unreachable:
 
 ```bash
 set -a; source ~/.env.jira; set +a
@@ -87,6 +87,30 @@ curl -sS -H "Authorization: Bearer $JIRA_PERSONAL_TOKEN" -H "Content-Type: appli
   -d '{"from":"2026-06-01","to":"2026-06-30","accountKey":["ACME"]}'
 # account lookup (key/name/lead): GET /rest/tempo-accounts/1/account/<id>
 ```
+
+### When the account search comes back short
+
+The account search answers with whatever the token's user may see in Tempo, and a short answer looks exactly like a small account. Measured on Jira Server with Tempo Timesheets 4: for one account over twelve months, a user's token got 707 worklogs, while a technical user's token got 1 — its own. Nothing in the response says that worklogs were left out.
+
+Where the token can browse the issues but not other people's worklogs in Tempo, count per issue instead. Search the issues by the account field, then read each issue's worklogs; Jira's issue worklog endpoint returns them to anyone who may browse the issue, except worklogs restricted to a group or role:
+
+```bash
+# 1. the issues: "Account" is the Tempo account field. -n defaults to 50 — set it,
+#    and page with --start-at when the account has more issues than that.
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query \
+    '"Account" in (ACME) AND worklogDate >= 2025-10-01' -f key -n 500
+# 2. per issue: GET /rest/api/2/issue/<KEY>/worklog?maxResults=1000
+#    (sum timeSpentSeconds of the worklogs whose `started` falls in the window)
+```
+
+For the account above both ways gave the same total, 677.6 h. The per-issue sum covers the issues whose Account field holds the account. Whether the account search also counts worklogs that carry a different account than their issue was not measured.
+
+When two totals for the same account still differ, the two tokens see different issues. Find which ones before trusting either number:
+
+1. Collect the issue keys behind each total (the account search returns `issue.key` per worklog) and diff the two sets.
+2. For the issues only one side sees, check the other token's rights: `GET /rest/api/2/mypermissions?projectKey=<KEY>&permissions=BROWSE_PROJECTS` for the project, and the issue's `security` field (read with the token that does see it) for an issue security level.
+
+In the case this was measured on, 112 h of 1,288 h were missing: 110.3 h sat on two issues with an issue security level the token's user was not in, and 1.7 h in a project it could not browse. All other issues matched to the hour.
 
 ## Relative dates
 
