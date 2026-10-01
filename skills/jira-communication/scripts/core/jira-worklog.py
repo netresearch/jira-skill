@@ -173,11 +173,11 @@ def _print_dry_run(ctx, issue_key: str, worklog_data: dict) -> None:
 
     ``--json`` gets the request body itself, ``--quiet`` the time spent alone.
     """
-    if ctx.obj["json"]:
-        format_output({"dry_run": True, "issue_key": issue_key, "worklog": worklog_data}, as_json=True)
-        return
     if ctx.obj["quiet"]:
         print(worklog_data["timeSpent"])
+        return
+    if ctx.obj["json"]:
+        format_output({"dry_run": True, "issue_key": issue_key, "worklog": worklog_data}, as_json=True)
         return
     warning("DRY RUN - No worklog will be added")
     print(f"\nWould add worklog to {issue_key}: {worklog_data['timeSpent']}")

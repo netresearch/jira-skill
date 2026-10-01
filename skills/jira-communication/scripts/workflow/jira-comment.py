@@ -84,11 +84,11 @@ def _print_dry_run(ctx, headline: str, intro: str, record: dict) -> None:
     instead would show something the instance never receives. ``--json``
     gets the record itself, ``--quiet`` the body alone.
     """
-    if ctx.obj["json"]:
-        format_output({"dry_run": True, **record}, as_json=True)
-        return
     if ctx.obj["quiet"]:
         print(record["body"])
+        return
+    if ctx.obj["json"]:
+        format_output({"dry_run": True, **record}, as_json=True)
         return
     warning(f"DRY RUN - {headline}")
     print(f"\n{intro}")
