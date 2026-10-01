@@ -520,3 +520,17 @@ def test_comment_edit_preview_names_the_comment():
     assert as_text.exit_code == 0, as_text.output
     assert json.loads(as_json.stdout)["comment_id"] == "42"
     assert "Would replace comment 42 on PROJ-1" in as_text.stdout, as_text.stdout
+
+
+@pytest.mark.parametrize(
+    "name,script,folder,argv,path,quiet_line", DRY_RUN_OUTPUT_MODES, ids=[s[0] for s in DRY_RUN_OUTPUT_MODES]
+)
+def test_dry_run_text_preview_says_nothing_was_written(name, script, folder, argv, path, quiet_line):
+    """Without the banner the text preview reads like a confirmation."""
+    module = load_script(script, folder)
+    runner = click.testing.CliRunner()
+    with _driving(module, _stocked_client()):
+        result = runner.invoke(module.cli, [*argv, "--dry-run"])
+
+    assert result.exit_code == 0, f"{name}: {result.output}"
+    assert "DRY RUN" in result.stderr, f"{name}: no dry-run banner in {result.stderr!r}"

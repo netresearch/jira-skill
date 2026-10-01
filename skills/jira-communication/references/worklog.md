@@ -26,7 +26,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py add PROJ-123 1h30m \
 
 Time strings accept `Nw Nd Nh Nm Ns` combinations (Jira semantics, 8h workday).
 
-`--dry-run` prints the entry as it would be added, with its start time and the comment after the markup escape and lint, and adds nothing. It skips the render call and the mention lookup, so an unknown `[~username]` only surfaces on the real run.
+`--dry-run` prints the entry as it would be added, with its start time and the comment after the markup escape and lint, and adds nothing. It skips the render call and the mention lookup, so an unknown `[~username]` only surfaces on the real run. The time spent and `--started` are passed on as given; a malformed value such as `2x` previews cleanly and is refused by Jira only on the real run.
 
 ## `jira-worklog.py delete` — undo a booking
 
