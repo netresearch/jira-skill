@@ -78,7 +78,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-worklog-query.py \
 
 > **Requires Tempo Timesheets on Jira Server/DC** — the whole Tempo backend (`--tempo-account`, `--backend tempo`, and `--backend auto`'s detection) talks to `/rest/tempo-timesheets/4`. Tempo **Cloud** exposes a different API (`api.tempo.io`) and is **not** supported: `--tempo-account`/`--backend tempo` fail with a clear message, and `--backend auto` falls back to the JQL backend.
 
-Why this exists: the plain worklog query (JQL or the Tempo `/worklogs` endpoint) can only filter by **worker**, issue, project or date — **not by Tempo account**. Time a customer books via a standby/support package is often logged by someone else on an issue you wouldn't guess, so a per-issue or per-user query silently returns nothing. Under the hood `--tempo-account` calls `POST /rest/tempo-timesheets/4/worklogs/search` with an `accountKey` array — the only endpoint that filters by account directly. It can return far fewer worklogs than the account holds: a technical user's token got its own worklogs and nobody else's (see [When the account search comes back short](#when-the-account-search-comes-back-short)). When a wrapper flag is missing, reach for the underlying REST before concluding the data is unreachable:
+Why this exists: the plain worklog query (JQL or the Tempo `/worklogs` endpoint) can only filter by **worker**, issue, project or date — **not by Tempo account**. Time a customer books via a standby/support package is often logged by someone else on an issue you wouldn't guess, so a per-issue or per-user query silently returns nothing. Under the hood `--tempo-account` calls `POST /rest/tempo-timesheets/4/worklogs/search` with an `accountKey` array — the only endpoint that filters by account directly. It can return far fewer worklogs than the account holds: a technical user's token got a single worklog, its own (see [When the account search comes back short](#when-the-account-search-comes-back-short)). When a wrapper flag is missing, reach for the underlying REST before concluding the data is unreachable:
 
 ```bash
 set -a; source ~/.env.jira; set +a
@@ -103,14 +103,14 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --json query \
 #    (sum timeSpentSeconds of the worklogs whose `started` falls in the window)
 ```
 
-For the account above both ways gave the same total, 677.6 h. The per-issue sum covers the issues whose Account field holds the account. Whether the account search also counts worklogs that carry a different account than their issue was not measured.
+For the account above, the per-issue count with the technical user's token gave the same 677.6 h as the account search with the user's token. The per-issue sum covers the issues whose Account field holds the account. Whether the account search also counts worklogs that carry a different account than their issue was not measured.
 
 When two totals for the same account still differ, check first whether the two tokens see different issues; in the measured case that was the whole difference. Other causes were not ruled out: worklogs restricted to a group or role, and worklogs that carry a different account than their issue. Find the issues before trusting either number:
 
 1. Collect the issue keys behind each total (the account search returns `issue.key` per worklog) and diff the two sets.
 2. For the issues only one side sees, check the other token's rights: `GET /rest/api/2/mypermissions?projectKey=<KEY>&permissions=BROWSE_PROJECTS` for the project, and the issue's `security` field (read with the token that does see it) for an issue security level.
 
-In the case this was measured on, 112 h of 1,288 h were missing: 110.3 h sat on two issues with an issue security level the token's user was not in, and 1.7 h in a project it could not browse. Compared issue by issue, every other issue matched to the hour.
+In the case this was measured on, 112 h of 1,288 h were missing: 110.3 h sat on two issues with an issue security level that hid them from the token's user, and 1.7 h in a project it could not browse. Compared issue by issue, every other issue matched to the hour.
 
 ## Relative dates
 
