@@ -8,6 +8,7 @@ from unittest import mock
 
 import click.testing
 import pytest
+import requests
 from conftest import load_script
 
 _mod = load_script("jira-worklog-query", "utility")
@@ -383,7 +384,7 @@ SAMPLE_TEMPO_RESPONSE = [
 
 
 class TestFetchWorklogsTempo:
-    """Test Tempo worklog fetching."""
+    """Test Tempo worklog fetching via the worker search endpoint."""
 
     def test_basic_fetch(self):
         mock_client = mock.MagicMock()
@@ -391,7 +392,7 @@ class TestFetchWorklogsTempo:
         mock_response = mock.MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_TEMPO_RESPONSE
-        mock_client._session.get.return_value = mock_response
+        mock_client._session.post.return_value = mock_response
 
         mock_client.jql.return_value = {
             "issues": [
@@ -409,21 +410,54 @@ class TestFetchWorklogsTempo:
         assert worklogs[0]["timeSpentSeconds"] == 3600
         assert issue_map["PROJ-100"] == "Fix login"
         assert issue_map["PROJ-200"] == "Update docs"
+        mock_client._session.get.assert_not_called()
+
+    def test_posts_to_search_endpoint(self):
+        # On Tempo Timesheets DC, GET /worklogs answers 405 and POST /worklogs
+        # CREATES worklogs — a listing must only ever hit /worklogs/search.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.json.return_value = []
+        mock_client._session.post.return_value = mock_response
+
+        _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30", user="asmith")
+
+        url = mock_client._session.post.call_args.args[0]
+        assert url.endswith("/rest/tempo-timesheets/4/worklogs/search")
+        mock_client._session.get.assert_not_called()
 
     def test_passes_filters_to_api(self):
         mock_client = mock.MagicMock()
         mock_client.url = "https://jira.example.com"
         mock_response = mock.MagicMock()
         mock_response.json.return_value = []
-        mock_client._session.get.return_value = mock_response
+        mock_client._session.post.return_value = mock_response
 
         _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30", user="asmith", project="PROJ")
 
-        params = mock_client._session.get.call_args.kwargs["params"]
-        assert params["dateFrom"] == "2026-04-01"
-        assert params["dateTo"] == "2026-04-30"
-        assert params["worker"] == "asmith"
-        assert params["projectKey"] == "PROJ"
+        payload = mock_client._session.post.call_args.kwargs["json"]
+        assert payload == {
+            "from": "2026-04-01",
+            "to": "2026-04-30",
+            "worker": ["asmith"],
+            "projectKey": ["PROJ"],
+        }
+        mock_client._session.get.assert_not_called()
+
+    def test_body_without_user_or_project(self):
+        # No worker/projectKey placeholders and no paging fields on the first request.
+        mock_client = mock.MagicMock()
+        mock_client.url = "https://jira.example.com"
+        mock_response = mock.MagicMock()
+        mock_response.json.return_value = []
+        mock_client._session.post.return_value = mock_response
+
+        _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-30")
+
+        payload = mock_client._session.post.call_args.kwargs["json"]
+        assert payload == {"from": "2026-04-01", "to": "2026-04-30"}
+        mock_client._session.get.assert_not_called()
 
     def test_paginated_response(self):
         mock_client = mock.MagicMock()
@@ -432,14 +466,14 @@ class TestFetchWorklogsTempo:
         page1_response = mock.MagicMock()
         page1_response.json.return_value = {
             "results": SAMPLE_TEMPO_RESPONSE[:1],
-            "metadata": {"count": 2, "offset": 0, "limit": 1, "next": "/rest/tempo-timesheets/4/worklogs?offset=1"},
+            "metadata": {"offset": 0, "limit": 1, "next": "/rest/tempo-timesheets/4/worklogs/search?offset=1"},
         }
         page2_response = mock.MagicMock()
         page2_response.json.return_value = {
             "results": SAMPLE_TEMPO_RESPONSE[1:],
-            "metadata": {"count": 2, "offset": 1, "limit": 1},
+            "metadata": {"offset": 1, "limit": 1},
         }
-        mock_client._session.get.side_effect = [page1_response, page2_response]
+        mock_client._session.post.side_effect = [page1_response, page2_response]
         mock_client.jql.return_value = {
             "issues": [
                 {"key": "PROJ-100", "fields": {"summary": "Issue"}},
@@ -452,7 +486,12 @@ class TestFetchWorklogsTempo:
 
         worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
         assert len(worklogs) == 2
-        assert mock_client._session.get.call_count == 2
+        assert mock_client._session.post.call_count == 2
+        first_body = mock_client._session.post.call_args_list[0].kwargs["json"]
+        second_body = mock_client._session.post.call_args_list[1].kwargs["json"]
+        assert "offset" not in first_body
+        assert second_body["offset"] == 1
+        mock_client._session.get.assert_not_called()
 
     def test_pagination_is_bounded(self):
         # A response whose metadata always reports another page must not loop
@@ -464,22 +503,24 @@ class TestFetchWorklogsTempo:
             "results": SAMPLE_TEMPO_RESPONSE[:1],
             "metadata": {"offset": 0, "limit": 1, "next": "/more"},
         }
-        mock_client._session.get.return_value = never_ending
+        mock_client._session.post.return_value = never_ending
 
         with mock.patch.object(_mod, "MAX_PAGES", 5), pytest.raises(RuntimeError, match="pagination exceeded"):
             _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
-        assert mock_client._session.get.call_count == 5
+        assert mock_client._session.post.call_count == 5
+        mock_client._session.get.assert_not_called()
 
     def test_empty_result(self):
         mock_client = mock.MagicMock()
         mock_client.url = "https://jira.example.com"
         mock_response = mock.MagicMock()
         mock_response.json.return_value = []
-        mock_client._session.get.return_value = mock_response
+        mock_client._session.post.return_value = mock_response
 
         worklogs, issue_map = _mod.fetch_worklogs_tempo(mock_client, "2026-04-01", "2026-04-02")
         assert worklogs == []
         assert issue_map == {}
+        mock_client._session.get.assert_not_called()
 
     def test_normalizes_to_jira_format(self):
         """Verify returned worklogs work with existing filter/format functions."""
@@ -487,7 +528,7 @@ class TestFetchWorklogsTempo:
         mock_client.url = "https://jira.example.com"
         mock_response = mock.MagicMock()
         mock_response.json.return_value = SAMPLE_TEMPO_RESPONSE
-        mock_client._session.get.return_value = mock_response
+        mock_client._session.post.return_value = mock_response
         mock_client.jql.return_value = {
             "issues": [
                 {"key": "PROJ-100", "fields": {"summary": "Test"}},
@@ -508,6 +549,7 @@ class TestFetchWorklogsTempo:
         output = _mod.format_detail(worklogs)
         assert "PROJ-100" in output
         assert "Alice Smith" in output
+        mock_client._session.get.assert_not_called()
 
 
 class TestFetchWorklogsTempoAccount:
@@ -735,9 +777,13 @@ class TestCliTempo:
         """Set up mock client for Tempo path."""
         mock_client.url = "https://jira.example.com"
         mock_client.myself.return_value = {"name": "asmith", "displayName": "Alice Smith"}
-        mock_response = mock.MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = [
+        # Tempo Timesheets DC answers the detection GET on /worklogs with 405.
+        detect_response = mock.MagicMock()
+        detect_response.status_code = 405
+        mock_client._session.get.return_value = detect_response
+        search_response = mock.MagicMock()
+        search_response.status_code = 200
+        search_response.json.return_value = [
             {
                 "tempoWorklogId": 101,
                 "issue": {"key": "PROJ-100", "id": 10001},
@@ -747,7 +793,7 @@ class TestCliTempo:
                 "author": {"name": "asmith", "displayName": "Alice Smith"},
             },
         ]
-        mock_client._session.get.return_value = mock_response
+        mock_client._session.post.return_value = search_response
         mock_client.jql.return_value = {
             "issues": [{"key": "PROJ-100", "fields": {"summary": "Fix login"}}],
             "total": 1,
@@ -772,7 +818,7 @@ class TestCliTempo:
         mock_client = mock.MagicMock()
         mock_client_cls.return_value = mock_client
         self._make_tempo_client(mock_client)
-        # detect_tempo will use the same _session.get mock which returns 200
+        # detect_tempo will use the same _session.get mock which returns 405
 
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--backend", "auto", "--from", "2026-04-01", "--to", "2026-04-01"])
@@ -816,10 +862,13 @@ class TestCliTempo:
         mock_client_cls.return_value = mock_client
         mock_client.url = "https://jira.example.com"
         mock_client.myself.return_value = {"name": "asmith"}
-        mock_response = mock.MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = []
-        mock_client._session.get.return_value = mock_response
+        detect_response = mock.MagicMock()
+        detect_response.status_code = 405
+        mock_client._session.get.return_value = detect_response
+        search_response = mock.MagicMock()
+        search_response.status_code = 200
+        search_response.json.return_value = []
+        mock_client._session.post.return_value = search_response
 
         runner = click.testing.CliRunner()
         result = runner.invoke(_mod.cli, ["--backend", "tempo"])
@@ -830,7 +879,7 @@ class TestCliTempo:
     def test_tempo_account_path(self, mock_client_cls):
         mock_client = mock.MagicMock()
         mock_client_cls.return_value = mock_client
-        self._make_tempo_client(mock_client)  # detect_tempo → 200; jql → issue_map
+        self._make_tempo_client(mock_client)  # detect_tempo → 405; jql → issue_map
         post_response = mock.MagicMock()
         post_response.status_code = 200
         post_response.json.return_value = SAMPLE_TEMPO_RESPONSE
@@ -843,6 +892,99 @@ class TestCliTempo:
         assert "via Tempo" in result.output
         payload = mock_client._session.post.call_args.kwargs["json"]
         assert payload["accountKey"] == ["ACME"]
+
+    def _make_worker_key_client(self, mock_client, worker_key):
+        """Tempo DC client whose search entries name the worker by user key only."""
+        mock_client.url = "https://jira.example.com"
+        detect_response = mock.MagicMock()
+        detect_response.status_code = 405
+        mock_client._session.get.return_value = detect_response
+        search_response = mock.MagicMock()
+        search_response.status_code = 200
+        search_response.json.return_value = [
+            {
+                "tempoWorklogId": 301,
+                "issue": {"key": "PROJ-100", "id": 10001},
+                "timeSpentSeconds": 3600,
+                "started": "2026-04-01",
+                "comment": "Feature work",
+                "worker": worker_key,
+            },
+        ]
+        mock_client._session.post.return_value = search_response
+        mock_client.jql.return_value = {
+            "issues": [{"key": "PROJ-100", "fields": {"summary": "Fix login"}}],
+            "total": 1,
+            "startAt": 0,
+            "maxResults": 50,
+        }
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_auto_detect_405_searches_with_current_user_key(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_worker_key_client(mock_client, "JIRAUSER99")
+        mock_client.myself.return_value = {"name": "asmith", "key": "JIRAUSER99", "displayName": "Alice Smith"}
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(_mod.cli, ["--backend", "auto", "--from", "2026-04-01", "--to", "2026-04-01"])
+        assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+        assert "PROJ-100" in result.output
+        url = mock_client._session.post.call_args.args[0]
+        assert url.endswith("/rest/tempo-timesheets/4/worklogs/search")
+        assert mock_client._session.post.call_args.kwargs["json"]["worker"] == ["JIRAUSER99"]
+        # The only GET is the detection probe; the listing never GETs /worklogs.
+        assert mock_client._session.get.call_count == 1
+        assert mock_client._session.get.call_args.args[0].endswith("/rest/tempo-timesheets/4/worklogs")
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_explicit_user_resolved_to_key(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_worker_key_client(mock_client, "JIRAUSER12345")
+        mock_client.user.return_value = {"name": "jsmith", "key": "JIRAUSER12345"}
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(
+            _mod.cli, ["--backend", "tempo", "--user", "jsmith", "--from", "2026-04-01", "--to", "2026-04-01"]
+        )
+        assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+        # Entries carry only the user key, so a client-side username filter would drop them.
+        assert "PROJ-100" in result.output
+        assert mock_client._session.post.call_args.kwargs["json"]["worker"] == ["JIRAUSER12345"]
+        mock_client.user.assert_called_once_with(username="jsmith")
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_explicit_user_not_found_falls_back_to_username(self, mock_client_cls):
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_worker_key_client(mock_client, "jsmith")
+        # An unknown username makes the library raise an HTTPError carrying the 404.
+        mock_client.user.side_effect = requests.HTTPError(response=mock.MagicMock(status_code=404))
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(
+            _mod.cli, ["--backend", "tempo", "--user", "jsmith", "--from", "2026-04-01", "--to", "2026-04-01"]
+        )
+        assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+        assert mock_client._session.post.call_args.kwargs["json"]["worker"] == ["jsmith"]
+
+    @mock.patch.object(_mod, "LazyJiraClient")
+    def test_explicit_user_lookup_server_error_fails(self, mock_client_cls):
+        # A failed lookup is not evidence the user is missing: searching with the
+        # username instead would turn the error into an empty report.
+        mock_client = mock.MagicMock()
+        mock_client_cls.return_value = mock_client
+        self._make_worker_key_client(mock_client, "jsmith")
+        mock_client.user.side_effect = requests.HTTPError(response=mock.MagicMock(status_code=500))
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(
+            _mod.cli, ["--backend", "tempo", "--user", "jsmith", "--from", "2026-04-01", "--to", "2026-04-01"]
+        )
+        assert result.exit_code == 1
+        assert "Failed to query worklogs" in result.output
+        mock_client._session.post.assert_not_called()
 
     @mock.patch.object(_mod, "LazyJiraClient")
     def test_tempo_account_empty_keys_rejected(self, mock_client_cls):
