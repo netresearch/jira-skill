@@ -280,34 +280,49 @@ def detect_tempo(client) -> bool:
         return False
 
 
-def fetch_worklogs_tempo(
-    client,
-    from_date: str,
-    to_date: str,
-    user: str | None = None,
-    project: str | None = None,
-) -> tuple[list[dict], dict[str, str]]:
-    """Fetch worklogs from Tempo REST API with native date/user/project filtering.
+def resolve_tempo_worker_key(client, user: str | None, me: dict | None = None) -> str:
+    """Return the Jira user KEY that Tempo's worker search matches against.
 
-    Returns (worklogs, issue_map) where worklogs are normalized to Jira format
-    and issue_map maps issue keys to summaries.
+    Tempo filters ``worker`` by user key (e.g. ``JIRAUSER12345``), which can
+    differ from the username. Without ``user`` the key comes from ``me`` (the
+    ``myself()`` response). An explicit ``user`` is looked up by username; if
+    no such user exists (404) or the response carries no key, the given value
+    is used unchanged. Auth and transport failures propagate — they are not
+    evidence that the user does not exist.
+    """
+    if not user:
+        me = me or {}
+        return me.get("key") or me.get("name") or me.get("accountId", "")
+    try:
+        found = client.user(username=user)
+        # Guard against a non-dict response, or one without a key.
+        if isinstance(found, dict) and found.get("key"):
+            return found["key"]
+    except Exception as exc:
+        # Only a 404 means "no such username"; auth, transport and timeout
+        # errors (which may carry no response at all) must propagate.
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status != 404:
+            raise
+        # 404 — not a username (it may already be a key); let Tempo match the raw value.
+    return user
+
+
+def _search_tempo_worklogs(client, payload: dict) -> list[dict]:
+    """POST ``payload`` to the Tempo worklog search and return normalized worklogs.
+
+    The first request carries no ``limit`` or ``offset``: Tempo Timesheets 4 on
+    Jira Server answers HTTP 500 to either field in this body and returns every
+    matching worklog as a plain list without them. An offset is only sent when a
+    server answers with paging metadata.
     """
     base_url = client.url.rstrip("/")
-    url = f"{base_url}/rest/tempo-timesheets/4/worklogs"
-    params: dict = {
-        "dateFrom": from_date,
-        "dateTo": to_date,
-        "limit": 1000,
-        "offset": 0,
-    }
-    if user:
-        params["worker"] = user
-    if project:
-        params["projectKey"] = project
+    url = f"{base_url}/rest/tempo-timesheets/4/worklogs/search"
 
-    all_worklogs = []
+    all_worklogs: list[dict] = []
     for _ in range(MAX_PAGES):
-        response = client._session.get(url, params=params, timeout=30)
+        # Send a copy so each request's body stays as it was sent.
+        response = client._session.post(url, json=dict(payload), timeout=30)
         response.raise_for_status()
         data = response.json()
 
@@ -315,18 +330,50 @@ def fetch_worklogs_tempo(
         if isinstance(data, list):
             all_worklogs.extend(normalize_tempo_worklog(wl) for wl in data)
             break  # Array response = no pagination
+
         entries = data.get("results") or data.get("worklogs") or []
         all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
+
         metadata = data.get("metadata", {})
-        if not metadata.get("next"):
+        next_offset = metadata.get("nextOffset")
+        if next_offset is not None:
+            payload["offset"] = next_offset
+        elif metadata.get("next") or metadata.get("hasMore"):
+            payload["offset"] = metadata.get("offset", payload.get("offset", 0)) + metadata.get("limit", len(entries))
+        else:
             break
-        params["offset"] = metadata.get("offset", 0) + metadata.get("limit", 1000)
     else:
         raise RuntimeError(
             f"Tempo worklog pagination exceeded {MAX_PAGES} pages — aborting to avoid unbounded memory use."
         )
+    return all_worklogs
 
-    return all_worklogs, _build_issue_map(client, all_worklogs)
+
+def fetch_worklogs_tempo(
+    client,
+    from_date: str,
+    to_date: str,
+    user: str | None = None,
+    project: str | None = None,
+) -> tuple[list[dict], dict[str, str]]:
+    """Fetch worklogs from the Tempo worker search with native date/user/project filtering.
+
+    ``user`` is the Jira user KEY (e.g. ``JIRAUSER12345``), which Tempo matches
+    against ``worker``; it can differ from the username. Uses
+    ``POST /worklogs/search`` because on Tempo Timesheets DC a GET on
+    ``/worklogs`` answers 405 and a POST to ``/worklogs`` creates worklogs.
+
+    Returns (worklogs, issue_map) where worklogs are normalized to Jira format
+    and issue_map maps issue keys to summaries.
+    """
+    payload: dict = {"from": from_date, "to": to_date}
+    if user:
+        payload["worker"] = [user]
+    if project:
+        payload["projectKey"] = [project]
+
+    worklogs = _search_tempo_worklogs(client, payload)
+    return worklogs, _build_issue_map(client, worklogs)
 
 
 def normalize_tempo_worklog(tempo_wl: dict) -> dict:
@@ -384,51 +431,21 @@ def fetch_worklogs_tempo_account(
 ) -> tuple[list[dict], dict[str, str]]:
     """Fetch worklogs for one or more Tempo *accounts* via the search endpoint.
 
-    The plain ``/worklogs`` endpoint filters by worker/project/date but NOT by
-    Tempo account, so the worked time booked to a customer account (across all
-    workers) is only reachable through ``POST /worklogs/search`` with
-    ``accountKey``. Returns ``(worklogs, issue_map)`` in the same shape as
+    The worker search in :func:`fetch_worklogs_tempo` filters by worker,
+    project and date but NOT by Tempo account, so it cannot return the time
+    booked to a customer account across all workers. This one sends
+    ``accountKey`` to the same ``POST /worklogs/search`` endpoint instead.
+    Returns ``(worklogs, issue_map)`` in the same shape as
     :func:`fetch_worklogs_tempo`.
-
-    The first request carries no ``limit`` or ``offset``: Tempo Timesheets 4 on
-    Jira Server answers HTTP 500 to either field in this body and returns every
-    matching worklog as a plain list without them. An offset is only sent when a
-    server answers with paging metadata.
     """
-    base_url = client.url.rstrip("/")
-    url = f"{base_url}/rest/tempo-timesheets/4/worklogs/search"
     payload: dict = {
         "from": from_date,
         "to": to_date,
         "accountKey": account_keys,
     }
 
-    all_worklogs: list[dict] = []
-    for _ in range(MAX_PAGES):
-        response = client._session.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-
-        if isinstance(data, list):
-            all_worklogs.extend(normalize_tempo_worklog(wl) for wl in data)
-            break
-
-        entries = data.get("results") or data.get("worklogs") or []
-        all_worklogs.extend(normalize_tempo_worklog(wl) for wl in entries)
-
-        metadata = data.get("metadata", {})
-        next_offset = metadata.get("nextOffset")
-        if next_offset is not None:
-            payload["offset"] = next_offset
-        elif metadata.get("next") or metadata.get("hasMore"):
-            payload["offset"] = metadata.get("offset", payload.get("offset", 0)) + metadata.get("limit", len(entries))
-        else:
-            break
-    else:
-        raise RuntimeError(
-            f"Tempo account worklog pagination exceeded {MAX_PAGES} pages — aborting to avoid unbounded memory use."
-        )
-    return all_worklogs, _build_issue_map(client, all_worklogs)
+    worklogs = _search_tempo_worklogs(client, payload)
+    return worklogs, _build_issue_map(client, worklogs)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -520,6 +537,7 @@ def cli(
 
         # Resolve user default (not used in account mode)
         effective_user = user
+        me = None
         if not account_keys and not effective_user:
             me = client.myself()
             effective_user = me.get("name") or me.get("accountId", "")
@@ -565,16 +583,22 @@ def cli(
             if issue_list or epic or sprint:
                 warning("Tempo backend does not support --issue, --epic, or --sprint filters. Ignoring them.")
 
+            # Tempo's worker search matches the user key, not the username
+            worker_key = resolve_tempo_worker_key(client, user, me)
+
             if debug:
-                click.echo(f"Tempo query: {from_date} to {to_date}, user={effective_user}, project={project}", err=True)
+                click.echo(
+                    f"Tempo query: {from_date} to {to_date}, user={effective_user}, "
+                    f"worker={worker_key}, project={project}",
+                    err=True,
+                )
 
-            all_worklogs, issue_map = fetch_worklogs_tempo(
-                client, from_date, to_date, user=effective_user, project=project
-            )
+            all_worklogs, issue_map = fetch_worklogs_tempo(client, from_date, to_date, user=worker_key, project=project)
 
-            # Client-side filter (Tempo already filters by user/date/project,
-            # but we still filter for consistency and to handle edge cases)
-            filtered = filter_worklogs(all_worklogs, user=effective_user, from_date=from_date, to_date=to_date)
+            # The search is already scoped to the worker; filter by date only.
+            # Entries name the worker by user key, so matching them against the
+            # username would drop every entry where the key differs.
+            filtered = filter_worklogs(all_worklogs, user=None, from_date=from_date, to_date=to_date)
         else:
             # Jira REST path: JQL search + per-issue fetch
             jql = build_jql(

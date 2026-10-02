@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `jira-worklog-query.py` returns the user's Tempo worklogs instead of failing with HTTP 405 on `--backend tempo`, and on `--backend auto` wherever Tempo Timesheets runs on Jira Server/DC. It listed worklogs with a GET on `/rest/tempo-timesheets/4/worklogs`, which on DC accepts only POST, and a POST there creates worklogs. It now calls `POST /rest/tempo-timesheets/4/worklogs/search` with `worker` set to the Jira user key and an optional `projectKey`, sharing the request loop of the `--tempo-account` search. `--user` is resolved to the user key (an unknown username is sent unchanged, a failed lookup aborts the query), and the Tempo path no longer filters client-side by username, which dropped every entry for accounts whose key differs from the username (e.g. `JIRAUSER12345`). New tests `test_posts_to_search_endpoint`, `test_body_without_user_or_project`, `test_auto_detect_405_searches_with_current_user_key`, `test_explicit_user_resolved_to_key`, `test_explicit_user_not_found_falls_back_to_username` and `test_explicit_user_lookup_failure_fails` ([#277](https://github.com/netresearch/jira-skill/pull/277), fixes [#275](https://github.com/netresearch/jira-skill/issues/275))
+
 ## [3.32.3] - 2026-09-27
 
 ### Fixed
