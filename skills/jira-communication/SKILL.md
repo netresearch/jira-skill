@@ -87,7 +87,7 @@ State what happened, not how good it is — `references/no-editorializing.md`.
 - `references/troubleshooting.md` — auth, 401/403
 - `references/issue-editing.md` — edit, delete, clear fields, `--fields-json`
 - `references/creation.md` — create, `--parent`, fields, admin-scope (`project`, `tempo-account.py`)
-- `references/comments.md` — edit, delete, lint, body via `-`
+- `references/comments.md` — edit, delete, lint, body via `-`, restricted comments (`--visibility`)
 - `references/worklog.md` — `--started`, ranges, `--tempo-account`, `delete`
 - `references/attachments.md` — upload, download
 - `references/links.md` — links

@@ -47,6 +47,21 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py --json list PROJ-123
 
 For a body too large to read in one go, write it to a file and read windows of it — the file keeps the whole thing while you look at part of it, which is the property a pipe destroys.
 
+## Restricted comments (visibility)
+
+`add --visibility role:Developers` (or `group:<group>`) posts a comment only that
+project role or group can read — for internal findings on a ticket the customer
+also reads:
+
+```bash
+uv run scripts/workflow/jira-comment.py add PROJ-123 - --visibility role:Developers < finding.txt
+```
+
+Which group backs a role is a project setting; check that every person who must
+read the comment is in it (`GET /rest/api/2/project/<KEY>/role/<id>`) before you
+tell them it is visible to them. Jira does not warn when they are not. Say so
+explicitly if you pick a different role or group than the one you were asked for.
+
 ## Edit an existing comment
 
 ```bash
