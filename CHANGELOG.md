@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-comment.py add --visibility role:<project role>|group:<group>` restricts a new comment to a project role or a group, the way the Jira UI's padlock does. The value is checked before anything is sent; `--dry-run` shows the restriction; without the option the call is unchanged. New tests in `tests/test_comment_visibility.py`
+
 ## [3.33.0] - 2026-10-07
 
 ### Added

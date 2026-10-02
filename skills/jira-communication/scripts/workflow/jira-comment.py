@@ -75,6 +75,24 @@ def _read_comment_text(comment_text: str, usage: str) -> str:
 
 DRY_RUN_HELP = "Print the comment as it would be posted, after the escape and the lint, without posting it"
 
+VISIBILITY_TYPES = ("role", "group")
+
+
+def _parse_visibility(_ctx, _param, value: str | None) -> dict | None:
+    """``role:Developers`` -> ``{"type": "role", "value": "Developers"}``.
+
+    Jira accepts exactly these two restriction types on a comment. Anything
+    else is refused here rather than by the instance, whose error for an
+    unknown type does not name the option.
+    """
+    if value is None:
+        return None
+    kind, sep, name = value.partition(":")
+    kind, name = kind.strip().lower(), name.strip()
+    if not sep or kind not in VISIBILITY_TYPES or not name:
+        raise click.BadParameter("expected role:<project role> or group:<group>, e.g. role:Developers")
+    return {"type": kind, "value": name}
+
 
 def _print_dry_run(ctx, headline: str, intro: str, record: dict) -> None:
     """Show what a real ``add`` or ``edit`` would send, and nothing else.
@@ -135,6 +153,12 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("comment_text")
 @markup_options
 @click.option("--no-verify-mentions", is_flag=True, help="Skip [~username] mention verification")
+@click.option(
+    "--visibility",
+    metavar="TYPE:VALUE",
+    callback=_parse_visibility,
+    help="Restrict the comment to a project role or a group, e.g. role:Developers or group:jira-developers",
+)
 @click.option("--dry-run", is_flag=True, help=DRY_RUN_HELP)
 @click.pass_context
 def add(
@@ -143,6 +167,7 @@ def add(
     comment_text: str,
     gates: MarkupGates,
     no_verify_mentions: bool,
+    visibility: dict | None,
     dry_run: bool,
 ):
     """Add a comment to an issue.
@@ -172,6 +197,11 @@ def add(
     separate user lookup is needed; an unknown username aborts with
     suggestions (skip with --no-verify-mentions).
 
+    --visibility restricts who can read the comment: role:<project role>
+    (e.g. role:Developers) or group:<group>. Check that the people who must
+    read it are in that role or group first; Jira does not warn when they
+    are not.
+
     --dry-run prints the comment exactly as it would be posted, after the
     escape and the lint, and posts nothing. The render preview and the
     mention lookup are skipped, because both call the instance.
@@ -187,6 +217,8 @@ def add(
       cat comment.txt | jira-comment add PROJ-123 -
 
       cat comment.txt | jira-comment add PROJ-123 - --dry-run
+
+      jira-comment add PROJ-123 "Internal finding" --visibility role:Developers
     """
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
@@ -205,14 +237,19 @@ def add(
         _print_dry_run(
             ctx,
             "No comment will be added",
-            f"Would add to {issue_key}:",
-            {"issue_key": issue_key, "body": comment_text},
+            f"Would add to {issue_key}"
+            + (f" (visible to {visibility['type']} {visibility['value']})" if visibility else "")
+            + ":",
+            {"issue_key": issue_key, "body": comment_text, **({"visibility": visibility} if visibility else {})},
         )
         return
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
 
     try:
-        result = client.issue_add_comment(issue_key, comment_text)
+        if visibility:
+            result = client.issue_add_comment(issue_key, comment_text, visibility=visibility)
+        else:
+            result = client.issue_add_comment(issue_key, comment_text)
 
         if ctx.obj["quiet"]:
             print(result.get("id", "ok"))
@@ -221,6 +258,8 @@ def add(
         else:
             success(f"Added comment to {issue_key}")
             print(f"  Comment ID: {result.get('id', 'N/A')}")
+            if visibility:
+                print(f"  Visible to: {visibility['type']} {visibility['value']}")
 
     except Exception as e:
         if ctx.obj["debug"]:
