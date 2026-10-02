@@ -970,13 +970,22 @@ class TestCliTempo:
         assert mock_client._session.post.call_args.kwargs["json"]["worker"] == ["jsmith"]
 
     @mock.patch.object(_mod, "LazyJiraClient")
-    def test_explicit_user_lookup_server_error_fails(self, mock_client_cls):
+    @pytest.mark.parametrize(
+        "lookup_error",
+        [
+            requests.HTTPError(response=mock.MagicMock(status_code=500)),
+            requests.ConnectionError("connection reset"),
+            requests.Timeout("read timed out"),
+        ],
+        ids=["http-500", "connection-error", "timeout"],
+    )
+    def test_explicit_user_lookup_failure_fails(self, mock_client_cls, lookup_error):
         # A failed lookup is not evidence the user is missing: searching with the
         # username instead would turn the error into an empty report.
         mock_client = mock.MagicMock()
         mock_client_cls.return_value = mock_client
         self._make_worker_key_client(mock_client, "jsmith")
-        mock_client.user.side_effect = requests.HTTPError(response=mock.MagicMock(status_code=500))
+        mock_client.user.side_effect = lookup_error
 
         runner = click.testing.CliRunner()
         result = runner.invoke(

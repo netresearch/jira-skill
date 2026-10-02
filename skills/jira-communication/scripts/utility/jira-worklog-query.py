@@ -27,7 +27,6 @@ import click
 from lib.client import LazyJiraClient
 from lib.jql import jql_escape
 from lib.output import comment_to_text, error, format_json, warning
-from lib.users import _infrastructure_error
 
 # Backwards-compatible alias (older code paths/tests refer to the private name)
 _jql_escape = jql_escape
@@ -300,7 +299,10 @@ def resolve_tempo_worker_key(client, user: str | None, me: dict | None = None) -
         if isinstance(found, dict) and found.get("key"):
             return found["key"]
     except Exception as exc:
-        if _infrastructure_error(exc):
+        # Only a 404 means "no such username"; auth, transport and timeout
+        # errors (which may carry no response at all) must propagate.
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status != 404:
             raise
         # 404 — not a username (it may already be a key); let Tempo match the raw value.
     return user
