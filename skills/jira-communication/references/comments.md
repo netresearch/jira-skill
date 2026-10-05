@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
 <!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 
-# Comments — Edit, Delete, List
+# Comments — Edit, Delete, List, Restrict
 
 ## When to load
 
-Load this reference whenever the user wants to edit or delete an existing comment, list comments, or needs to get a comment ID for any reason.
+Load this reference whenever the user wants to edit or delete an existing comment, list comments, needs to get a comment ID for any reason, or wants to post a restricted/internal comment (`--visibility`).
 
 ## List and get IDs
 
@@ -49,18 +49,21 @@ For a body too large to read in one go, write it to a file and read windows of i
 
 ## Restricted comments (visibility)
 
-`add --visibility role:Developers` (or `group:<group>`) posts a comment only that
-project role or group can read — for internal findings on a ticket the customer
-also reads:
+`add --visibility role:<project role>` (or `group:<group>`) posts a comment only that project role or group can read — for internal findings on a ticket the customer also reads:
 
 ```bash
-uv run scripts/workflow/jira-comment.py add PROJ-123 - --visibility role:Developers < finding.txt
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-comment.py add PROJ-123 - --visibility role:Developers < finding.txt
 ```
 
-Which group backs a role is a project setting; check that every person who must
-read the comment is in it (`GET /rest/api/2/project/<KEY>/role/<id>`) before you
-tell them it is visible to them. Jira does not warn when they are not. Say so
-explicitly if you pick a different role or group than the one you were asked for.
+Before posting, check who will be able to read it. Measured on Jira Server 9.12.3:
+
+- **You must be in the role or group yourself.** Otherwise Jira refuses the comment and the CLI prints Jira's reason, e.g. `You are currently not a member of the group: <group>`. An unknown role fails with `Role with id: <name> does not exist`.
+- **A role's members are a project setting**, and a role can hold individual users as well as groups. `GET /rest/api/2/project/<KEY>/role` lists the roles; `GET …/role/<id>` shows their users and groups; `GET /rest/api/2/group/member?groupname=<group>` expands a group. Reading a project's roles needs project admin rights — without them the API answers 401, so ask a project admin.
+- **A `[~user]` mention does not grant access.** Mention verification only checks that the user exists; someone outside the role or group still cannot read the comment.
+- **`edit` keeps the restriction.** Editing the text of a restricted comment leaves its visibility as it was.
+- On Jira Cloud group names can change; Cloud recommends the group `identifier` (ID), which this option does not take — `value` (the name) still works.
+
+Say so explicitly if you pick a different role or group than the one you were asked for.
 
 ## Edit an existing comment
 
