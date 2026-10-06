@@ -4,6 +4,10 @@
 name: Dependency Audit
 
 on:
+  pull_request:
+    paths:
+      - 'skills/jira-communication/scripts/**'
+      - '.github/workflows/dependency-audit.yml'
   schedule:
     - cron: '0 8 * * 1'  # Weekly Monday 08:00 UTC
   workflow_dispatch:
