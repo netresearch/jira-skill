@@ -48,11 +48,97 @@ class TestValidateAttachmentUrl:
         att_url = "https://jira.evil.com/rest/api/2/attachment/content/1"
         assert jira_attachment.validate_attachment_url(att_url, jira_url) is False
 
-    def test_relative_path_always_accepted(self):
-        """Relative paths (no host) are always safe — they'll be prefixed with JIRA_URL."""
+    def test_relative_path_resolves_against_configured_base(self):
+        """A relative path is resolved against JIRA_URL and the result is checked, not the input."""
         jira_url = "https://jira.example.com"
         att_url = "/rest/api/2/attachment/content/12345"
         assert jira_attachment.validate_attachment_url(att_url, jira_url) is True
+        assert (
+            jira_attachment.resolve_attachment_url(att_url, jira_url)
+            == "https://jira.example.com/rest/api/2/attachment/content/12345"
+        )
+
+    def test_relative_path_keeps_context_path(self):
+        """A JIRA_URL with a context path keeps it when a relative path is resolved."""
+        resolved = jira_attachment.resolve_attachment_url(
+            "/rest/api/2/attachment/content/1", "https://example.com/jira/"
+        )
+        assert resolved == "https://example.com/jira/rest/api/2/attachment/content/1"
+
+    @pytest.mark.parametrize(
+        "att_url",
+        [
+            "rest/api/2/attachment/content/1",
+            ".example.org/x",
+            "@example.org/x",
+            ":8443/x",
+        ],
+    )
+    def test_value_without_scheme_stays_on_configured_host(self, att_url):
+        """A value without scheme and host resolves to a path on the configured Jira host."""
+        resolved = jira_attachment.resolve_attachment_url(att_url, "https://jira.example.com")
+        assert resolved is not None
+        parsed = jira_attachment.urlparse(resolved)
+        assert (parsed.scheme, parsed.hostname, parsed.port) == ("https", "jira.example.com", None)
+
+    @pytest.mark.parametrize(
+        "att_url",
+        [
+            "//example.org/rest/api/2/attachment/content/1",
+            "HTTPS://example.org/rest/api/2/attachment/content/1",
+            "https://jira.example.com@example.org/x",
+            "https://jira.example.com.example.org/x",
+            "https://example.org\\@jira.example.com/x",
+        ],
+    )
+    def test_reference_naming_another_host_rejected(self, att_url):
+        """Any value that resolves to a host other than JIRA_URL's is rejected."""
+        assert jira_attachment.resolve_attachment_url(att_url, "https://jira.example.com") is None
+
+    def test_userinfo_on_configured_host_accepted_by_host(self):
+        """Host comparison uses the parsed hostname, so userinfo does not change the target host."""
+        resolved = jira_attachment.resolve_attachment_url(
+            "https://someone@jira.example.com/x", "https://jira.example.com"
+        )
+        assert jira_attachment.urlparse(resolved).hostname == "jira.example.com"
+
+    def test_plain_http_to_configured_host_rejected(self):
+        """Credentials are only sent over https, even to the configured host."""
+        jira_url = "https://jira.example.com"
+        att_url = "http://jira.example.com/rest/api/2/attachment/content/1"
+        assert jira_attachment.validate_attachment_url(att_url, jira_url) is False
+
+    def test_http_jira_url_rejected(self):
+        """An http:// JIRA_URL cannot be used for authenticated attachment downloads."""
+        assert (
+            jira_attachment.resolve_attachment_url("/rest/api/2/attachment/content/1", "http://jira.example.com")
+            is None
+        )
+
+    @pytest.mark.parametrize("jira_url", ["https://[::1]:8443", "https://[2001:db8::1]"])
+    def test_ipv6_literal_jira_url_accepted(self, jira_url):
+        """An IPv6 literal JIRA_URL resolves relative and same-host values like any other host."""
+        assert jira_attachment.resolve_attachment_url("/x", jira_url) == jira_url + "/x"
+        assert jira_attachment.resolve_attachment_url(jira_url + "/y", jira_url) == jira_url + "/y"
+        assert jira_attachment.resolve_attachment_url("https://[::2]/x", jira_url) is None
+
+    @pytest.mark.parametrize("jira_url", ["https://bücher.example", "https://straße.example:8443/jira"])
+    def test_internationalised_jira_url_accepted(self, jira_url):
+        """A JIRA_URL with a non-ASCII host resolves relative and same-host values."""
+        assert jira_attachment.resolve_attachment_url("/x", jira_url) == jira_url + "/x"
+        assert jira_attachment.resolve_attachment_url(jira_url + "/y", jira_url) == jira_url + "/y"
+        assert jira_attachment.resolve_attachment_url("https://other.example/x", jira_url) is None
+
+    @pytest.mark.parametrize("att_url", ["https://[::1/a", "https://jira.example.com[x]/a"])
+    def test_unparsable_url_rejected(self, att_url):
+        """A value urllib cannot parse is rejected instead of raising."""
+        assert jira_attachment.resolve_attachment_url(att_url, "https://jira.example.com") is None
+
+    def test_invalid_port_rejected(self):
+        """A port that is not a number is rejected instead of raising."""
+        assert (
+            jira_attachment.resolve_attachment_url("https://jira.example.com:abc/x", "https://jira.example.com") is None
+        )
 
     def test_case_insensitive_host_match(self):
         """Host comparison must be case-insensitive."""
@@ -78,11 +164,11 @@ class TestValidateAttachmentUrl:
         att_url = "https://jira.example.com:443/rest/api/2/attachment/content/1"
         assert jira_attachment.validate_attachment_url(att_url, jira_url) is True
 
-    def test_default_http_port_normalized(self):
-        """Default port :80 on HTTP should match host without port."""
-        jira_url = "http://jira.example.com:80"
-        att_url = "http://jira.example.com/rest/api/2/attachment/content/1"
-        assert jira_attachment.validate_attachment_url(att_url, jira_url) is True
+    def test_explicit_port_must_match(self):
+        """An explicit non-default port on JIRA_URL must appear on the attachment URL too."""
+        jira_url = "https://jira.example.com:8443"
+        assert jira_attachment.validate_attachment_url("https://jira.example.com:8443/x", jira_url) is True
+        assert jira_attachment.validate_attachment_url("https://jira.example.com/x", jira_url) is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -483,3 +569,178 @@ class TestDownloadAll:
         assert result.exit_code == 0, result.output
         assert (tmp_path / "good.pdf").exists()
         assert not (tmp_path / "bad.txt").exists()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: credentials only reach the configured Jira origin
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _requested_hosts(get_mock) -> list[tuple[str | None, bool]]:
+    """(hostname, carries credentials) for every requests.get call."""
+    calls = []
+    for call in get_mock.call_args_list:
+        url = call.args[0] if call.args else call.kwargs["url"]
+        has_creds = bool(call.kwargs.get("auth")) or "Authorization" in (call.kwargs.get("headers") or {})
+        calls.append((jira_attachment.urlparse(url).hostname, has_creds))
+    return calls
+
+
+def _invoke(tmp_path, args, transport):
+    """Run the CLI with the fake config and cwd; ``transport`` is a patch for the HTTP layer."""
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+        transport,
+        mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+    ):
+        return runner.invoke(jira_attachment.cli, args)
+
+
+def _download(tmp_path, att_url, responses):
+    get_mock = mock.Mock(side_effect=responses)
+    args = ["download", att_url, str(tmp_path / "out.bin")]
+    return _invoke(tmp_path, args, mock.patch.object(jira_attachment.requests, "get", get_mock)), get_mock
+
+
+def _download_all(tmp_path, attachments, content=None):
+    """Run download-all; ``content(url)`` may answer a content request, else a file is returned."""
+
+    def fake_get(url, *args, **kwargs):
+        if "/rest/api/2/issue/" in url:
+            return _make_meta_response(attachments)
+        answer = content(url) if content else None
+        return answer or _make_mock_response("application/octet-stream", b"data")
+
+    get_mock = mock.Mock(side_effect=fake_get)
+    result = _invoke(tmp_path, ["download-all", "TEST-1"], mock.patch.object(jira_attachment.requests, "get", get_mock))
+    return result, get_mock
+
+
+def _redirect(location: str):
+    resp = _make_mock_response("text/html", status_code=302)
+    resp.headers["Location"] = location
+    return resp
+
+
+class TestDownloadTargetsConfiguredHost:
+    """`download` requests only the configured Jira host and only over https."""
+
+    @pytest.mark.parametrize("att_url", [".example.org/x", "@example.org/x", "rest/api/2/attachment/content/1"])
+    def test_value_without_scheme_requested_on_configured_host(self, tmp_path, att_url):
+        result, get_mock = _download(tmp_path, att_url, [_make_mock_response("application/octet-stream")])
+        assert result.exit_code == 0, result.output
+        assert _requested_hosts(get_mock) == [("jira.example.com", True)]
+
+    @pytest.mark.parametrize(
+        "att_url",
+        [
+            "//example.org/rest/api/2/attachment/content/1",
+            "HTTPS://example.org/rest/api/2/attachment/content/1",
+            "http://jira.example.com/rest/api/2/attachment/content/1",
+        ],
+    )
+    def test_rejected_value_sends_no_request(self, tmp_path, att_url):
+        result, get_mock = _download(tmp_path, att_url, [])
+        assert result.exit_code != 0
+        get_mock.assert_not_called()
+        assert not (tmp_path / "out.bin").exists()
+
+
+class TestRedirectHandling:
+    """The single followed redirect never carries credentials and never leaves https."""
+
+    def _run(self, tmp_path, location):
+        responses = [_redirect(location), _make_mock_response("application/octet-stream", b"data")]
+        return _download(tmp_path, "/rest/api/2/attachment/content/1", responses)
+
+    def test_https_redirect_followed_without_credentials(self, tmp_path):
+        result, get_mock = self._run(tmp_path, "https://cdn.example.net/file")
+        assert result.exit_code == 0, result.output
+        assert _requested_hosts(get_mock) == [("jira.example.com", True), ("cdn.example.net", False)]
+
+    def test_relative_redirect_resolved_against_request_url(self, tmp_path):
+        result, get_mock = self._run(tmp_path, "/files/1")
+        assert result.exit_code == 0, result.output
+        assert get_mock.call_args_list[1].args[0] == "https://jira.example.com/files/1"
+        assert _requested_hosts(get_mock)[1] == ("jira.example.com", False)
+
+    def test_unparsable_redirect_is_a_download_error(self, tmp_path):
+        result, get_mock = self._run(tmp_path, "https://[::1/x")
+        assert result.exit_code != 0
+        assert "Download failed" in result.output
+        assert get_mock.call_count == 1
+
+    @pytest.mark.parametrize("location", ["http://cdn.example.net/file", "HTTP://cdn.example.net/file"])
+    def test_non_https_redirect_refused(self, tmp_path, location):
+        result, get_mock = self._run(tmp_path, location)
+        assert result.exit_code != 0
+        assert get_mock.call_count == 1
+        assert not (tmp_path / "out.bin").exists()
+
+
+class TestDownloadAllTargetsConfiguredHost:
+    """`download-all` only sends credentials to content URLs on the configured host."""
+
+    def test_content_url_on_other_host_skipped(self, tmp_path):
+        other = {"id": "2", "filename": "other.pdf", "size": 4, "content": "https://example.org/content/2"}
+        result, get_mock = _download_all(tmp_path, [_att("1", "good.pdf"), other])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "other.pdf").exists()
+        assert all(host == "jira.example.com" for host, _ in _requested_hosts(get_mock))
+
+    @pytest.mark.parametrize("content", ["https://[::1/a", "", "  ", None, 7, "MISSING"])
+    def test_unusable_content_url_skipped_and_batch_continues(self, tmp_path, content):
+        bad = {"id": "1", "filename": "bad.pdf", "size": 4}
+        if content != "MISSING":
+            bad["content"] = content
+        result, get_mock = _download_all(tmp_path, [bad, _att("2", "good.pdf")])
+        assert result.exit_code == 0, result.output
+        assert [c.args[0] for c in get_mock.call_args_list][1:] == [_att("2", "good.pdf")["content"]]
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "bad.pdf").exists()
+
+    def test_unparsable_redirect_skips_only_that_attachment(self, tmp_path):
+        result, _ = _download_all(
+            tmp_path,
+            [_att("1", "bad.pdf"), _att("2", "good.pdf")],
+            content=lambda url: _redirect("https://[::1/x") if url.endswith("/content/1") else None,
+        )
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "bad.pdf").exists()
+
+    def test_relative_content_url_resolved_against_jira_url(self, tmp_path):
+        rel = {"id": "3", "filename": "rel.pdf", "size": 4, "content": "/rest/api/2/attachment/content/3"}
+        result, get_mock = _download_all(tmp_path, [rel])
+        assert result.exit_code == 0, result.output
+        assert get_mock.call_args_list[-1].args[0] == "https://jira.example.com/rest/api/2/attachment/content/3"
+        assert (tmp_path / "rel.pdf").exists()
+
+
+class TestRequestsSeeConfiguredHost:
+    """The host checked is the host requests actually connects to."""
+
+    @pytest.mark.parametrize(
+        "att_url",
+        [
+            "/rest/api/2/attachment/content/1",
+            "https://jira.example.com/rest/api/2/attachment/content/1",
+            "https://example.org\\@jira.example.com/x",
+            "https://jira.example.com\\@example.org/x",
+            "//example.org/x",
+        ],
+    )
+    def test_sent_request_targets_configured_host(self, tmp_path, att_url):
+        sent = []
+
+        def fake_send(adapter, request, **kwargs):
+            sent.append(request)
+            raise jira_attachment.requests.exceptions.ConnectionError("stop")
+
+        transport = mock.patch("requests.adapters.HTTPAdapter.send", autospec=True, side_effect=fake_send)
+        _invoke(tmp_path, ["download", att_url, str(tmp_path / "out.bin")], transport)
+        for request in sent:
+            parsed = jira_attachment.parse_url(request.url)
+            assert (parsed.scheme, parsed.host, parsed.port) == ("https", "jira.example.com", None), request.url

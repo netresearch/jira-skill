@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.32.4] - 2026-10-06
+
+### Security
+
+- `jira-attachment.py download` resolves the attachment URL against `JIRA_URL` and sends the authenticated request only to an `https://` URL on the host and port of `JIRA_URL`; every other value exits non-zero before any request. `download-all` applies the same check to each attachment's `content` URL and skips the ones that fail it, and a redirect is followed only to an `https://` location (case-insensitive scheme, relative locations resolved). Attachment downloads now need an `https://` `JIRA_URL`. Backported from [#280](https://github.com/netresearch/jira-skill/pull/280) onto 3.32.3; 3.32.4 contains no other change
+
 ## [3.32.3] - 2026-09-27
 
 ### Fixed
@@ -902,7 +908,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.3...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.32.4...HEAD
+[3.32.4]: https://github.com/netresearch/jira-skill/compare/v3.32.3...v3.32.4
 [3.32.3]: https://github.com/netresearch/jira-skill/compare/v3.32.2...v3.32.3
 [3.32.2]: https://github.com/netresearch/jira-skill/compare/v3.32.1...v3.32.2
 [3.32.1]: https://github.com/netresearch/jira-skill/compare/v3.32.0...v3.32.1
