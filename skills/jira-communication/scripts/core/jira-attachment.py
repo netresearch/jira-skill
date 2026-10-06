@@ -72,13 +72,30 @@ def _https_origin(url: str) -> tuple[str, int] | None:
         return None
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         return None
-    # urllib3 keeps the brackets of an IPv6 literal, urllib drops them.
-    sent_host = (sent.host or "").lower().removeprefix("[").removesuffix("]")
-    if (sent.scheme or "").lower() != "https" or sent_host != parsed.hostname:
+    sent_host = _bare_host(sent.host)
+    if (sent.scheme or "").lower() != "https" or sent_host != _urllib3_host(parsed.hostname):
         return None
     if (sent.port or 443) != port:
         return None
-    return parsed.hostname, port
+    return sent_host, port
+
+
+def _bare_host(host: str | None) -> str:
+    """Lowercase host without the brackets urllib3 keeps around an IPv6 literal."""
+    return (host or "").lower().removeprefix("[").removesuffix("]")
+
+
+def _urllib3_host(hostname: str) -> str | None:
+    """urllib's hostname in the form urllib3 sends it (IDNA-encoded, lowercased).
+
+    Comparing in urllib3's form keeps an internationalised JIRA_URL working:
+    urllib reports such a host in Unicode, urllib3 sends its IDNA encoding.
+    """
+    literal = f"[{hostname}]" if ":" in hostname else hostname
+    try:
+        return _bare_host(parse_url(f"https://{literal}/").host)
+    except (ValueError, LocationParseError):
+        return None
 
 
 def resolve_attachment_url(attachment_url: str, jira_url: str) -> str | None:

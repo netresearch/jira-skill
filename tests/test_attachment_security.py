@@ -125,6 +125,13 @@ class TestValidateAttachmentUrl:
         assert jira_attachment.resolve_attachment_url(jira_url + "/y", jira_url) == jira_url + "/y"
         assert jira_attachment.resolve_attachment_url("https://[::2]/x", jira_url) is None
 
+    @pytest.mark.parametrize("jira_url", ["https://bücher.example", "https://straße.example:8443/jira"])
+    def test_internationalised_jira_url_accepted(self, jira_url):
+        """A JIRA_URL with a non-ASCII host resolves relative and same-host values."""
+        assert jira_attachment.resolve_attachment_url("/x", jira_url) == jira_url + "/x"
+        assert jira_attachment.resolve_attachment_url(jira_url + "/y", jira_url) == jira_url + "/y"
+        assert jira_attachment.resolve_attachment_url("https://other.example/x", jira_url) is None
+
     @pytest.mark.parametrize("att_url", ["https://[::1/a", "https://jira.example.com[x]/a"])
     def test_unparsable_url_rejected(self, att_url):
         """A value urllib cannot parse is rejected instead of raising."""
