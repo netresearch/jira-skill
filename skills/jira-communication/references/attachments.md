@@ -68,6 +68,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py download-all PROJ-123
 
 ## Safety guarantees
 
+- **Credentials stay on the Jira host**: `download` resolves `ATTACHMENT_URL` against `JIRA_URL` (a path such as `/rest/api/2/attachment/content/12345` is appended to `JIRA_URL`, keeping a context path like `/jira`) and sends the request only if the result is an `https://` URL whose host and port equal those of `JIRA_URL`; anything else exits non-zero without a request. `download-all` applies the same check to each attachment's `content` URL and skips the ones that fail it. Attachment downloads therefore need an `https://` `JIRA_URL`. A redirect from Jira (Cloud stores attachments on a CDN) is followed once, only to an `https://` location, and without credentials.
 - **Path traversal**: output paths are constrained to the current working directory — the script rejects targets that resolve outside cwd. `cd` to the target directory before downloading. `download-all` additionally strips path components from each Jira-supplied filename and constrains it within `--dir`.
 
 ## Don't use raw curl

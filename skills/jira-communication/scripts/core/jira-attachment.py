@@ -15,7 +15,7 @@ import json
 import mimetypes
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared library import (TR1.1.1 - PYTHONPATH approach)
@@ -35,7 +35,7 @@ from lib.client import (
     _handle_response,
     _sanitize_error,
 )
-from lib.config import load_config, normalize_netloc
+from lib.config import load_config
 from lib.output import error, success, warning
 
 # Chunk size for streaming large file downloads (1 MB)
@@ -53,24 +53,54 @@ UPLOAD_TIMEOUT = (10, 300)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def validate_attachment_url(attachment_url: str, jira_url: str) -> bool:
-    """Validate that an attachment URL points to the configured Jira host.
+def _https_origin(url: str) -> tuple[str, int] | None:
+    """Return (hostname, port) of an https URL, or None for any other URL.
 
-    Prevents SSRF attacks where a malicious URL could exfiltrate Jira
-    credentials to an attacker-controlled server.
+    The hostname is lowercased and excludes userinfo; a missing port is the
+    https default. A malformed port yields None.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        return None
+    try:
+        port = parsed.port or 443
+    except ValueError:
+        return None
+    return parsed.hostname, port
+
+
+def resolve_attachment_url(attachment_url: str, jira_url: str) -> str | None:
+    """Resolve an attachment URL against JIRA_URL and check where it points.
+
+    A value without scheme and host is resolved as a path below JIRA_URL
+    (keeping a context path such as ``/jira``); any other value is resolved
+    with ``urljoin``. The resolved URL is accepted only if it uses https and
+    its host and port equal those of JIRA_URL, because the request carries
+    the Jira credentials.
 
     Args:
-        attachment_url: The attachment URL to validate
-        jira_url: The configured JIRA_URL to validate against
+        attachment_url: Absolute URL, path, or path relative to JIRA_URL
+        jira_url: The configured JIRA_URL
 
     Returns:
-        True if the URL is safe to request with credentials
+        The resolved URL, or None if it must not be requested with credentials
     """
-    # Relative paths are always safe — they get prefixed with JIRA_URL
-    if not attachment_url.startswith(("http://", "https://")):
-        return True
+    base = jira_url.rstrip("/") + "/"
+    parsed = urlparse(attachment_url)
+    if not parsed.scheme and not parsed.netloc and not attachment_url.startswith("//"):
+        resolved = urljoin(base, attachment_url.lstrip("/"))
+    else:
+        resolved = urljoin(base, attachment_url)
 
-    return normalize_netloc(attachment_url) == normalize_netloc(jira_url)
+    target = _https_origin(resolved)
+    if target is None or target != _https_origin(jira_url):
+        return None
+    return resolved
+
+
+def validate_attachment_url(attachment_url: str, jira_url: str) -> bool:
+    """Return True if the attachment URL may be requested with Jira credentials."""
+    return resolve_attachment_url(attachment_url, jira_url) is not None
 
 
 def validate_output_path(output_file: str, working_dir: str) -> Path | None:
@@ -135,10 +165,10 @@ def _stream_to_path(url: str, jira_url: str, auth, headers: dict, safe_path: Pat
     # Follow one CDN redirect without forwarding credentials (Jira Cloud stores
     # attachments in S3/CDN which returns 302).
     if response.status_code in (301, 302, 303, 307, 308) and "Location" in response.headers:
-        redirect_url = response.headers["Location"]
-        # Reject HTTP downgrade — prevents MITM on non-TLS redirects
-        if redirect_url.startswith("http://"):
-            raise DownloadError("refusing HTTP redirect (TLS downgrade)")
+        redirect_url = urljoin(url, response.headers["Location"])
+        # Follow only https redirects; the request below carries no credentials.
+        if _https_origin(redirect_url) is None:
+            raise DownloadError("refusing non-https redirect")
         response = requests.get(
             redirect_url,
             allow_redirects=False,
@@ -225,27 +255,23 @@ def download(ctx, attachment_url: str, output_file: str):
     """
     try:
         # Load config for authentication (pass URL for host-based profile resolution)
-        if attachment_url.startswith(("http://", "https://")):
+        if urlparse(attachment_url).scheme.lower() in ("http", "https"):
             config = load_config(env_file=ctx.obj["env_file"], profile=ctx.obj.get("profile"), url=attachment_url)
         else:
             config = load_config(env_file=ctx.obj["env_file"], profile=ctx.obj.get("profile"))
         jira_url = config["JIRA_URL"]
 
-        # SSRF protection: validate attachment URL host matches JIRA_URL
-        if not validate_attachment_url(attachment_url, jira_url):
-            att_host = urlparse(attachment_url).netloc
-            jira_host = urlparse(jira_url).netloc
-            error(f"Attachment URL host '{att_host}' does not match JIRA_URL host '{jira_host}'")
+        # Credentials go only to the configured Jira host over https
+        url = resolve_attachment_url(attachment_url, jira_url)
+        if url is None:
+            error(
+                f"Attachment URL must resolve to an https URL on the JIRA_URL host "
+                f"'{urlparse(jira_url).netloc}': {attachment_url}"
+            )
             sys.exit(1)
 
         # Determine authentication method
         auth, headers = _build_auth(config)
-
-        # Build full URL if needed
-        if attachment_url.startswith(("http://", "https://")):
-            url = attachment_url
-        else:
-            url = jira_url + attachment_url
 
         # Path traversal protection: validate output path
         safe_path = validate_output_path(output_file, Path.cwd())
@@ -374,8 +400,13 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
             # Per-file resilience: a single bad file (404/500/redirect anomaly)
             # must not abort the whole batch. Auth/session/CAPTCHA errors are NOT
             # caught here — they propagate and abort, since retrying is pointless.
+            content_url = resolve_attachment_url(att.get("content") or "", jira_url)
+            if content_url is None:
+                warning(f"Skipping {filename}: content URL is not an https URL on the JIRA_URL host")
+                continue
+
             try:
-                _stream_to_path(att["content"], jira_url, auth, headers, dest)
+                _stream_to_path(content_url, jira_url, auth, headers, dest)
             except (DownloadError, requests.exceptions.RequestException) as e:
                 warning(f"Skipping {filename}: {_sanitize_error(str(e))}")
                 continue
