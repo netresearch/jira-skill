@@ -199,7 +199,10 @@ def _stream_to_path(url: str, jira_url: str, auth, headers: dict, safe_path: Pat
     # Follow one CDN redirect without forwarding credentials (Jira Cloud stores
     # attachments in S3/CDN which returns 302).
     if response.status_code in (301, 302, 303, 307, 308) and "Location" in response.headers:
-        redirect_url = urljoin(url, response.headers["Location"])
+        try:
+            redirect_url = urljoin(url, response.headers["Location"])
+        except ValueError as exc:
+            raise DownloadError("unparsable redirect location") from exc
         # Follow only https redirects; the request below carries no credentials.
         if _https_origin(redirect_url) is None:
             raise DownloadError("refusing non-https redirect")

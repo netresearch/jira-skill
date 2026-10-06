@@ -662,6 +662,12 @@ class TestRedirectHandling:
         assert get_mock.call_args_list[1].args[0] == "https://jira.example.com/files/1"
         assert _requested_hosts(get_mock)[1] == ("jira.example.com", False)
 
+    def test_unparsable_redirect_is_a_download_error(self, tmp_path):
+        result, get_mock = self._run(tmp_path, "https://[::1/x")
+        assert result.exit_code != 0
+        assert "Download failed" in result.output
+        assert get_mock.call_count == 1
+
     @pytest.mark.parametrize("location", ["http://cdn.example.net/file", "HTTP://cdn.example.net/file"])
     def test_non_https_redirect_refused(self, tmp_path, location):
         result, get_mock = self._run(tmp_path, location)
@@ -708,6 +714,29 @@ class TestDownloadAllTargetsConfiguredHost:
         def fake_get(url, *args, **kwargs):
             if "/rest/api/2/issue/" in url:
                 return _make_meta_response(attachments)
+            return _make_mock_response("application/octet-stream", b"data")
+
+        runner = click.testing.CliRunner()
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "bad.pdf").exists()
+
+    def test_unparsable_redirect_skips_only_that_attachment(self, tmp_path):
+        attachments = [_att("1", "bad.pdf"), _att("2", "good.pdf")]
+
+        def fake_get(url, *args, **kwargs):
+            if "/rest/api/2/issue/" in url:
+                return _make_meta_response(attachments)
+            if url.endswith("/content/1"):
+                resp = _make_mock_response("text/html", status_code=302)
+                resp.headers["Location"] = "https://[::1/x"
+                return resp
             return _make_mock_response("application/octet-stream", b"data")
 
         runner = click.testing.CliRunner()
