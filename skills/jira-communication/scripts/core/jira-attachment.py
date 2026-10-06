@@ -98,11 +98,16 @@ def resolve_attachment_url(attachment_url: str, jira_url: str) -> str | None:
         The resolved URL, or None if it must not be requested with credentials
     """
     base = jira_url.rstrip("/") + "/"
-    parsed = urlparse(attachment_url)
-    if not parsed.scheme and not parsed.netloc and not attachment_url.startswith("//"):
-        resolved = urljoin(base, attachment_url.lstrip("/"))
-    else:
-        resolved = urljoin(base, attachment_url)
+    try:
+        parsed = urlparse(attachment_url)
+        if not parsed.scheme and not parsed.netloc and not attachment_url.startswith("//"):
+            resolved = urljoin(base, attachment_url.lstrip("/"))
+        else:
+            resolved = urljoin(base, attachment_url)
+    except ValueError:
+        # urllib rejects some malformed authorities (e.g. an invalid IPv6
+        # literal) by raising; such a value is not requested.
+        return None
 
     target = _https_origin(resolved)
     if target is None or target != _https_origin(jira_url):

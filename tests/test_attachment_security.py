@@ -125,6 +125,11 @@ class TestValidateAttachmentUrl:
         assert jira_attachment.resolve_attachment_url(jira_url + "/y", jira_url) == jira_url + "/y"
         assert jira_attachment.resolve_attachment_url("https://[::2]/x", jira_url) is None
 
+    @pytest.mark.parametrize("att_url", ["https://[::1/a", "https://jira.example.com[x]/a"])
+    def test_unparsable_url_rejected(self, att_url):
+        """A value urllib cannot parse is rejected instead of raising."""
+        assert jira_attachment.resolve_attachment_url(att_url, "https://jira.example.com") is None
+
     def test_invalid_port_rejected(self):
         """A port that is not a number is rejected instead of raising."""
         assert (
@@ -686,6 +691,28 @@ class TestDownloadAllTargetsConfiguredHost:
         assert not (tmp_path / "other.pdf").exists()
         assert ("example.org", True) not in _requested_hosts(get_mock)
         assert all(host == "jira.example.com" for host, _ in _requested_hosts(get_mock))
+
+    def test_unparsable_content_url_skipped_and_batch_continues(self, tmp_path):
+        attachments = [
+            {"id": "1", "filename": "bad.pdf", "size": 4, "content": "https://[::1/a"},
+            _att("2", "good.pdf"),
+        ]
+
+        def fake_get(url, *args, **kwargs):
+            if "/rest/api/2/issue/" in url:
+                return _make_meta_response(attachments)
+            return _make_mock_response("application/octet-stream", b"data")
+
+        runner = click.testing.CliRunner()
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good.pdf").exists()
+        assert not (tmp_path / "bad.pdf").exists()
 
     def test_relative_content_url_resolved_against_jira_url(self, tmp_path):
         attachments = [{"id": "3", "filename": "rel.pdf", "size": 4, "content": "/rest/api/2/attachment/content/3"}]
