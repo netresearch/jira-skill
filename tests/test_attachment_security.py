@@ -118,6 +118,13 @@ class TestValidateAttachmentUrl:
             is None
         )
 
+    @pytest.mark.parametrize("jira_url", ["https://[::1]:8443", "https://[2001:db8::1]"])
+    def test_ipv6_literal_jira_url_accepted(self, jira_url):
+        """An IPv6 literal JIRA_URL resolves relative and same-host values like any other host."""
+        assert jira_attachment.resolve_attachment_url("/x", jira_url) == jira_url + "/x"
+        assert jira_attachment.resolve_attachment_url(jira_url + "/y", jira_url) == jira_url + "/y"
+        assert jira_attachment.resolve_attachment_url("https://[::2]/x", jira_url) is None
+
     def test_invalid_port_rejected(self):
         """A port that is not a number is rejected instead of raising."""
         assert (

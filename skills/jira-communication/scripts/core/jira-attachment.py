@@ -72,7 +72,9 @@ def _https_origin(url: str) -> tuple[str, int] | None:
         return None
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         return None
-    if (sent.scheme or "").lower() != "https" or (sent.host or "").lower() != parsed.hostname:
+    # urllib3 keeps the brackets of an IPv6 literal, urllib drops them.
+    sent_host = (sent.host or "").lower().removeprefix("[").removesuffix("]")
+    if (sent.scheme or "").lower() != "https" or sent_host != parsed.hostname:
         return None
     if (sent.port or 443) != port:
         return None
