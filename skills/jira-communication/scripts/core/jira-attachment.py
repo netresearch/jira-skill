@@ -7,6 +7,7 @@
 #     "atlassian-python-api>=3.41.0,<4",
 #     "click>=8.1.0,<9",
 #     "requests>=2.31.0,<3",
+#     "urllib3>=1.26,<3",
 # ]
 # ///
 """Jira attachment operations - download and upload attachments."""
@@ -37,6 +38,8 @@ from lib.client import (
 )
 from lib.config import load_config
 from lib.output import error, success, warning
+from urllib3.exceptions import LocationParseError
+from urllib3.util import parse_url
 
 # Chunk size for streaming large file downloads (1 MB)
 CHUNK_SIZE = 1048576
@@ -57,14 +60,21 @@ def _https_origin(url: str) -> tuple[str, int] | None:
     """Return (hostname, port) of an https URL, or None for any other URL.
 
     The hostname is lowercased and excludes userinfo; a missing port is the
-    https default. A malformed port yields None.
+    https default. The URL is parsed both with urllib and with urllib3, the
+    parser requests uses to send it; a URL the two read differently, or one
+    with a malformed port, yields None.
     """
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+        sent = parse_url(url)
+        port = parsed.port or 443
+    except (ValueError, LocationParseError):
+        return None
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         return None
-    try:
-        port = parsed.port or 443
-    except ValueError:
+    if (sent.scheme or "").lower() != "https" or (sent.host or "").lower() != parsed.hostname:
+        return None
+    if (sent.port or 443) != port:
         return None
     return parsed.hostname, port
 

@@ -91,6 +91,7 @@ class TestValidateAttachmentUrl:
             "HTTPS://example.org/rest/api/2/attachment/content/1",
             "https://jira.example.com@example.org/x",
             "https://jira.example.com.example.org/x",
+            "https://example.org\\@jira.example.com/x",
         ],
     )
     def test_reference_naming_another_host_rejected(self, att_url):
@@ -698,3 +699,35 @@ class TestDownloadAllTargetsConfiguredHost:
         assert result.exit_code == 0, result.output
         assert get_mock.call_args_list[-1].args[0] == "https://jira.example.com/rest/api/2/attachment/content/3"
         assert (tmp_path / "rel.pdf").exists()
+
+
+class TestRequestsSeeConfiguredHost:
+    """The host checked is the host requests actually connects to."""
+
+    @pytest.mark.parametrize(
+        "att_url",
+        [
+            "/rest/api/2/attachment/content/1",
+            "https://jira.example.com/rest/api/2/attachment/content/1",
+            "https://example.org\\@jira.example.com/x",
+            "https://jira.example.com\\@example.org/x",
+            "//example.org/x",
+        ],
+    )
+    def test_sent_request_targets_configured_host(self, tmp_path, att_url):
+        sent = []
+
+        def fake_send(adapter, request, **kwargs):
+            sent.append(request)
+            raise jira_attachment.requests.exceptions.ConnectionError("stop")
+
+        runner = click.testing.CliRunner()
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch("requests.adapters.HTTPAdapter.send", autospec=True, side_effect=fake_send),
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            runner.invoke(jira_attachment.cli, ["download", att_url, str(tmp_path / "out.bin")])
+        for request in sent:
+            parsed = jira_attachment.parse_url(request.url)
+            assert (parsed.scheme, parsed.host, parsed.port) == ("https", "jira.example.com", None), request.url
