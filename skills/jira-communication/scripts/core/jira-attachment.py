@@ -38,7 +38,6 @@ from lib.client import (
 )
 from lib.config import load_config
 from lib.output import error, success, warning
-from urllib3.exceptions import LocationParseError
 from urllib3.util import parse_url
 
 # Chunk size for streaming large file downloads (1 MB)
@@ -68,7 +67,7 @@ def _https_origin(url: str) -> tuple[str, int] | None:
         parsed = urlparse(url)
         sent = parse_url(url)
         port = parsed.port or 443
-    except (ValueError, LocationParseError):
+    except ValueError:  # LocationParseError is a ValueError
         return None
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         return None
@@ -94,7 +93,7 @@ def _urllib3_host(hostname: str) -> str | None:
     literal = f"[{hostname}]" if ":" in hostname else hostname
     try:
         return _bare_host(parse_url(f"https://{literal}/").host)
-    except (ValueError, LocationParseError):
+    except ValueError:  # LocationParseError is a ValueError
         return None
 
 
@@ -114,6 +113,8 @@ def resolve_attachment_url(attachment_url: str, jira_url: str) -> str | None:
     Returns:
         The resolved URL, or None if it must not be requested with credentials
     """
+    if not isinstance(attachment_url, str) or not attachment_url.strip():
+        return None
     base = jira_url.rstrip("/") + "/"
     try:
         parsed = urlparse(attachment_url)
@@ -437,7 +438,7 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
             # Per-file resilience: a single bad file (404/500/redirect anomaly)
             # must not abort the whole batch. Auth/session/CAPTCHA errors are NOT
             # caught here — they propagate and abort, since retrying is pointless.
-            content_url = resolve_attachment_url(att.get("content") or "", jira_url)
+            content_url = resolve_attachment_url(att.get("content"), jira_url)
             if content_url is None:
                 warning(f"Skipping {filename}: content URL is not an https URL on the JIRA_URL host")
                 continue

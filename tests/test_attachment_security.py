@@ -589,25 +589,49 @@ def _requested_hosts(get_mock) -> list[tuple[str | None, bool]]:
     return calls
 
 
+def _invoke(tmp_path, args, transport):
+    """Run the CLI with the fake config and cwd; ``transport`` is a patch for the HTTP layer."""
+    runner = click.testing.CliRunner()
+    with (
+        mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+        transport,
+        mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+    ):
+        return runner.invoke(jira_attachment.cli, args)
+
+
+def _download(tmp_path, att_url, responses):
+    get_mock = mock.Mock(side_effect=responses)
+    args = ["download", att_url, str(tmp_path / "out.bin")]
+    return _invoke(tmp_path, args, mock.patch.object(jira_attachment.requests, "get", get_mock)), get_mock
+
+
+def _download_all(tmp_path, attachments, content=None):
+    """Run download-all; ``content(url)`` may answer a content request, else a file is returned."""
+
+    def fake_get(url, *args, **kwargs):
+        if "/rest/api/2/issue/" in url:
+            return _make_meta_response(attachments)
+        answer = content(url) if content else None
+        return answer or _make_mock_response("application/octet-stream", b"data")
+
+    get_mock = mock.Mock(side_effect=fake_get)
+    result = _invoke(tmp_path, ["download-all", "TEST-1"], mock.patch.object(jira_attachment.requests, "get", get_mock))
+    return result, get_mock
+
+
+def _redirect(location: str):
+    resp = _make_mock_response("text/html", status_code=302)
+    resp.headers["Location"] = location
+    return resp
+
+
 class TestDownloadTargetsConfiguredHost:
     """`download` requests only the configured Jira host and only over https."""
 
-    def _run(self, tmp_path, att_url, responses=None):
-        get_mock = mock.Mock(
-            side_effect=responses or [_make_mock_response("application/octet-stream", b"data")],
-        )
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch.object(jira_attachment.requests, "get", get_mock),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            result = runner.invoke(jira_attachment.cli, ["download", att_url, str(tmp_path / "out.bin")])
-        return result, get_mock
-
     @pytest.mark.parametrize("att_url", [".example.org/x", "@example.org/x", "rest/api/2/attachment/content/1"])
     def test_value_without_scheme_requested_on_configured_host(self, tmp_path, att_url):
-        result, get_mock = self._run(tmp_path, att_url)
+        result, get_mock = _download(tmp_path, att_url, [_make_mock_response("application/octet-stream")])
         assert result.exit_code == 0, result.output
         assert _requested_hosts(get_mock) == [("jira.example.com", True)]
 
@@ -620,7 +644,7 @@ class TestDownloadTargetsConfiguredHost:
         ],
     )
     def test_rejected_value_sends_no_request(self, tmp_path, att_url):
-        result, get_mock = self._run(tmp_path, att_url)
+        result, get_mock = _download(tmp_path, att_url, [])
         assert result.exit_code != 0
         get_mock.assert_not_called()
         assert not (tmp_path / "out.bin").exists()
@@ -629,27 +653,9 @@ class TestDownloadTargetsConfiguredHost:
 class TestRedirectHandling:
     """The single followed redirect never carries credentials and never leaves https."""
 
-    @staticmethod
-    def _redirect(location: str):
-        resp = _make_mock_response("text/html", status_code=302)
-        resp.headers["Location"] = location
-        return resp
-
     def _run(self, tmp_path, location):
-        get_mock = mock.Mock(
-            side_effect=[self._redirect(location), _make_mock_response("application/octet-stream", b"data")]
-        )
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch.object(jira_attachment.requests, "get", get_mock),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            result = runner.invoke(
-                jira_attachment.cli,
-                ["download", "/rest/api/2/attachment/content/1", str(tmp_path / "out.bin")],
-            )
-        return result, get_mock
+        responses = [_redirect(location), _make_mock_response("application/octet-stream", b"data")]
+        return _download(tmp_path, "/rest/api/2/attachment/content/1", responses)
 
     def test_https_redirect_followed_without_credentials(self, tmp_path):
         result, get_mock = self._run(tmp_path, "https://cdn.example.net/file")
@@ -680,92 +686,37 @@ class TestDownloadAllTargetsConfiguredHost:
     """`download-all` only sends credentials to content URLs on the configured host."""
 
     def test_content_url_on_other_host_skipped(self, tmp_path):
-        attachments = [
-            _att("1", "good.pdf"),
-            {"id": "2", "filename": "other.pdf", "size": 4, "content": "https://example.org/content/2"},
-        ]
-        responses = {"meta": _make_meta_response(attachments)}
-
-        def fake_get(url, *args, **kwargs):
-            if "/rest/api/2/issue/" in url:
-                return responses["meta"]
-            return _make_mock_response("application/octet-stream", b"data")
-
-        get_mock = mock.Mock(side_effect=fake_get)
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch.object(jira_attachment.requests, "get", get_mock),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        other = {"id": "2", "filename": "other.pdf", "size": 4, "content": "https://example.org/content/2"}
+        result, get_mock = _download_all(tmp_path, [_att("1", "good.pdf"), other])
         assert result.exit_code == 0, result.output
         assert (tmp_path / "good.pdf").exists()
         assert not (tmp_path / "other.pdf").exists()
-        assert ("example.org", True) not in _requested_hosts(get_mock)
         assert all(host == "jira.example.com" for host, _ in _requested_hosts(get_mock))
 
-    def test_unparsable_content_url_skipped_and_batch_continues(self, tmp_path):
-        attachments = [
-            {"id": "1", "filename": "bad.pdf", "size": 4, "content": "https://[::1/a"},
-            _att("2", "good.pdf"),
-        ]
-
-        def fake_get(url, *args, **kwargs):
-            if "/rest/api/2/issue/" in url:
-                return _make_meta_response(attachments)
-            return _make_mock_response("application/octet-stream", b"data")
-
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+    @pytest.mark.parametrize("content", ["https://[::1/a", "", "  ", None, 7, "MISSING"])
+    def test_unusable_content_url_skipped_and_batch_continues(self, tmp_path, content):
+        bad = {"id": "1", "filename": "bad.pdf", "size": 4}
+        if content != "MISSING":
+            bad["content"] = content
+        result, get_mock = _download_all(tmp_path, [bad, _att("2", "good.pdf")])
         assert result.exit_code == 0, result.output
+        assert [c.args[0] for c in get_mock.call_args_list][1:] == [_att("2", "good.pdf")["content"]]
         assert (tmp_path / "good.pdf").exists()
         assert not (tmp_path / "bad.pdf").exists()
 
     def test_unparsable_redirect_skips_only_that_attachment(self, tmp_path):
-        attachments = [_att("1", "bad.pdf"), _att("2", "good.pdf")]
-
-        def fake_get(url, *args, **kwargs):
-            if "/rest/api/2/issue/" in url:
-                return _make_meta_response(attachments)
-            if url.endswith("/content/1"):
-                resp = _make_mock_response("text/html", status_code=302)
-                resp.headers["Location"] = "https://[::1/x"
-                return resp
-            return _make_mock_response("application/octet-stream", b"data")
-
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch.object(jira_attachment.requests, "get", side_effect=fake_get),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        result, _ = _download_all(
+            tmp_path,
+            [_att("1", "bad.pdf"), _att("2", "good.pdf")],
+            content=lambda url: _redirect("https://[::1/x") if url.endswith("/content/1") else None,
+        )
         assert result.exit_code == 0, result.output
         assert (tmp_path / "good.pdf").exists()
         assert not (tmp_path / "bad.pdf").exists()
 
     def test_relative_content_url_resolved_against_jira_url(self, tmp_path):
-        attachments = [{"id": "3", "filename": "rel.pdf", "size": 4, "content": "/rest/api/2/attachment/content/3"}]
-
-        def fake_get(url, *args, **kwargs):
-            if "/rest/api/2/issue/" in url:
-                return _make_meta_response(attachments)
-            return _make_mock_response("application/octet-stream", b"data")
-
-        get_mock = mock.Mock(side_effect=fake_get)
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch.object(jira_attachment.requests, "get", get_mock),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            result = runner.invoke(jira_attachment.cli, ["download-all", "TEST-1"])
+        rel = {"id": "3", "filename": "rel.pdf", "size": 4, "content": "/rest/api/2/attachment/content/3"}
+        result, get_mock = _download_all(tmp_path, [rel])
         assert result.exit_code == 0, result.output
         assert get_mock.call_args_list[-1].args[0] == "https://jira.example.com/rest/api/2/attachment/content/3"
         assert (tmp_path / "rel.pdf").exists()
@@ -791,13 +742,8 @@ class TestRequestsSeeConfiguredHost:
             sent.append(request)
             raise jira_attachment.requests.exceptions.ConnectionError("stop")
 
-        runner = click.testing.CliRunner()
-        with (
-            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
-            mock.patch("requests.adapters.HTTPAdapter.send", autospec=True, side_effect=fake_send),
-            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
-        ):
-            runner.invoke(jira_attachment.cli, ["download", att_url, str(tmp_path / "out.bin")])
+        transport = mock.patch("requests.adapters.HTTPAdapter.send", autospec=True, side_effect=fake_send)
+        _invoke(tmp_path, ["download", att_url, str(tmp_path / "out.bin")], transport)
         for request in sent:
             parsed = jira_attachment.parse_url(request.url)
             assert (parsed.scheme, parsed.host, parsed.port) == ("https", "jira.example.com", None), request.url
