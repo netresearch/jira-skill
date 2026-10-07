@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.33.0] - 2026-10-05
+## [3.33.0] - 2026-10-07
 
 ### Added
 
@@ -21,12 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `jira-create.py issue --dry-run` prints the whole description instead of its first 50 characters and lists the `--fields-json` fields as applied last, winning over the flags. `jira-create.py issue` and `jira-issue.py update` refuse `--fields-json` that is not a JSON object ([#271](https://github.com/netresearch/jira-skill/pull/271))
 - Project-authored files carry SPDX licence and copyright notices, and ShellCheck in `validate.yml` runs at style severity ([#270](https://github.com/netresearch/jira-skill/pull/270))
+- `dependency-audit.yml` runs pip-audit on the PEP 723 dependencies for pull requests that change `skills/jira-communication/scripts/`, not only weekly ([#281](https://github.com/netresearch/jira-skill/pull/281))
 
 ### Fixed
 
 - `jira-worklog-query.py` returns the user's Tempo worklogs instead of failing with HTTP 405 on `--backend tempo`, and on `--backend auto` wherever Tempo Timesheets runs on Jira Server/DC. It listed worklogs with a GET on `/rest/tempo-timesheets/4/worklogs`, which on DC accepts only POST, and a POST there creates worklogs. It now calls `POST /rest/tempo-timesheets/4/worklogs/search` with `worker` set to the Jira user key and an optional `projectKey`, sharing the request loop of the `--tempo-account` search. `--user` is resolved to the user key (an unknown username is sent unchanged, a failed lookup aborts the query), and the Tempo path no longer filters client-side by username, which dropped every entry for accounts whose key differs from the username (e.g. `JIRAUSER12345`). New tests `test_posts_to_search_endpoint`, `test_body_without_user_or_project`, `test_auto_detect_405_searches_with_current_user_key`, `test_explicit_user_resolved_to_key`, `test_explicit_user_not_found_falls_back_to_username` and `test_explicit_user_lookup_failure_fails` ([#277](https://github.com/netresearch/jira-skill/pull/277), fixes [#275](https://github.com/netresearch/jira-skill/issues/275))
 - The prompt hook no longer reports SPDX license identifiers (GPL-2, AGPL-3, LGPL-3, MPL-2, EPL-2, EUPL-1, CDDL-1) as Jira issue references; the license prefixes join the denylist next to CVE, CWE and UTF ([#273](https://github.com/netresearch/jira-skill/pull/273))
 - `jira-move.py` passes `JIRA_TIMEOUT` to its issue-type PUT, which went through the raw client session without a timeout ([#270](https://github.com/netresearch/jira-skill/pull/270))
+- `jira-syntax` evals: the seven `not_content` assertions are graded as must-not (the shared grader inverts only `must_not`), the patterns that rejected correct answers are corrected, and the suite reaches the validator's minimum of 10 evals ([#281](https://github.com/netresearch/jira-skill/pull/281))
+
+### Security
+
+- `jira-attachment.py download` resolves the attachment URL against `JIRA_URL` and sends the authenticated request only to an `https://` URL on the host and port of `JIRA_URL`; every other value exits non-zero before any request. `download-all` applies the same check to each attachment's `content` URL and skips the ones that fail it, and a redirect is followed only to an `https://` location (case-insensitive scheme, relative locations resolved). Attachment downloads now need an `https://` `JIRA_URL`. The test `test_relative_path_always_accepted`, which accepted relative values without resolving them, is replaced by `test_relative_path_resolves_against_configured_base` ([#280](https://github.com/netresearch/jira-skill/pull/280))
 
 ### Documentation
 
