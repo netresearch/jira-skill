@@ -269,6 +269,17 @@ def issue(
     help="Key or ID of an existing project whose configuration (schemes) to copy",
 )
 @click.option("--lead", required=True, help="Username of the new project's lead")
+@click.option("--category", help="Project category to set, by name or numeric id")
+@click.option(
+    "--assignee-type",
+    type=click.Choice(["PROJECT_LEAD", "UNASSIGNED"]),
+    help="Default assignee for new issues",
+)
+@click.option(
+    "--copy-roles",
+    is_flag=True,
+    help="Copy the project role members (groups and users) of --from-project to the new project",
+)
 @click.option(
     "--bootstrap-issues",
     is_flag=True,
@@ -287,6 +298,9 @@ def project(
     name: str,
     source_project: str,
     lead: str,
+    category: str | None,
+    assignee_type: str | None,
+    copy_roles: bool,
     bootstrap_issues: bool,
     force: bool,
     dry_run: bool,
@@ -309,11 +323,22 @@ def project(
     already used, so the new project's first bootstrap issue would NOT be
     KEY-1. Use --force to proceed anyway if this is expected.
 
+    Shared configuration does not copy project role members. Without
+    --copy-roles the new project only holds Jira's default role members, so
+    a lead who is assignable in --from-project may not be assignable here
+    and --bootstrap-issues fails. --copy-roles adds the missing groups and
+    users role by role before the bootstrap issue is created. It grants the
+    same access as --from-project, customer groups included, so check the
+    source's roles first (--dry-run lists them).
+
     Examples:
 
       jira-create project NEWP "Example Customer GmbH" --from-project TMPL --lead jane.doe
 
       jira-create project OPSNEWP "OPS Example Customer GmbH" --from-project OPS --lead jane.doe --bootstrap-issues
+
+      jira-create project OPSNEWP "OPS Example Customer GmbH" --from-project NEWP --lead jane.doe
+      --copy-roles --category Support --assignee-type PROJECT_LEAD --bootstrap-issues
     """
     client = ctx.obj["client"]
 
@@ -340,6 +365,13 @@ def project(
     elif collision:
         warning(f"Proceeding despite '{key}-1' already resolving to {collision} (--force)")
 
+    # Resolve the category before creating anything, so a typo aborts cleanly
+    # instead of leaving a half-configured project behind.
+    category_id = None
+    category_name = None
+    if category:
+        category_id, category_name = _resolve_category(client, category)
+
     if dry_run:
         warning("DRY RUN - No project will be created")
         print("\nWould create project:")
@@ -347,6 +379,20 @@ def project(
         print(f"  Name: {name}")
         print(f"  Lead: {lead}")
         print(f"  Copying schemes from: {source_project} (id={source_id})")
+        if category_id is not None:
+            print(f"  Category: {category_name} (id={category_id})")
+        if assignee_type:
+            print(f"  Default assignee: {assignee_type}")
+        if copy_roles:
+            print(f"  Would copy role members from {source_project} (members already present are skipped):")
+            try:
+                source_roles = _read_role_actors(client, source_project)
+            except Exception as e:
+                warning(f"Could not read the project roles of {source_project}: {e}")
+                source_roles = {}
+            for role_name, (_, actors) in sorted(source_roles.items()):
+                if actors:
+                    print(f"    {role_name}: {', '.join(f'{actor} ({kind})' for kind, actor in actors)}")
         if bootstrap_issues:
             print(f"  Would create bootstrap issue: {key}-1 (Projektmanagement, Issue Number One)")
         return
@@ -370,8 +416,104 @@ def project(
         print(f"  Configuration copied from: {source_project}")
         print(f"  URL: {client.url}/browse/{key}")
 
+    verbose = not (ctx.obj.get("quiet") or ctx.obj.get("json"))
+
+    settings: dict = {}
+    if category_id is not None:
+        settings["categoryId"] = category_id
+    if assignee_type:
+        settings["assigneeType"] = assignee_type
+    if settings:
+        try:
+            client.update_project(key, settings)
+            if verbose:
+                success(f"Updated {key}: {', '.join(f'{k}={v}' for k, v in settings.items())}")
+        except Exception as e:
+            warning(f"Could not update category/default assignee of {key}: {e}")
+
+    # Roles before the bootstrap issue: its default assignee must be assignable.
+    if copy_roles:
+        added = _copy_role_actors(client, source_project, key)
+        if verbose:
+            if added:
+                success(f"Copied {len(added)} role member(s) from {source_project}:")
+                for role_name, kind, actor in added:
+                    print(f"  {role_name}: {actor} ({kind})")
+            else:
+                print(f"  Role members: nothing to copy from {source_project}")
+
     if bootstrap_issues:
         _create_bootstrap_issues(client, key, ctx.obj)
+
+
+_ROLE_ACTOR_TYPES = {
+    "atlassian-group-role-actor": "group",
+    "atlassian-user-role-actor": "user",
+}
+
+
+def _resolve_category(client, value: str) -> tuple[int, str]:
+    """Resolve a project category given by name (case-insensitive) or id. Exits on no match."""
+    try:
+        categories = client.get_all_project_categories() or []
+    except Exception as e:
+        error(f"Could not read project categories: {e}")
+        sys.exit(1)
+    for cat in categories:
+        if str(cat.get("id")) == value or str(cat.get("name", "")).lower() == value.lower():
+            return int(cat["id"]), cat.get("name", value)
+    names = ", ".join(sorted(str(c.get("name")) for c in categories))
+    error(f"Unknown project category '{value}'. Available: {names}")
+    sys.exit(1)
+
+
+def _read_role_actors(client, project_key: str) -> dict[str, tuple[str, list[tuple[str, str]]]]:
+    """Return {role name: (role id, [(actor kind, actor name), ...])} for a project.
+
+    Role ids are global, so the same id addresses the same role in every
+    project. Actor kinds other than group and user are ignored.
+    """
+    roles = {}
+    for role_name, role_url in (client.get_project_roles(project_key) or {}).items():
+        role_id = str(role_url).rstrip("/").rsplit("/", 1)[-1]
+        details = client.get_project_actors_for_role_project(project_key, role_id) or []
+        # The library returns the bare actors list; tolerate the full role payload too.
+        actors_raw = details.get("actors", []) if isinstance(details, dict) else details
+        actors = [
+            (_ROLE_ACTOR_TYPES[a["type"]], a["name"])
+            for a in actors_raw
+            if a.get("type") in _ROLE_ACTOR_TYPES and a.get("name")
+        ]
+        roles[role_name] = (role_id, actors)
+    return roles
+
+
+def _copy_role_actors(client, source_key: str, target_key: str) -> list[tuple[str, str, str]]:
+    """Add the role members of SOURCE that TARGET lacks. Returns (role, kind, name) per added member.
+
+    Members already in the target role are skipped, since re-adding one is
+    rejected by Jira. A failed add only warns, so one bad actor does not stop
+    the rest.
+    """
+    try:
+        source_roles = _read_role_actors(client, source_key)
+        target_roles = _read_role_actors(client, target_key)
+    except Exception as e:
+        warning(f"Could not read project roles, no role members copied: {e}")
+        return []
+
+    added = []
+    for role_name, (role_id, actors) in sorted(source_roles.items()):
+        present = set(target_roles.get(role_name, (role_id, []))[1])
+        for kind, actor in actors:
+            if (kind, actor) in present:
+                continue
+            try:
+                client.add_project_actor_in_role(target_key, role_id, actor, kind)
+                added.append((role_name, kind, actor))
+            except Exception as e:
+                warning(f"Could not add {kind} '{actor}' to role '{role_name}' of {target_key}: {e}")
+    return added
 
 
 def _check_key_collision(client, key: str) -> str | None:

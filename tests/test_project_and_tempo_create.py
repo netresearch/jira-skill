@@ -246,6 +246,146 @@ class TestProjectCreate:
         assert result.output.strip() == "NEWP"
 
 
+_ROLES = {
+    "Developers": "https://jira.example.com/rest/api/2/project/X/role/10001",
+    "Customers": "https://jira.example.com/rest/api/2/project/X/role/10002",
+    "Administrators": "https://jira.example.com/rest/api/2/project/X/role/10003",
+}
+
+_SOURCE_ACTORS = {
+    "10001": [{"type": "atlassian-group-role-actor", "name": "developers-group"}],
+    "10002": [
+        {"type": "atlassian-group-role-actor", "name": "customer-group"},
+        {"type": "atlassian-user-role-actor", "name": "jane.customer"},
+    ],
+    "10003": [
+        {"type": "atlassian-group-role-actor", "name": "jira-administrators"},
+        {"type": "atlassian-group-role-actor", "name": "leads-group"},
+    ],
+}
+
+# Jira's default role members, present right after creation.
+_NEW_PROJECT_ACTORS = {
+    "10001": [],
+    "10002": [],
+    "10003": [{"type": "atlassian-group-role-actor", "name": "jira-administrators"}],
+}
+
+
+def _role_client(**attrs):
+    """Mock client whose TMPL project holds _SOURCE_ACTORS and NEWP _NEW_PROJECT_ACTORS."""
+    mock_client = _make_mock_client(**attrs)
+    mock_client.project.return_value = {"id": 10101}
+    mock_client.create_project_from_shared_template.return_value = {"key": "NEWP", "id": 20202}
+    mock_client.get_project_roles.return_value = _ROLES
+    mock_client.get_project_actors_for_role_project.side_effect = lambda project, role_id: (
+        _SOURCE_ACTORS if project == "TMPL" else _NEW_PROJECT_ACTORS
+    )[role_id]
+    return mock_client
+
+
+_BASE_ARGS = ["project", "NEWP", "Example Customer GmbH", "--from-project", "TMPL", "--lead", "jane.doe"]
+
+
+class TestProjectSettingsAndRoles:
+    def test_copy_roles_adds_only_missing_members(self):
+        mock_client = _role_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_create_mod.cli, [*_BASE_ARGS, "--copy-roles"])
+        assert result.exit_code == 0, result.output
+        calls = [c.args for c in mock_client.add_project_actor_in_role.call_args_list]
+        assert sorted(calls) == sorted(
+            [
+                ("NEWP", "10001", "developers-group", "group"),
+                ("NEWP", "10002", "customer-group", "group"),
+                ("NEWP", "10002", "jane.customer", "user"),
+                ("NEWP", "10003", "leads-group", "group"),
+            ]
+        )
+        assert "Copied 4 role member(s)" in result.output
+
+    def test_copy_roles_runs_before_bootstrap_issue(self):
+        """The bootstrap issue's default assignee must already be assignable."""
+        mock_client = _role_client()
+        order = []
+        mock_client.add_project_actor_in_role.side_effect = lambda *a: order.append("role")
+        mock_client.create_issue.side_effect = lambda **kw: order.append("issue") or {"key": "NEWP-1"}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_create_mod.cli, [*_BASE_ARGS, "--copy-roles", "--bootstrap-issues"])
+        assert result.exit_code == 0, result.output
+        assert order.index("issue") > max(i for i, step in enumerate(order) if step == "role")
+
+    def test_copy_roles_failed_add_warns_and_continues(self):
+        mock_client = _role_client()
+        mock_client.add_project_actor_in_role.side_effect = [Exception("group does not exist"), None, None, None]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_create_mod.cli, [*_BASE_ARGS, "--copy-roles"])
+        assert result.exit_code == 0, result.output
+        assert mock_client.add_project_actor_in_role.call_count == 4
+        assert "Copied 3 role member(s)" in result.output
+
+    def test_copy_roles_dry_run_lists_source_members_without_writing(self):
+        mock_client = _role_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_create_mod.cli, [*_BASE_ARGS, "--copy-roles", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        assert "customer-group (group)" in result.output
+        assert "jane.customer (user)" in result.output
+        mock_client.create_project_from_shared_template.assert_not_called()
+        mock_client.add_project_actor_in_role.assert_not_called()
+
+    def test_without_copy_roles_no_role_calls(self):
+        mock_client = _role_client()
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_create_mod.cli, _BASE_ARGS)
+        assert result.exit_code == 0, result.output
+        mock_client.get_project_roles.assert_not_called()
+        mock_client.add_project_actor_in_role.assert_not_called()
+        mock_client.update_project.assert_not_called()
+
+    def test_category_and_assignee_type_update_project(self):
+        mock_client = _role_client()
+        mock_client.get_all_project_categories.return_value = [
+            {"id": "10002", "name": "Agency"},
+            {"id": "10006", "name": "Support"},
+        ]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _create_mod.cli, [*_BASE_ARGS, "--category", "support", "--assignee-type", "PROJECT_LEAD"]
+            )
+        assert result.exit_code == 0, result.output
+        mock_client.update_project.assert_called_once_with(
+            "NEWP", {"categoryId": 10006, "assigneeType": "PROJECT_LEAD"}
+        )
+
+    def test_unknown_category_aborts_before_creating(self):
+        mock_client = _role_client()
+        mock_client.get_all_project_categories.return_value = [{"id": "10006", "name": "Support"}]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(_create_mod.cli, [*_BASE_ARGS, "--category", "Suport"])
+        assert result.exit_code != 0
+        mock_client.create_project_from_shared_template.assert_not_called()
+
+    def test_json_output_stays_parseable_with_settings_and_roles(self):
+        mock_client = _role_client()
+        mock_client.get_all_project_categories.return_value = [{"id": "10006", "name": "Support"}]
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _create_mod.cli,
+                ["--json", *_BASE_ARGS, "--copy-roles", "--category", "Support", "--assignee-type", "PROJECT_LEAD"],
+            )
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["key"] == "NEWP"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # tempo-account customer create
 # ═══════════════════════════════════════════════════════════════════════════════

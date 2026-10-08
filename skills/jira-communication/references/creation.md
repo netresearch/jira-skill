@@ -56,4 +56,15 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py project PROJ "Project
 uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/tempo-account.py account link 42 PROJ --default
 ```
 
+`--from-project` copies the schemes (permissions, notifications, workflow, issue types), not the project settings or the role members. Three options cover what it leaves out:
+
+- `--category NAME|ID` sets the project category. An unknown name aborts before anything is created and lists the categories that exist.
+- `--assignee-type PROJECT_LEAD|UNASSIGNED` sets the default assignee for new issues.
+- `--copy-roles` adds the groups and users of every project role of `--from-project` that the new project lacks. Members Jira already put there are skipped. It runs before `--bootstrap-issues`, because the bootstrap issue fails with "the default assignee does NOT have ASSIGNABLE permission" while the lead's group is missing from the roles. Role members decide who can see the project, customer groups included: `--dry-run` lists what would be copied, so check it first.
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py project OPSPROJ "OPS Project Name" --from-project PROJ \
+    --lead jdoe --copy-roles --category Support --assignee-type PROJECT_LEAD --bootstrap-issues --dry-run
+```
+
 These exercise Jira Administrator / Tempo Administrator rights on whichever PAT is configured. On Jira Server a PAT carries the full permission set of the user who created it, so there is no separate, narrower credential for this — check before running these against an instance where that scope is not expected.
