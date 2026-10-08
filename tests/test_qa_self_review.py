@@ -201,7 +201,7 @@ def test_cli_failed_fetch_reads_as_unknown_not_other(monkeypatch, method, field)
     assert sr[field] is None
 
 
-@pytest.mark.parametrize("payload", [None, {}, {"errorMessages": ["Log work is hidden"]}])
+@pytest.mark.parametrize("payload", [None, {}, {"errorMessages": ["boom"]}])
 def test_cli_worklog_without_a_list_is_unread(monkeypatch, payload):
     # Correct verdict with the worklog read is "self"; a response that carries
     # no worklog list must not turn it into "other".

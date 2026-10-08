@@ -113,6 +113,7 @@ Same project, summary-token overlap (case-insensitive heuristic, 4-char minimum,
 - Issue fetch fails → script exits non-zero with a sanitized error.
 - Worklog / web-links / sibling-search failures → warning to stderr, the corresponding JSON field is empty/`[]`, the script continues.
 - `myself` / status-list failures → warning to stderr; `self_review.reviewer` or `in_progress_by` stays `null` and a verdict that would have been `other` becomes `unknown`. The first (issue) fetch is the only hard dependency.
+- A response that arrives but cannot be used — a worklog without a `worklogs` list, a status list that is not a list, a `myself` without `name` or `accountId` — prints no warning; it shows only as `unknown` with the input named in `self_review.reason`.
 - Paginated comment fetch fails → warning to stderr, the comments embedded in the issue payload (capped at 50) are used instead.
 - Exception messages are passed through `_sanitize_error()` to redact tokens / passwords / api keys before being printed.
 
