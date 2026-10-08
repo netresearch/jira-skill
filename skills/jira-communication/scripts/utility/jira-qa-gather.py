@@ -318,7 +318,8 @@ def compute_self_review(
         "in_progress_authors": _authors(in_progress),
         "in_progress_complete": categories_known,
         "worklog_authors": worklog_authors,
-        "worklog_empty": None if worklogs is None else not worklogs,
+        # An incomplete worklog cannot say whether the full one is empty.
+        "worklog_empty": None if worklogs is None or not worklog_complete else not worklogs,
         "resolution": resolution.get("name") if isinstance(resolution, dict) else None,
         # Information only: opening a ticket is not implementing it.
         "creator": _person_label(fields.get("creator")),

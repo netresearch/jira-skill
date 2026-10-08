@@ -75,7 +75,7 @@ Known limitations:
 - Moves into QA count from every round. A reviewer who once moved a ticket into QA on someone else's behalf gets `self` (`earlier_handover`); the event line shows when, so check it before handing the review off.
 - Jira returns no worklog entries when the Log Work field is hidden for the project, and that response looks the same as an empty worklog. On such a project the worklog signal cannot fire; the changelog signals still apply.
 
-The section also carries two facts reviewers otherwise look up by hand: `resolution` (its name, or none) and `worklog_empty` (yes/no; unknown when the worklog could not be read).
+The section also carries two facts reviewers otherwise look up by hand: `resolution` (its name, or none) and `worklog_empty` (yes/no; unknown when the worklog could not be read or holds fewer entries than its `total`).
 
 The changelog comes embedded in the issue payload (`expand=changelog`), the same source the `qa` verb reads. With `--json` it is therefore part of the `issue` object, which grows with the ticket's history.
 
@@ -100,8 +100,8 @@ Top-level keys (stable):
   - `reviewer` — your account name / accountId, `null` if `myself` failed
   - `implementer`, `implementer_display` — author of the handover into QA, `null` when there is none; `handover` — `{created, from, to}` of that transition, or `null`; `handover_authors` — every handover author in changelog order
   - `in_progress_by` — author of the most recent move into In Progress, or `null`; `in_progress_authors` — every such author in changelog order; `in_progress_complete` — `false` when the status categories could not be read or a move went to a status without a known category
-  - `worklog_authors` — sorted list of account names, `null` if the worklog could not be read
-  - `worklog_empty` — bool, `null` if the worklog could not be read
+  - `worklog_authors` — sorted list of the account names in the returned entries (entries without an author are left out), `null` if the worklog could not be read
+  - `worklog_empty` — bool, `null` if the worklog could not be read or holds fewer entries than its `total`
   - `resolution` — resolution name, or `null`
   - `creator`, `reporter` — `"Display Name (key)"`, the bare key when there is no display name, `null` when the field is empty; information only
 

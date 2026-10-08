@@ -256,6 +256,20 @@ def test_cli_incomplete_worklog(monkeypatch, name, verdict):
     assert sr["verdict"] == verdict
     if verdict == "unknown":
         assert "worklog (incomplete)" in sr["reason"]
+    assert sr["worklog_empty"] is None
+
+
+def test_cli_incomplete_empty_worklog_is_not_empty(monkeypatch):
+    payload = {"total": 3, "worklogs": []}
+    result, _ = _run("other_implementer", [], monkeypatch, issue_get_worklog=lambda *a, **k: payload)
+    assert "Worklog empty: unknown" in result.output
+
+
+def test_worklog_entry_without_author_is_left_out():
+    case = _FIXTURE["cases"]["other_implementer"]
+    worklogs = [*_worklogs(case), {"author": {"displayName": "Gone"}, "timeSpentSeconds": 60}]
+    sr = _mod.compute_self_review(_issue(case), worklogs, "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["worklog_authors"] == ["impl"]
 
 
 def test_cli_complete_worklog_with_total_is_read(monkeypatch):
