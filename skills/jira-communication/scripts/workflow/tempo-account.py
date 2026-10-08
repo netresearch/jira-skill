@@ -139,29 +139,13 @@ def account_create(
     """
     client = ctx.obj["client"]
 
-    data = {
-        "key": key,
-        "name": name,
-        "lead": {"name": lead},
-    }
-    if customer_key:
-        data["customer"] = {"key": customer_key}
-    else:
-        # The payload shape that is known to work on Tempo Server without a customer.
-        data["status"] = "OPEN"
-        data["global"] = False
-    if category_key:
-        data["category"] = {"key": category_key}
+    data = _account_payload(key, name, lead, customer_key, category_key)
 
     if dry_run:
         warning("DRY RUN - No account will be created")
         print("\nWould create Tempo account:")
-        print(f"  Key: {key}")
         print(f"  Name: {name}")
-        print(f"  Lead: {lead}")
-        print(f"  Customer: {customer_key or '-'}")
-        if category_key:
-            print(f"  Category: {category_key}")
+        _print_account(data)
         return
 
     try:
@@ -179,14 +163,32 @@ def account_create(
         format_output(result, as_json=True)
     else:
         success(f"Created Tempo account: {name}")
-        print(f"  Key: {key}")
-        print(f"  Lead: {lead}")
-        print(f"  Customer: {customer_key or '-'}")
-        if category_key:
-            print(f"  Category: {category_key}")
+        _print_account(data)
         if isinstance(result, dict) and result.get("id") is not None:
             print(f"  Account ID: {result['id']}")
             print("  Note: use this Account ID with 'tempo-account account link' to attach it to a project.")
+
+
+def _account_payload(key: str, name: str, lead: str, customer_key: str | None, category_key: str | None) -> dict:
+    """Build the Tempo account payload. Optional parts are only sent when given."""
+    data: dict = {"key": key, "name": name, "lead": {"name": lead}}
+    if customer_key:
+        data["customer"] = {"key": customer_key}
+    else:
+        # The payload shape that is known to work on Tempo Server without a customer.
+        data["status"] = "OPEN"
+        data["global"] = False
+    if category_key:
+        data["category"] = {"key": category_key}
+    return data
+
+
+def _print_account(data: dict) -> None:
+    print(f"  Key: {data['key']}")
+    print(f"  Lead: {data['lead']['name']}")
+    print(f"  Customer: {data.get('customer', {}).get('key', '-')}")
+    if "category" in data:
+        print(f"  Category: {data['category']['key']}")
 
 
 @account.command("link")
