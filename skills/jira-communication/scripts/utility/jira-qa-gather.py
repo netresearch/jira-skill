@@ -446,7 +446,9 @@ def cli(
     try:
         worklog_block = client.issue_get_worklog(issue_key) or {}
         worklogs = worklog_block.get("worklogs", []) or []
-        worklog_read = True
+        # Only a response that carries a worklog list says who logged work; an
+        # empty body or an error object must not read as "nobody did".
+        worklog_read = isinstance(worklog_block.get("worklogs"), list)
     except Exception as exc:
         if debug:
             raise

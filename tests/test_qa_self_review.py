@@ -87,6 +87,44 @@ def test_handover_without_author_is_unknown_not_other():
     assert "implementer" in sr["reason"]
 
 
+def _as_cloud(value):
+    """Rename every user ``name`` to ``accountId``, the only key Cloud sends."""
+    if isinstance(value, dict):
+        return {("accountId" if k == "name" else k): _as_cloud(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_as_cloud(v) for v in value]
+    return value
+
+
+@pytest.mark.parametrize(("name", "verdict"), [("implementer_is_reviewer", "self"), ("other_implementer", "other")])
+def test_cloud_account_ids(name, verdict):
+    case = _FIXTURE["cases"][name]
+    issue = _as_cloud(_issue(case))
+    sr = _mod.compute_self_review(issue, _as_cloud(_worklogs(case)), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["verdict"] == verdict
+    assert sr["implementer"] == case["expect"]["implementer"]
+    assert sr["worklog_authors"] == case["worklog_authors"]
+    assert sr["reporter"] == "Rep Orter (rep)"
+
+
+def test_reporter_is_not_a_signal():
+    case = _FIXTURE["cases"]["other_implementer"]
+    issue = _issue(case)
+    issue["fields"]["reporter"] = {"name": "rev", "displayName": "Rev Iewer"}
+    sr = _mod.compute_self_review(issue, _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["verdict"] == "other"
+    assert sr["matched"] == []
+    assert sr["reporter"] == "Rev Iewer (rev)"
+
+
+def test_print_shows_resolution(capsys):
+    case = _FIXTURE["cases"]["other_implementer"]
+    issue = _issue(case)
+    issue["fields"]["resolution"] = {"name": "Done"}
+    _mod._print_self_review(_mod.compute_self_review(issue, [], "rev", _STATUS_SETS, _CATEGORIES))
+    assert "Resolution: Done | Worklog empty: yes" in capsys.readouterr().out
+
+
 def test_unknown_reviewer_never_matches_a_missing_author():
     # /myself failed and the handover has no author: None must not equal None.
     case = _FIXTURE["cases"]["other_implementer"]
@@ -163,6 +201,17 @@ def test_cli_failed_fetch_reads_as_unknown_not_other(monkeypatch, method, field)
     assert sr[field] is None
 
 
+@pytest.mark.parametrize("payload", [None, {}, {"errorMessages": ["Log work is hidden"]}])
+def test_cli_worklog_without_a_list_is_unread(monkeypatch, payload):
+    # Correct verdict with the worklog read is "self"; a response that carries
+    # no worklog list must not turn it into "other".
+    result, _ = _run("reviewer_only_in_worklog", ["--json"], monkeypatch, issue_get_worklog=lambda *a, **k: payload)
+    assert result.exit_code == 0, result.output
+    sr = json.loads(result.stdout)["self_review"]
+    assert sr["verdict"] == "unknown"
+    assert sr["worklog_empty"] is None
+
+
 def test_cli_json_carries_self_review(monkeypatch):
     result, mc = _run("implementer_is_reviewer", ["--json"], monkeypatch)
     assert result.exit_code == 0, result.output
@@ -195,7 +244,8 @@ def test_cli_text_other_has_no_warning(monkeypatch):
     assert "Reviewer (you): rev" in out
     assert "In progress by: impl" in out
     assert "Creator / reporter (information only): Boss (boss) / Rep Orter (rep)" in out
-    assert "Worklog empty: no" in out
+    assert "Worklog authors: impl" in out
+    assert "Resolution: none | Worklog empty: no" in out
 
 
 def test_cli_text_without_handover(monkeypatch):
