@@ -27,7 +27,7 @@ On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
 | QA-fail follow-up | `jira-issue.py qa-fail KEY` |
 | field-only lookup | `jira-issue.py get KEY --fields ...` |
 | change status | `jira-issue.py act KEY` → `jira-transition.py do` |
-| audit / sibling discovery | `jira-qa-gather.py KEY` |
+| audit / sibling discovery / "am I reviewing my own work?" | `jira-qa-gather.py KEY` |
 
 Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — use the matching verb.
 
@@ -96,7 +96,7 @@ State what happened, not how good it is — `references/no-editorializing.md`.
 - `references/fields-and-users.md` — custom field IDs, users, issue types
 - `references/watchers.md` — watch, subscribe, list watchers
 - `references/versions.md` — fix/affects versions, releases, version CRUD
-- `references/qa-gather.md` — audit bundle (siblings, prose URLs)
+- `references/qa-gather.md` — audit bundle (siblings, prose URLs, self-review check from changelog + worklog — not the assignee)
 - `references/intent-verbs.md` — `work / qa / qa-fail / act`, exact transition names
 
 ## Authentication

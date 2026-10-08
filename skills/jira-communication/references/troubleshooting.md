@@ -153,7 +153,7 @@ Shapes across the scripts (verify with `| jq -r 'type'` rather than assuming):
 | `issue work / qa / qa-fail` | object | `.key`, `.comments[]` |
 | `issue act` | object | `.key`, `.transitions[]` |
 | `watchers list` | object — the one *list* subcommand that wraps its result | `.watchers[]`, `.watchCount` |
-| `jira-qa-gather.py KEY` | object (bundle, like `work`) | `.siblings[]`, `.comments[]`, `.worklogs[]` |
+| `jira-qa-gather.py KEY` | object (bundle, like `work`) | `.siblings[]`, `.comments[]`, `.worklogs[]`, `.self_review.verdict` |
 
 **Fix**: index the array directly.
 

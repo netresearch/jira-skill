@@ -31,6 +31,7 @@ from lib.changelog import (
     extract_status_transitions_with_authors,
     find_transition_window,
     format_timedelta,
+    last_into_qa_index,
     parse_jira_datetime,
 )
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated, resolve_assignee, resolve_status
@@ -913,11 +914,10 @@ def _collect_handover_bundle(issue: dict, comments: list, status_sets: dict) -> 
     """Compose the qa (handover) bundle. See PLAN-context-fetch-optimization.md."""
     transitions = extract_status_transitions_with_authors(issue)
 
-    into_qa_indices = [i for i, t in enumerate(transitions) if classify_transition(t, status_sets) == "into_qa"]
-    if not into_qa_indices:
+    target_idx = last_into_qa_index(transitions, status_sets)
+    if target_idx is None:
         return {"fallback": True, "comments": comments[-5:], "transition": None}
 
-    target_idx = into_qa_indices[-1]
     target = transitions[target_idx]
     t_transition = target["created"]
     t_prev, t_next = find_transition_window(transitions, target_idx)

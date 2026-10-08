@@ -108,8 +108,9 @@ def compute_time_in_status(
 def extract_status_transitions_with_authors(issue: dict) -> list[dict]:
     """Like :func:`extract_status_transitions` but preserves transition author.
 
-    Each entry adds ``author_name`` (display name) and ``author_key`` (the
-    stable identifier — Server/DC ``name`` or Cloud ``accountId``).
+    Each entry adds ``author_name`` (display name), ``author_key`` (the
+    stable identifier — Server/DC ``name`` or Cloud ``accountId``) and
+    ``to_id`` (the target status id, for status-category lookups).
     """
     transitions: list[dict] = []
     histories = issue.get("changelog", {}).get("histories", [])
@@ -134,10 +135,23 @@ def extract_status_transitions_with_authors(issue: dict) -> list[dict]:
                     "to": item.get("toString") or "",
                     "author_name": author_name,
                     "author_key": author_key,
+                    "to_id": str(item.get("to") or ""),
                 }
             )
     transitions.sort(key=lambda t: t["created"])
     return transitions
+
+
+def last_into_qa_index(transitions: list[dict], status_sets: dict) -> int | None:
+    """Index of the most recent ``into_qa`` transition (the handover), or ``None``.
+
+    Shared by ``jira-issue.py qa`` and ``jira-qa-gather.py`` so both name the
+    same handover — and therefore the same implementer.
+    """
+    for i in range(len(transitions) - 1, -1, -1):
+        if classify_transition(transitions[i], status_sets) == "into_qa":
+            return i
+    return None
 
 
 def classify_transition(transition: dict, status_sets: dict) -> "TransitionKind":
