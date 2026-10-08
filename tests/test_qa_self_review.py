@@ -107,6 +107,14 @@ def test_cloud_account_ids(name, verdict):
     assert sr["reporter"] == "Rep Orter (rep)"
 
 
+def test_person_without_display_name_shows_the_key():
+    case = _FIXTURE["cases"]["other_implementer"]
+    issue = _issue(case)
+    issue["fields"]["reporter"] = {"name": "rep"}
+    sr = _mod.compute_self_review(issue, _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["reporter"] == "rep"
+
+
 def test_reporter_is_not_a_signal():
     case = _FIXTURE["cases"]["other_implementer"]
     issue = _issue(case)
@@ -321,6 +329,8 @@ def test_cli_text_other_has_no_warning(monkeypatch):
     out = result.output
     assert "Implementer (moved into QA): Imp Lementer (impl) at 2026-10-02T09:00:00+02:00 (In Progress → QA)" in out
     assert "Reviewer (you): rev" in out
+    assert "Handover authors (all rounds): impl" in out
+    assert "In progress authors (all rounds): impl" in out
     assert "In progress by: impl" in out
     assert "Creator / reporter (information only): Boss (boss) / Rep Orter (rep)" in out
     assert "Worklog authors: impl" in out
