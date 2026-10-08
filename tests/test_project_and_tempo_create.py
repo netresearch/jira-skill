@@ -373,6 +373,22 @@ class TestProjectSettingsAndRoles:
         assert result.exit_code != 0
         mock_client.create_project_from_shared_template.assert_not_called()
 
+    def test_failed_settings_update_exits_nonzero_after_remaining_steps(self):
+        """A project with the wrong category must not look fully configured, but
+        roles and the bootstrap issue are still applied."""
+        mock_client = _role_client()
+        mock_client.get_all_project_categories.return_value = [{"id": "10006", "name": "Support"}]
+        mock_client.update_project.side_effect = Exception("403 forbidden")
+        mock_client.create_issue.return_value = {"key": "NEWP-1"}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _create_mod.cli, [*_BASE_ARGS, "--category", "Support", "--copy-roles", "--bootstrap-issues"]
+            )
+        assert result.exit_code == 1
+        assert mock_client.add_project_actor_in_role.call_count == 4
+        mock_client.create_issue.assert_called_once()
+
     def test_json_output_stays_parseable_with_settings_and_roles(self):
         mock_client = _role_client()
         mock_client.get_all_project_categories.return_value = [{"id": "10006", "name": "Support"}]

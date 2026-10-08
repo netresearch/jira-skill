@@ -405,6 +405,7 @@ def project(
         error(f"Failed to create project: {e}")
         sys.exit(1)
 
+    verbose = not (ctx.obj.get("quiet") or ctx.obj.get("json"))
     if ctx.obj["quiet"]:
         print(key)
     elif ctx.obj["json"]:
@@ -416,8 +417,7 @@ def project(
         print(f"  Configuration copied from: {source_project}")
         print(f"  URL: {client.url}/browse/{key}")
 
-    verbose = not (ctx.obj.get("quiet") or ctx.obj.get("json"))
-
+    settings_failed = False
     settings: dict = {}
     if category_id is not None:
         settings["categoryId"] = category_id
@@ -429,6 +429,7 @@ def project(
             if verbose:
                 success(f"Updated {key}: {', '.join(f'{k}={v}' for k, v in settings.items())}")
         except Exception as e:
+            settings_failed = True
             warning(f"Could not update category/default assignee of {key}: {e}")
 
     # Roles before the bootstrap issue: its default assignee must be assignable.
@@ -445,6 +446,10 @@ def project(
     if bootstrap_issues:
         _create_bootstrap_issues(client, key, ctx.obj)
 
+    if settings_failed:
+        error(f"Project {key} was created, but its category/default assignee could not be set. Set them by hand.")
+        sys.exit(1)
+
 
 _ROLE_ACTOR_TYPES = {
     "atlassian-group-role-actor": "group",
@@ -453,18 +458,16 @@ _ROLE_ACTOR_TYPES = {
 
 
 def _resolve_category(client, value: str) -> tuple[int, str]:
-    """Resolve a project category given by name (case-insensitive) or id. Exits on no match."""
+    """Resolve a project category given by name (case-insensitive) or id. Raises on no match."""
     try:
         categories = client.get_all_project_categories() or []
     except Exception as e:
-        error(f"Could not read project categories: {e}")
-        sys.exit(1)
+        raise click.ClickException(f"Could not read project categories: {e}") from e
     for cat in categories:
         if str(cat.get("id")) == value or str(cat.get("name", "")).lower() == value.lower():
             return int(cat["id"]), cat.get("name", value)
     names = ", ".join(sorted(str(c.get("name")) for c in categories))
-    error(f"Unknown project category '{value}'. Available: {names}")
-    sys.exit(1)
+    raise click.BadParameter(f"unknown project category '{value}'. Available: {names}", param_hint="--category")
 
 
 def _read_role_actors(client, project_key: str) -> dict[str, tuple[str, list[tuple[str, str]]]]:
