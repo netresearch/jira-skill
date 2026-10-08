@@ -34,7 +34,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
-from lib.changelog import extract_status_transitions_with_authors, last_into_qa_index
+from lib.changelog import classify_transition, extract_status_transitions_with_authors, last_into_qa_index
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.config import load_status_sets
 from lib.jql import jql_escape
@@ -154,28 +154,28 @@ def _author_key(transition: dict | None) -> str | None:
     return (transition or {}).get("author_key") or None
 
 
-def _last_in_progress_transition(
+def _in_progress_transitions(
     transitions: list[dict], qa: set, status_categories: dict[str, str] | None
-) -> tuple[dict | None, bool]:
-    """Latest move into an "indeterminate" (in progress) status, and whether it is known.
+) -> tuple[list[dict], bool]:
+    """Every move into an "indeterminate" (in progress) status, and whether the list is complete.
 
     Moves into or out of a QA status are skipped: a QA reject back to In Progress
     is the reviewer's verdict, not implementation work. The second value is
-    ``False`` when the answer cannot be trusted: the categories could not be
-    read, or a newer move went to a status id they do not list (a deleted
-    status), whose category is unknown.
+    ``False`` when the list cannot be trusted: the categories could not be
+    read, or a move went to a status id they do not list (a deleted status),
+    whose category is unknown.
     """
     if status_categories is None:
-        return None, False
-    for t in reversed(transitions):
-        if t["from"] in qa or t["to"] in qa:
-            continue
-        category = status_categories.get(t["to_id"])
-        if category is None:
-            return None, False
-        if category == "indeterminate":
-            return t, True
-    return None, True
+        return [], False
+    moves = [t for t in transitions if t["from"] not in qa and t["to"] not in qa]
+    if any(t["to_id"] not in status_categories for t in moves):
+        return [], False
+    return [t for t in moves if status_categories[t["to_id"]] == "indeterminate"], True
+
+
+def _authors(transitions: list[dict]) -> list[str]:
+    """Distinct non-empty author keys, in changelog order."""
+    return list(dict.fromkeys(t["author_key"] for t in transitions if t["author_key"]))
 
 
 def _worklog_authors(worklogs: list[dict] | None) -> list[str] | None:
@@ -184,23 +184,33 @@ def _worklog_authors(worklogs: list[dict] | None) -> list[str] | None:
     return sorted({_person_key(w.get("author")) for w in worklogs} - {""})
 
 
+def _changelog_hits(reviewer: str, events: list[dict], latest: str, earlier: str) -> list[tuple[str, dict]]:
+    """The reviewer's own events, named ``latest`` for the newest one and ``earlier`` otherwise."""
+    return [(latest if t is events[-1] else earlier, t) for t in events if t["author_key"] == reviewer]
+
+
 def _reviewer_matches(
     reviewer: str | None,
-    implementer: str | None,
+    handovers: list[dict],
     worklog_authors: list[str] | None,
-    in_progress_by: str | None,
-) -> list[str]:
-    """Names of the implementation signals that point at the reviewer."""
+    in_progress: list[dict],
+) -> tuple[list[str], list[dict]]:
+    """Names of the signals that point at the reviewer, and the changelog events behind them.
+
+    Every round counts, not only the latest: a reviewer who implemented an
+    earlier round that QA rejected is still reviewing their own work.
+    """
     if not reviewer:
-        return []
-    matched: list[str] = []
-    if implementer == reviewer:
-        matched.append("implementer")
-    if worklog_authors and reviewer in worklog_authors:
-        matched.append("worklog_author")
-    if in_progress_by == reviewer:
-        matched.append("in_progress_by")
-    return matched
+        return [], []
+    hits = _changelog_hits(reviewer, handovers, "implementer", "earlier_handover")
+    in_progress_hits = _changelog_hits(reviewer, in_progress, "in_progress_by", "earlier_in_progress")
+    worklog = ["worklog_author"] if worklog_authors and reviewer in worklog_authors else []
+    names = list(dict.fromkeys([n for n, _ in hits] + worklog + [n for n, _ in in_progress_hits]))
+    events = [
+        {"signal": n, "created": t["created"].isoformat(), "from": t["from"], "to": t["to"]}
+        for n, t in hits + in_progress_hits
+    ]
+    return names, events
 
 
 def _unread_signals(readable: dict[str, bool]) -> list[str]:
@@ -231,6 +241,7 @@ def compute_self_review(
     reviewer: str | None,
     status_sets: dict,
     status_categories: dict[str, str] | None,
+    worklog_complete: bool = True,
 ) -> dict:
     """Decide whether the reviewer would be reviewing their own work.
 
@@ -239,25 +250,30 @@ def compute_self_review(
     worklog still name who did the work.
 
     ``worklogs`` / ``reviewer`` / ``status_categories`` are ``None`` when the
-    corresponding fetch failed. A signal that could not be read never counts
-    as "not you": a non-match is ``unknown``, not ``other``, when any input is
-    missing, the changelog is truncated, the handover has no author, or a move
-    went to a status the categories do not list.
+    corresponding fetch failed; ``worklog_complete`` is ``False`` when the
+    worklog response holds fewer entries than its ``total``. A signal that
+    could not be read never counts as "not you": a non-match is ``unknown``,
+    not ``other``, when any input is missing, the changelog or the worklog is
+    incomplete, the latest handover has no author, or a move went to a status
+    the categories do not list.
     """
     fields = issue.get("fields") or {}
     transitions = extract_status_transitions_with_authors(issue)
+    handovers = [t for t in transitions if classify_transition(t, status_sets) == "into_qa"]
+    # The latest handover, shown as the implementer: the same one the `qa` verb names.
     idx = last_into_qa_index(transitions, status_sets)
     handover = transitions[idx] if idx is not None else None
-    in_progress, categories_known = _last_in_progress_transition(transitions, status_sets["qa"], status_categories)
+    in_progress, categories_known = _in_progress_transitions(transitions, status_sets["qa"], status_categories)
     worklog_authors = _worklog_authors(worklogs)
 
     implementer = _author_key(handover)
-    in_progress_by = _author_key(in_progress)
-    matched = _reviewer_matches(reviewer, implementer, worklog_authors, in_progress_by)
+    in_progress_by = _author_key(in_progress[-1] if in_progress else None)
+    matched, matched_events = _reviewer_matches(reviewer, handovers, worklog_authors, in_progress)
     unread = _unread_signals(
         {
             "reviewer": bool(reviewer),
             "worklog": worklogs is not None,
+            "worklog (incomplete)": worklog_complete,
             "status categories": categories_known,
             "changelog (truncated)": not _changelog_truncated(issue),
             "implementer (handover has no author)": handover is None or bool(implementer),
@@ -270,13 +286,16 @@ def compute_self_review(
         "verdict": verdict,
         "reason": reason,
         "matched": matched,
+        "matched_events": matched_events,
         "reviewer": reviewer or None,
         "implementer": implementer,
         "implementer_display": (handover or {}).get("author_name") or None,
         "handover": None
         if handover is None
         else {"created": handover["created"].isoformat(), "from": handover["from"], "to": handover["to"]},
+        "handover_authors": _authors(handovers),
         "in_progress_by": in_progress_by,
+        "in_progress_authors": _authors(in_progress),
         "worklog_authors": worklog_authors,
         "worklog_empty": None if worklogs is None else not worklogs,
         "resolution": resolution.get("name") if isinstance(resolution, dict) else None,
@@ -298,6 +317,8 @@ def _print_self_review(sr: dict) -> None:
         print(
             f"  WARNING: you ({sr['reviewer']}) would be reviewing your own work - matched: {', '.join(sr['matched'])}"
         )
+        for e in sr["matched_events"]:
+            print(f"    {e['signal']}: {e['created']} ({e['from']} → {e['to']})")
     handover = sr["handover"]
     if handover:
         print(
@@ -307,7 +328,9 @@ def _print_self_review(sr: dict) -> None:
     else:
         print("  Implementer (moved into QA): not found")
     print(f"  Reviewer (you): {sr['reviewer'] or 'unknown'}")
+    print(f"  Handover authors (all rounds): {', '.join(sr['handover_authors']) or 'none'}")
     print(f"  In progress by: {sr['in_progress_by'] or 'none found'}")
+    print(f"  In progress authors (all rounds): {', '.join(sr['in_progress_authors']) or 'none'}")
     authors = sr["worklog_authors"]
     print(f"  Worklog authors: {'not readable' if authors is None else ', '.join(authors) or 'none'}")
     print(f"  Creator / reporter (information only): {sr['creator'] or '-'} / {sr['reporter'] or '-'}")
@@ -374,8 +397,8 @@ def cli(
     date, rendered like `jira-issue.py work`) + worklog + structured issue links
     + web/remote links + URLs extracted from prose (MR/PR/pipeline/commit/tag/
     release) + sibling tickets in the same project + a self-review check that
-    compares you with whoever moved the ticket into QA, logged work on it, or
-    last moved it to In Progress. No second call is needed to
+    compares you with everyone who moved the ticket into QA or to In Progress,
+    in any round, or logged work on it. No second call is needed to
     read the ticket text; --no-body restores the metadata-only output.
 
     ISSUE_KEY: Jira issue key (e.g., NRS-4365)
@@ -443,12 +466,15 @@ def cli(
     # Worklog
     worklogs: list[dict] = []
     worklog_read = False
+    worklog_complete = True
     try:
         worklog_block = client.issue_get_worklog(issue_key) or {}
         worklogs = worklog_block.get("worklogs", []) or []
         # Only a response that carries a worklog list says who logged work; an
         # empty body or an error object must not read as "nobody did".
         worklog_read = isinstance(worklog_block.get("worklogs"), list)
+        worklog_total = worklog_block.get("total")
+        worklog_complete = not (isinstance(worklog_total, int) and worklog_total > len(worklogs))
     except Exception as exc:
         if debug:
             raise
@@ -483,6 +509,7 @@ def cli(
         reviewer,
         load_status_sets(profile=profile, issue_key=issue_key),
         status_categories,
+        worklog_complete,
     )
 
     bundle["assignee"] = assignee_name or None

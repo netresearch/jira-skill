@@ -53,25 +53,26 @@ Comments come last so the metadata stays at the top of the screen; the section i
 
 ## Self-review check
 
-The check compares you (the authenticated user, `GET /rest/api/2/myself`: `name` on Server/DC, `accountId` on Cloud) with three implementation signals:
+The check compares you (the authenticated user, `GET /rest/api/2/myself`: `name` on Server/DC, `accountId` on Cloud) with three implementation signals. Every round in the changelog counts, not only the latest: a reviewer who implemented a round that QA rejected, after which someone else took the ticket over, is still reviewing their own work.
 
 | Signal | Source |
 |--------|--------|
-| `implementer` | Author of the most recent changelog entry that moved the status from a non-QA status into a QA status — the same handover the `jira-issue.py qa` verb uses (see `intent-verbs.md`) |
+| Handovers into QA | Authors of every changelog entry that moved the status from a non-QA status into a QA status. The most recent one is shown as `implementer` — the same handover the `jira-issue.py qa` verb uses (see `intent-verbs.md`); a match on it is named `implementer`, a match on an earlier one `earlier_handover` |
 | `worklog_authors` | Distinct authors of the issue's worklog entries |
-| `in_progress_by` | Author of the most recent move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work. A newer move into a status id the status list does not contain (a deleted status) has no known category, so the signal counts as unread |
+| Moves into In Progress | Authors of every move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work. The most recent one is shown as `in_progress_by`; a match on it is named `in_progress_by`, a match on an earlier one `earlier_in_progress`. A move into a status id the status list does not contain (a deleted status) has no known category, so the signal counts as unread |
 
 Verdict:
 
-- `self` — you match at least one signal; `matched` and the text line name which.
-- `other` — no signal matches, a handover into QA exists, and every input could be read: you, the worklog, the status categories, the full changelog and the author of the handover.
-- `unknown` — no transition into a QA status is in the changelog, or one of those inputs could not be read: a failed fetch, a worklog response that carries no `worklogs` list (empty body, error object), a changelog whose `total` exceeds the embedded entries (Cloud caps it), a handover entry without an author (deleted or anonymous user, post-function), or a move into a status the status list does not contain. `reason` names which. None of these counts as "not you".
+- `self` — you match at least one signal; `matched` names which, and `matched_events` (one indented text line each) gives the date and statuses of every matching changelog entry.
+- `other` — no signal matches, a handover into QA exists, and every input could be read: you, the full worklog, the status categories, the full changelog and the author of the latest handover.
+- `unknown` — no transition into a QA status is in the changelog, or one of those inputs could not be read: a failed fetch, a worklog response that carries no `worklogs` list (empty body, error object) or fewer entries than its `total`, a changelog whose `total` exceeds the embedded entries (Cloud caps it), a latest handover entry without an author (deleted or anonymous user, post-function), or a move into a status the status list does not contain. `reason` names which. None of these counts as "not you".
 
 The creator and the reporter are printed for information only. Opening a ticket is not implementing it, so neither is a signal.
 
 Known limitations:
 
 - Any worklog entry counts. A reviewer who logged time for an earlier review round of the same ticket gets `self` on the next round; the text line says `worklog_author`, so check whose entry it is before handing the review off.
+- Moves into QA count from every round. A reviewer who once moved a ticket into QA on someone else's behalf gets `self` (`earlier_handover`); the event line shows when, so check it before handing the review off.
 - Jira returns no worklog entries when the Log Work field is hidden for the project, and that response looks the same as an empty worklog. On such a project the worklog signal cannot fire; the changelog signals still apply.
 
 The section also carries two facts reviewers otherwise look up by hand: `resolution` (its name, or none) and `worklog_empty` (yes/no; unknown when the worklog could not be read).
@@ -95,10 +96,10 @@ Top-level keys (stable):
 - `extracted_urls` — `{category: [url, ...]}` deduplicated, order-preserved
 - `siblings` — list of issue dicts (summary + status + resolutiondate + updated)
 - `self_review` — object:
-  - `verdict` — `"self"`, `"other"` or `"unknown"`; `reason` — one line saying why; `matched` — list of the matching signals (`implementer`, `worklog_author`, `in_progress_by`)
+  - `verdict` — `"self"`, `"other"` or `"unknown"`; `reason` — one line saying why; `matched` — list of the matching signals (`implementer`, `earlier_handover`, `worklog_author`, `in_progress_by`, `earlier_in_progress`); `matched_events` — `{signal, created, from, to}` for each matching changelog entry
   - `reviewer` — your account name / accountId, `null` if `myself` failed
-  - `implementer`, `implementer_display` — author of the handover into QA, `null` when there is none; `handover` — `{created, from, to}` of that transition, or `null`
-  - `in_progress_by` — account name, or `null`
+  - `implementer`, `implementer_display` — author of the handover into QA, `null` when there is none; `handover` — `{created, from, to}` of that transition, or `null`; `handover_authors` — every handover author in changelog order
+  - `in_progress_by` — author of the most recent move into In Progress, or `null`; `in_progress_authors` — every such author in changelog order
   - `worklog_authors` — sorted list of account names, `null` if the worklog could not be read
   - `worklog_empty` — bool, `null` if the worklog could not be read
   - `resolution` — resolution name, or `null`

@@ -4,6 +4,7 @@
     {"id": "1", "name": "Open", "statusCategory": {"key": "new"}},
     {"id": "3", "name": "In Progress", "statusCategory": {"key": "indeterminate"}},
     {"id": "10", "name": "QA", "statusCategory": {"key": "indeterminate"}},
+    {"id": "11", "name": "QA failed", "statusCategory": {"key": "indeterminate"}},
     {"id": "6", "name": "Closed", "statusCategory": {"key": "done"}}
   ],
   "cases": {
@@ -63,6 +64,19 @@
       ],
       "worklog_authors": ["impl"],
       "expect": {"verdict": "other", "matched": [], "implementer": "impl", "in_progress_by": null}
+    },
+    "reviewer_implemented_an_earlier_round": {
+      "reviewer": "rev",
+      "creator": "boss",
+      "histories": [
+        {"author": {"name": "rev", "displayName": "Rev Iewer"}, "created": "2026-10-01T09:00:00.000+0200", "items": [{"field": "status", "from": "1", "fromString": "Open", "to": "3", "toString": "In Progress"}]},
+        {"author": {"name": "rev", "displayName": "Rev Iewer"}, "created": "2026-10-02T09:00:00.000+0200", "items": [{"field": "status", "from": "3", "fromString": "In Progress", "to": "10", "toString": "QA"}]},
+        {"author": {"name": "lead", "displayName": "Le Ad"}, "created": "2026-10-03T09:00:00.000+0200", "items": [{"field": "status", "from": "10", "fromString": "QA", "to": "11", "toString": "QA failed"}]},
+        {"author": {"name": "bob", "displayName": "B Ob"}, "created": "2026-10-04T09:00:00.000+0200", "items": [{"field": "status", "from": "11", "fromString": "QA failed", "to": "3", "toString": "In Progress"}]},
+        {"author": {"name": "bob", "displayName": "B Ob"}, "created": "2026-10-05T09:00:00.000+0200", "items": [{"field": "status", "from": "3", "fromString": "In Progress", "to": "10", "toString": "QA"}]}
+      ],
+      "worklog_authors": ["bob"],
+      "expect": {"verdict": "self", "matched": ["earlier_handover", "earlier_in_progress"], "implementer": "bob", "in_progress_by": "bob"}
     },
     "creator_is_reviewer": {
       "reviewer": "rev",

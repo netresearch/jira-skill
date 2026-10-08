@@ -212,6 +212,49 @@ def test_cli_worklog_without_a_list_is_unread(monkeypatch, payload):
     assert sr["worklog_empty"] is None
 
 
+def test_earlier_round_names_every_author_and_event():
+    # The reviewer implemented round one; QA rejected it and bob did round two.
+    case = _FIXTURE["cases"]["reviewer_implemented_an_earlier_round"]
+    sr = _mod.compute_self_review(_issue(case), _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["handover_authors"] == ["rev", "bob"]
+    assert sr["in_progress_authors"] == ["rev", "bob"]
+    assert sr["matched_events"] == [
+        {"signal": "earlier_handover", "created": "2026-10-02T09:00:00+02:00", "from": "In Progress", "to": "QA"},
+        {"signal": "earlier_in_progress", "created": "2026-10-01T09:00:00+02:00", "from": "Open", "to": "In Progress"},
+    ]
+
+
+def test_cli_text_lists_earlier_round(monkeypatch):
+    result, _ = _run("reviewer_implemented_an_earlier_round", [], monkeypatch)
+    assert result.exit_code == 0, result.output
+    out = result.output
+    assert "matched: earlier_handover, earlier_in_progress" in out
+    assert "    earlier_handover: 2026-10-02T09:00:00+02:00 (In Progress → QA)" in out
+    assert "Handover authors (all rounds): rev, bob" in out
+    assert "In progress authors (all rounds): rev, bob" in out
+
+
+@pytest.mark.parametrize(("name", "verdict"), [("other_implementer", "unknown"), ("reviewer_only_in_worklog", "self")])
+def test_cli_incomplete_worklog(monkeypatch, name, verdict):
+    # The response says two entries exist but returns one: the missing entry
+    # may be the reviewer's, unless a returned one already is.
+    case = _FIXTURE["cases"][name]
+    payload = {"total": len(case["worklog_authors"]) + 1, "worklogs": _worklogs(case)}
+    result, _ = _run(name, ["--json"], monkeypatch, issue_get_worklog=lambda *a, **k: payload)
+    assert result.exit_code == 0, result.output
+    sr = json.loads(result.stdout)["self_review"]
+    assert sr["verdict"] == verdict
+    if verdict == "unknown":
+        assert "worklog (incomplete)" in sr["reason"]
+
+
+def test_cli_complete_worklog_with_total_is_read(monkeypatch):
+    case = _FIXTURE["cases"]["other_implementer"]
+    payload = {"total": len(case["worklog_authors"]), "worklogs": _worklogs(case)}
+    result, _ = _run("other_implementer", ["--json"], monkeypatch, issue_get_worklog=lambda *a, **k: payload)
+    assert json.loads(result.stdout)["self_review"]["verdict"] == "other"
+
+
 def test_cli_json_carries_self_review(monkeypatch):
     result, mc = _run("implementer_is_reviewer", ["--json"], monkeypatch)
     assert result.exit_code == 0, result.output
