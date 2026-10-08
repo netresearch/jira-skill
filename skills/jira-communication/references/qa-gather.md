@@ -65,7 +65,7 @@ Verdict:
 
 - `self` — you match at least one signal; `matched` names which, and `matched_events` (one indented text line each) gives the date and statuses of every matching changelog entry.
 - `other` — no signal matches, a handover into QA exists, and every input could be read: you, the full worklog, the status categories, the full changelog and the author of the latest handover.
-- `unknown` — no transition into a QA status is in the changelog, or one of those inputs could not be read: a failed fetch, a worklog response that carries no `worklogs` list (empty body, error object) or fewer entries than its `total`, a changelog whose `total` exceeds the embedded entries (Cloud caps it), a latest handover entry without an author (deleted or anonymous user, post-function), or a move into a status the status list does not contain. `reason` names which. None of these counts as "not you".
+- `unknown` — no transition into a QA status is in the changelog, or one of those inputs could not be read: a failed fetch, a worklog response that carries no `worklogs` list (empty body, error object) or fewer entries than its `total`, a changelog whose `total` exceeds the embedded entries (Cloud caps it), a latest handover entry without an author (deleted or anonymous user, post-function), or a move outside QA (neither from nor into a QA status) into a status the status list does not contain or lists without a known category. `reason` names which. None of these counts as "not you".
 
 The creator and the reporter are printed for information only. Opening a ticket is not implementing it, so neither is a signal.
 

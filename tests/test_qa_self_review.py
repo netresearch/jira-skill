@@ -5,8 +5,8 @@
 
 Workflows that unassign a ticket on its move into QA leave every QA ticket
 "Unassigned", so the assignee can no longer tell a reviewer that the work is
-their own. The check reads the changelog (who moved it into QA, who last
-moved it to In Progress) and the worklog authors instead. Cases live in
+their own. The check reads the changelog (who moved it into QA and who moved
+it to In Progress, in every round) and the worklog authors instead. Cases live in
 ``fixtures/qa_self_review.json``.
 """
 
@@ -323,6 +323,36 @@ def test_cli_only_known_categories_count(monkeypatch, category, verdict):
     sr = json.loads(result.stdout)["self_review"]
     assert sr["verdict"] == verdict
     assert sr["in_progress_complete"] is (verdict == "self")
+
+
+def test_move_between_qa_statuses_is_not_a_handover():
+    # With two QA stages, the reviewer moving QA -> QA2 is reviewing, not
+    # handing over implementation work.
+    status_sets = {**_STATUS_SETS, "qa": frozenset({"QA", "QA2"})}
+    categories = {**_CATEGORIES, "12": "indeterminate"}
+    histories = [
+        {
+            "author": {"name": "impl"},
+            "created": "2026-10-01T09:00:00.000+0200",
+            "items": [{"field": "status", "from": "1", "fromString": "Open", "to": "3", "toString": "In Progress"}],
+        },
+        {
+            "author": {"name": "impl"},
+            "created": "2026-10-02T09:00:00.000+0200",
+            "items": [{"field": "status", "from": "3", "fromString": "In Progress", "to": "10", "toString": "QA"}],
+        },
+        {
+            "author": {"name": "rev"},
+            "created": "2026-10-03T09:00:00.000+0200",
+            "items": [{"field": "status", "from": "10", "fromString": "QA", "to": "12", "toString": "QA2"}],
+        },
+    ]
+    case = {"creator": "boss", "histories": histories, "worklog_authors": ["impl"]}
+    sr = _mod.compute_self_review(_issue(case), _worklogs(case), "rev", status_sets, categories)
+    assert sr["verdict"] == "other"
+    assert sr["matched"] == []
+    assert sr["implementer"] == "impl"
+    assert sr["handover_authors"] == ["impl"]
 
 
 def test_cli_malformed_status_entry_is_skipped(monkeypatch):
