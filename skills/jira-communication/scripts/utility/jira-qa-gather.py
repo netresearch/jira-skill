@@ -12,8 +12,9 @@
 
 Aggregates issue + description + comments + worklog + structured issue links +
 web/remote links + URLs extracted from prose (MR/PR/pipeline/commit/tag/release)
-+ sibling tickets, so a QA reviewer (or QA-assistant skill) can read context
-without making 5+ separate API calls. The description and every comment body
++ sibling tickets + a self-review check (does the changelog or worklog name the
+reviewer as implementer?), so a QA reviewer (or QA-assistant skill) can read
+context without making 5+ separate API calls. The description and every comment body
 are printed in full (same rendering as ``jira-issue.py work``); ``--no-body``
 keeps the metadata-only shape.
 
@@ -33,7 +34,9 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
+from lib.changelog import extract_status_transitions_with_authors, last_into_qa_index
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
+from lib.config import load_status_sets
 from lib.jql import jql_escape
 from lib.output import error, extract_adf_text, format_output, warning
 from lib.render import print_comment, print_description
@@ -128,6 +131,135 @@ def _comment_text(comment: dict) -> str:
     return str(body or "")
 
 
+def _person_key(person) -> str:
+    """Stable user identifier: Server/DC ``name`` or Cloud ``accountId``."""
+    if not isinstance(person, dict):
+        return ""
+    for field in ("name", "accountId"):
+        value = person.get(field)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _person_label(person) -> str | None:
+    key = _person_key(person)
+    if not key:
+        return None
+    display = person.get("displayName")
+    return f"{display} ({key})" if isinstance(display, str) and display else key
+
+
+def compute_self_review(
+    issue: dict,
+    worklogs: list[dict] | None,
+    reviewer: str | None,
+    status_sets: dict,
+    status_categories: dict[str, str] | None,
+) -> dict:
+    """Decide whether the reviewer would be reviewing their own work.
+
+    The current assignee cannot answer this: workflows that unassign on the
+    move into QA leave every QA ticket "Unassigned". The changelog and the
+    worklog still name who did the work.
+
+    ``worklogs`` / ``reviewer`` / ``status_categories`` are ``None`` when the
+    corresponding fetch failed. A signal that could not be read never counts
+    as "not you": without all three, a non-match is ``unknown``, not ``other``.
+    """
+    fields = issue.get("fields") or {}
+    transitions = extract_status_transitions_with_authors(issue)
+    idx = last_into_qa_index(transitions, status_sets)
+    handover = transitions[idx] if idx is not None else None
+
+    # Moves out of a QA status are excluded too: a QA reject back to In Progress
+    # is the reviewer's verdict, not implementation work.
+    qa = status_sets["qa"]
+    in_progress = None
+    if status_categories is not None:
+        for t in reversed(transitions):
+            if t["from"] in qa or t["to"] in qa:
+                continue
+            if status_categories.get(t["to_id"]) == "indeterminate":
+                in_progress = t
+                break
+
+    worklog_authors = None
+    if worklogs is not None:
+        worklog_authors = sorted({_person_key(w.get("author")) for w in worklogs} - {""})
+
+    implementer = (handover or {}).get("author_key") or None
+    in_progress_by = (in_progress or {}).get("author_key") or None
+    matched: list[str] = []
+    if reviewer:
+        if implementer == reviewer:
+            matched.append("implementer")
+        if worklog_authors and reviewer in worklog_authors:
+            matched.append("worklog_author")
+        if in_progress_by == reviewer:
+            matched.append("in_progress_by")
+
+    unread = [
+        name
+        for name, value in (("reviewer", reviewer), ("worklog", worklogs), ("status categories", status_categories))
+        if value is None or value == ""
+    ]
+    if matched:
+        verdict, reason = "self", "reviewer matches " + ", ".join(matched)
+    elif handover is None:
+        verdict, reason = "unknown", "no transition into a QA status in the changelog"
+    elif unread:
+        verdict, reason = "unknown", "could not read: " + ", ".join(unread)
+    else:
+        verdict, reason = "other", "reviewer matches no implementation signal"
+
+    resolution = fields.get("resolution")
+    return {
+        "verdict": verdict,
+        "reason": reason,
+        "matched": matched,
+        "reviewer": reviewer or None,
+        "implementer": implementer,
+        "implementer_display": (handover or {}).get("author_name") or None,
+        "handover": None
+        if handover is None
+        else {"created": handover["created"].isoformat(), "from": handover["from"], "to": handover["to"]},
+        "in_progress_by": in_progress_by,
+        "worklog_authors": worklog_authors,
+        "worklog_empty": None if worklogs is None else not worklogs,
+        "resolution": resolution.get("name") if isinstance(resolution, dict) else None,
+        # Information only: opening a ticket is not implementing it.
+        "creator": _person_label(fields.get("creator")),
+        "reporter": _person_label(fields.get("reporter")),
+    }
+
+
+def _print_self_review(sr: dict) -> None:
+    print(f"\nSelf-review check: {sr['verdict']} ({sr['reason']})")
+    if sr["verdict"] == "self":
+        print(
+            f"  WARNING: you ({sr['reviewer']}) would be reviewing your own work - matched: {', '.join(sr['matched'])}"
+        )
+    handover = sr["handover"]
+    if handover:
+        print(
+            f"  Implementer (moved into QA): {sr['implementer_display'] or '?'} ({sr['implementer'] or '?'}) "
+            f"at {handover['created']} ({handover['from']} → {handover['to']})"
+        )
+    else:
+        print("  Implementer (moved into QA): not found")
+    print(f"  Reviewer (you): {sr['reviewer'] or 'unknown'}")
+    print(f"  In progress by: {sr['in_progress_by'] or 'none found'}")
+    authors = sr["worklog_authors"]
+    print(f"  Worklog authors: {'not readable' if authors is None else ', '.join(authors) or 'none'}")
+    print(f"  Creator / reporter (information only): {sr['creator'] or '-'} / {sr['reporter'] or '-'}")
+    empty = sr["worklog_empty"]
+    print(
+        f"  Resolution: {sr['resolution'] or 'none'} | "
+        f"Worklog empty: {'unknown' if empty is None else 'yes' if empty else 'no'}"
+    )
+
+
 def _safe_message(exc: Exception) -> str:
     """Render an exception message with credentials/tokens redacted.
 
@@ -187,7 +319,9 @@ def cli(
     Returns issue + description + all comments (chronological, with author and
     date, rendered like `jira-issue.py work`) + worklog + structured issue links
     + web/remote links + URLs extracted from prose (MR/PR/pipeline/commit/tag/
-    release) + sibling tickets in the same project. No second call is needed to
+    release) + sibling tickets in the same project + a self-review check that
+    compares you with whoever moved the ticket into QA, logged work on it, or
+    last moved it to In Progress. No second call is needed to
     read the ticket text; --no-body restores the metadata-only output.
 
     ISSUE_KEY: Jira issue key (e.g., NRS-4365)
@@ -206,7 +340,7 @@ def cli(
     bundle: dict = {"issue_key": issue_key}
 
     try:
-        issue = client.issue(issue_key, expand="renderedFields")
+        issue = client.issue(issue_key, expand="renderedFields,changelog")
         bundle["issue"] = issue
     except Exception as exc:
         if debug:
@@ -224,9 +358,10 @@ def cli(
     summary = fields.get("summary", "") or ""
     project_key = (fields.get("project") or {}).get("key", "") or issue_key.split("-")[0]
     status = (fields.get("status") or {}).get("name", "")
-    # Reviewers decide whether to claim a QA ticket by comparing the current
-    # assignee against themselves, so the bundle has to carry it. `None` is a
-    # meaningful value here (unclaimed team queue), not a missing one.
+    # The assignee says whether a QA ticket is claimed (`None` = unclaimed team
+    # queue). It does NOT say who implemented it — workflows that unassign on
+    # the move into QA blank it — so the self-review check below reads the
+    # changelog and the worklog instead.
     assignee_field = fields.get("assignee") or {}
     assignee_name = assignee_field.get("name") or assignee_field.get("accountId") or ""
     assignee_display = assignee_field.get("displayName") or ""
@@ -253,15 +388,46 @@ def cli(
 
     # Worklog
     worklogs: list[dict] = []
+    worklog_read = False
     try:
         worklog_block = client.issue_get_worklog(issue_key) or {}
         worklogs = worklog_block.get("worklogs", []) or []
+        worklog_read = True
     except Exception as exc:
         if debug:
             raise
         warning(f"Failed to fetch worklog: {_safe_message(exc)}")
     bundle["worklogs"] = worklogs
     bundle["worklog_total_seconds"] = sum(int(w.get("timeSpentSeconds") or 0) for w in worklogs)
+
+    # Self-review inputs: who is asking, and which statuses are "In Progress".
+    reviewer: str | None = None
+    try:
+        reviewer = _person_key(client.myself()) or None
+    except Exception as exc:
+        if debug:
+            raise
+        warning(f"Failed to read the authenticated user: {_safe_message(exc)}")
+    status_categories: dict[str, str] | None = None
+    try:
+        statuses = client.get_all_statuses()
+        if isinstance(statuses, list):
+            status_categories = {
+                str(s.get("id")): (s.get("statusCategory") or {}).get("key", "")
+                for s in statuses
+                if isinstance(s, dict)
+            }
+    except Exception as exc:
+        if debug:
+            raise
+        warning(f"Failed to fetch status categories: {_safe_message(exc)}")
+    bundle["self_review"] = compute_self_review(
+        issue,
+        worklogs if worklog_read else None,
+        reviewer,
+        load_status_sets(profile=profile, issue_key=issue_key),
+        status_categories,
+    )
 
     bundle["assignee"] = assignee_name or None
     bundle["assignee_display"] = assignee_display or None
@@ -318,6 +484,7 @@ def cli(
         f"Worklog entries: {len(worklogs)} "
         f"({bundle['worklog_total_seconds'] // 60} min total)"
     )
+    _print_self_review(bundle["self_review"])
 
     if not no_body:
         print_description(issue)

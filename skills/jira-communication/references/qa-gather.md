@@ -7,7 +7,7 @@
 
 Load this reference when reviewing a ticket transitioned to *QA* / *In Review* / *Ready for Review*, or when the user asks for "QA review", "peer review", "review and resolve", or pulls a ticket from a team-review queue. Also when a peer-review style runbook (e.g. [`peer-qa-review`](https://github.com/netresearch/peer-qa-review-skill)) needs single-call context discovery for Stage 0 of its lifecycle.
 
-The script gives you everything a reviewer typically chases across 4–5 separate calls — issue + description + comments + worklog + structured issue links + web/remote links + URLs scraped from prose (MR/PR/pipeline/commit/tag/release) + sibling tickets — in one shot. The description and every comment body are part of the text output, so no follow-up `jira-issue.py work KEY` is needed to read the ticket.
+The script gives you everything a reviewer typically chases across 4–5 separate calls — issue + description + comments + worklog + structured issue links + web/remote links + URLs scraped from prose (MR/PR/pipeline/commit/tag/release) + sibling tickets + a self-review check — in one shot. The description and every comment body are part of the text output, so no follow-up `jira-issue.py work KEY` is needed to read the ticket.
 
 ## Command
 
@@ -37,18 +37,43 @@ Human-readable sections, in order:
 
 1. Issue key + summary
 2. Status, **current assignee** (or `Unassigned`), comment count, worklog count + total minutes
-3. `Description:` — the full description, indented (omitted when empty, or with `--no-body`)
-4. Structured issue links (`<type> → <key>: <summary>` for outward, `←` for inward), or `Issue links: none`
-5. Web/remote links (`title: url`), or `Web/remote links: none`
+3. `Self-review check: <self|other|unknown> (<reason>)` — see [Self-review check](#self-review-check); a `WARNING:` line follows when the verdict is `self`
+4. `Description:` — the full description, indented (omitted when empty, or with `--no-body`)
+5. Structured issue links (`<type> → <key>: <summary>` for outward, `←` for inward), or `Issue links: none`
+6. Web/remote links (`title: url`), or `Web/remote links: none`
+7. URLs extracted from prose, grouped by category: `merge_request`, `pull_request`, `pipeline`, `commit`, `tag`, `release`, `issue_link`
+8. Sibling tickets in the same project, sorted by `updated DESC`
+9. `COMMENTS (N total — chronological)` — every comment as `--- [YYYY-MM-DD HH:MM] Display Name (username) ---` followed by its body, the same rendering as `jira-issue.py work` (omitted when there are none, or with `--no-body`)
 
-Sections 4 and 5 always print, including when empty. "None" is a reviewable fact — a related ticket mentioned in prose but never linked, or a merged MR with no web link, is a finding in its own right — whereas an omitted section reads as "not checked" and invites the reader to assume the links exist.
+Sections 5 and 6 always print, including when empty. "None" is a reviewable fact — a related ticket mentioned in prose but never linked, or a merged MR with no web link, is a finding in its own right — whereas an omitted section reads as "not checked" and invites the reader to assume the links exist.
 
-The assignee is section 2 because claiming a ticket off a team queue depends on it: unassigned means claimable, someone else means it is already in flight, and yourself means you may be about to review your own work.
-6. URLs extracted from prose, grouped by category: `merge_request`, `pull_request`, `pipeline`, `commit`, `tag`, `release`, `issue_link`
-7. Sibling tickets in the same project, sorted by `updated DESC`
-8. `COMMENTS (N total — chronological)` — every comment as `--- [YYYY-MM-DD HH:MM] Display Name (username) ---` followed by its body, the same rendering as `jira-issue.py work` (omitted when there are none, or with `--no-body`)
+The assignee says whether a ticket is claimed: unassigned means claimable, someone else means it is already in flight. It does not say who did the work. Workflows that unassign a ticket on its move into QA leave every QA ticket `Unassigned`, so "the assignee is me" never fires there. The self-review check answers that question from the changelog and the worklog instead.
 
 Comments come last so the metadata stays at the top of the screen; the section is the full, paginated set (Jira's embedded block stops at 50 on Server/DC).
+
+## Self-review check
+
+The check compares you (the authenticated user, `GET /rest/api/2/myself`: `name` on Server/DC, `accountId` on Cloud) with three implementation signals:
+
+| Signal | Source |
+|--------|--------|
+| `implementer` | Author of the most recent changelog entry that moved the status from a non-QA status into a QA status — the same handover the `jira-issue.py qa` verb uses (see `intent-verbs.md`) |
+| `worklog_authors` | Distinct authors of the issue's worklog entries |
+| `in_progress_by` | Author of the most recent move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work |
+
+Verdict:
+
+- `self` — you match at least one signal; `matched` and the text line name which.
+- `other` — no signal matches, a handover into QA exists, and all three inputs (you, the worklog, the status categories) could be read.
+- `unknown` — no transition into a QA status is in the changelog, or one of the inputs could not be read. A failed fetch never counts as "not you".
+
+The creator and the reporter are printed for information only. Opening a ticket is not implementing it, so neither is a signal.
+
+Known limitation: any worklog entry counts. A reviewer who logged time for an earlier review round of the same ticket gets `self` on the next round; the text line says `worklog_author`, so check whose entry it is before handing the review off.
+
+The section also carries two facts reviewers otherwise look up by hand: `resolution` (its name, or none) and `worklog_empty` (yes/no; unknown when the worklog could not be read).
+
+The changelog comes embedded in the issue payload (`expand=changelog`), the same source the `qa` verb reads.
 
 ## JSON shape (with `--json`)
 
@@ -66,6 +91,15 @@ Top-level keys (stable):
 - `web_links` — list (from `get_issue_remote_links`)
 - `extracted_urls` — `{category: [url, ...]}` deduplicated, order-preserved
 - `siblings` — list of issue dicts (summary + status + resolutiondate + updated)
+- `self_review` — object:
+  - `verdict` — `"self"`, `"other"` or `"unknown"`; `reason` — one line saying why; `matched` — list of the matching signals (`implementer`, `worklog_author`, `in_progress_by`)
+  - `reviewer` — your account name / accountId, `null` if `myself` failed
+  - `implementer`, `implementer_display` — author of the handover into QA, `null` when there is none; `handover` — `{created, from, to}` of that transition, or `null`
+  - `in_progress_by` — account name, or `null`
+  - `worklog_authors` — sorted list of account names, `null` if the worklog could not be read
+  - `worklog_empty` — bool, `null` if the worklog could not be read
+  - `resolution` — resolution name, or `null`
+  - `creator`, `reporter` — `"Display Name (name)"`, information only
 
 ## Sibling-search semantics
 
@@ -74,7 +108,8 @@ Same project, summary-token overlap (case-insensitive heuristic, 4-char minimum,
 ## Failure modes
 
 - Issue fetch fails → script exits non-zero with a sanitized error.
-- Worklog / web-links / sibling-search failures → warning to stderr, the corresponding JSON field is empty/`[]`, the script continues. The first (issue) fetch is the only hard dependency.
+- Worklog / web-links / sibling-search failures → warning to stderr, the corresponding JSON field is empty/`[]`, the script continues.
+- `myself` / status-list failures → warning to stderr; `self_review.reviewer` or `in_progress_by` stays `null` and a verdict that would have been `other` becomes `unknown`. The first (issue) fetch is the only hard dependency.
 - Paginated comment fetch fails → warning to stderr, the comments embedded in the issue payload (capped at 50) are used instead.
 - Exception messages are passed through `_sanitize_error()` to redact tokens / passwords / api keys before being printed.
 
