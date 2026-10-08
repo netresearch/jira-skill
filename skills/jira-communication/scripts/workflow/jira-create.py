@@ -405,7 +405,6 @@ def project(
         error(f"Failed to create project: {e}")
         sys.exit(1)
 
-    verbose = not (ctx.obj.get("quiet") or ctx.obj.get("json"))
     if ctx.obj["quiet"]:
         print(key)
     elif ctx.obj["json"]:
@@ -426,7 +425,7 @@ def project(
     if settings:
         try:
             client.update_project(key, settings)
-            if verbose:
+            if _is_verbose(ctx.obj):
                 success(f"Updated {key}: {', '.join(f'{k}={v}' for k, v in settings.items())}")
         except Exception as e:
             settings_failed = True
@@ -435,7 +434,7 @@ def project(
     # Roles before the bootstrap issue: its default assignee must be assignable.
     if copy_roles:
         added = _copy_role_actors(client, source_project, key)
-        if verbose:
+        if _is_verbose(ctx.obj):
             if added:
                 success(f"Copied {len(added)} role member(s) from {source_project}:")
                 for role_name, kind, actor in added:
@@ -449,6 +448,11 @@ def project(
     if settings_failed:
         error(f"Project {key} was created, but its category/default assignee could not be set. Set them by hand.")
         sys.exit(1)
+
+
+def _is_verbose(ctx_obj: dict) -> bool:
+    """Human-readable progress lines are printed only outside --json and --quiet."""
+    return not (ctx_obj.get("quiet") or ctx_obj.get("json"))
 
 
 _ROLE_ACTOR_TYPES = {
