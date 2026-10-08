@@ -161,16 +161,16 @@ def _in_progress_transitions(
 
     Moves into or out of a QA status are skipped: a QA reject back to In Progress
     is the reviewer's verdict, not implementation work. The second value is
-    ``False`` when the list cannot be trusted: the categories could not be
-    read, or a move went to a status id they do not list (a deleted status),
-    whose category is unknown.
+    ``False`` when the list may miss moves: the categories could not be read,
+    or a move went to a status id they do not list (a deleted status), whose
+    category is unknown. The moves into listed statuses are still returned, so
+    a match among them still counts.
     """
     if status_categories is None:
         return [], False
     moves = [t for t in transitions if t["from"] not in qa and t["to"] not in qa]
-    if any(t["to_id"] not in status_categories for t in moves):
-        return [], False
-    return [t for t in moves if status_categories[t["to_id"]] == "indeterminate"], True
+    complete = all(t["to_id"] in status_categories for t in moves)
+    return [t for t in moves if status_categories.get(t["to_id"]) == "indeterminate"], complete
 
 
 def _authors(transitions: list[dict]) -> list[str]:
@@ -296,6 +296,7 @@ def compute_self_review(
         "handover_authors": _authors(handovers),
         "in_progress_by": in_progress_by,
         "in_progress_authors": _authors(in_progress),
+        "in_progress_complete": categories_known,
         "worklog_authors": worklog_authors,
         "worklog_empty": None if worklogs is None else not worklogs,
         "resolution": resolution.get("name") if isinstance(resolution, dict) else None,
@@ -329,8 +330,9 @@ def _print_self_review(sr: dict) -> None:
         print("  Implementer (moved into QA): not found")
     print(f"  Reviewer (you): {sr['reviewer'] or 'unknown'}")
     print(f"  Handover authors (all rounds): {', '.join(sr['handover_authors']) or 'none'}")
-    print(f"  In progress by: {sr['in_progress_by'] or 'none found'}")
-    print(f"  In progress authors (all rounds): {', '.join(sr['in_progress_authors']) or 'none'}")
+    partial = "" if sr["in_progress_complete"] else " (incomplete: status categories not readable)"
+    print(f"  In progress by: {sr['in_progress_by'] or 'none found'}{partial}")
+    print(f"  In progress authors (all rounds): {', '.join(sr['in_progress_authors']) or 'none'}{partial}")
     authors = sr["worklog_authors"]
     print(f"  Worklog authors: {'not readable' if authors is None else ', '.join(authors) or 'none'}")
     print(f"  Creator / reporter (information only): {sr['creator'] or '-'} / {sr['reporter'] or '-'}")
@@ -494,10 +496,12 @@ def cli(
     try:
         statuses = client.get_all_statuses()
         if isinstance(statuses, list):
+            # A status without a category key stays out of the map, so a move
+            # into it reads as "category unknown", not as "not In Progress".
             status_categories = {
-                str(s.get("id")): (s.get("statusCategory") or {}).get("key", "")
+                str(s.get("id")): (s.get("statusCategory") or {}).get("key")
                 for s in statuses
-                if isinstance(s, dict)
+                if isinstance(s, dict) and (s.get("statusCategory") or {}).get("key")
             }
     except Exception as exc:
         if debug:

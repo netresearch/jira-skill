@@ -255,6 +255,39 @@ def test_cli_complete_worklog_with_total_is_read(monkeypatch):
     assert json.loads(result.stdout)["self_review"]["verdict"] == "other"
 
 
+def test_unlisted_status_keeps_the_listed_matches():
+    # An old move into a since-deleted status (id 99) must not hide the
+    # reviewer's own, listed In Progress move.
+    case = _FIXTURE["cases"]["reviewer_started_work"]
+    issue = _issue(case)
+    gone = {"field": "status", "from": "1", "fromString": "Open", "to": "99", "toString": "Gone"}
+    issue["changelog"]["histories"].insert(
+        0, {"author": {"name": "impl"}, "created": "2026-09-30T09:00:00.000+0200", "items": [gone]}
+    )
+    sr = _mod.compute_self_review(issue, _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["verdict"] == "self"
+    assert sr["matched"] == ["in_progress_by"]
+    assert sr["in_progress_complete"] is False
+
+
+def test_cli_status_without_category_is_unread(monkeypatch):
+    # "In Progress" arrives without statusCategory: its moves have no known
+    # category, so they must not read as "not In Progress".
+    statuses = [dict(s) for s in _FIXTURE["statuses"]]
+    del next(s for s in statuses if s["id"] == "3")["statusCategory"]
+    result, _ = _run("other_implementer", ["--json"], monkeypatch, get_all_statuses=lambda *a, **k: statuses)
+    sr = json.loads(result.stdout)["self_review"]
+    assert sr["verdict"] == "unknown"
+    assert "status categories" in sr["reason"]
+
+
+def test_cli_text_marks_in_progress_incomplete(monkeypatch):
+    result, _ = _run("other_implementer", [], monkeypatch, get_all_statuses=RuntimeError("boom"))
+    assert result.exit_code == 0, result.output
+    assert "In progress by: none found (incomplete: status categories not readable)" in result.output
+    assert "In progress authors (all rounds): none (incomplete: status categories not readable)" in result.output
+
+
 def test_cli_json_carries_self_review(monkeypatch):
     result, mc = _run("implementer_is_reviewer", ["--json"], monkeypatch)
     assert result.exit_code == 0, result.output
