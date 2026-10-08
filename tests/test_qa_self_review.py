@@ -86,6 +86,16 @@ def test_handover_without_author_is_unknown_not_other():
     assert "implementer" in sr["reason"]
 
 
+def test_unknown_reviewer_never_matches_a_missing_author():
+    # /myself failed and the handover has no author: None must not equal None.
+    case = _FIXTURE["cases"]["other_implementer"]
+    issue = _issue(case)
+    del issue["changelog"]["histories"][-1]["author"]
+    sr = _mod.compute_self_review(issue, _worklogs(case), None, _STATUS_SETS, _CATEGORIES)
+    assert sr["matched"] == []
+    assert sr["verdict"] == "unknown"
+
+
 def test_truncated_changelog_is_unknown_not_other():
     # Cloud caps the embedded changelog; a later handover may be missing.
     case = _FIXTURE["cases"]["other_implementer"]

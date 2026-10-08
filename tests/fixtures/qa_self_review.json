@@ -46,6 +46,24 @@
       "worklog_authors": [],
       "expect": {"verdict": "unknown", "matched": [], "implementer": null, "in_progress_by": "impl"}
     },
+    "no_into_qa_but_reviewer_logged_work": {
+      "reviewer": "rev",
+      "creator": "boss",
+      "histories": [
+        {"author": {"name": "impl", "displayName": "Imp Lementer"}, "created": "2026-10-01T09:00:00.000+0200", "items": [{"field": "status", "from": "1", "fromString": "Open", "to": "3", "toString": "In Progress"}]}
+      ],
+      "worklog_authors": ["rev"],
+      "expect": {"verdict": "self", "matched": ["worklog_author"], "implementer": null, "in_progress_by": "impl"}
+    },
+    "straight_into_qa": {
+      "reviewer": "rev",
+      "creator": "boss",
+      "histories": [
+        {"author": {"name": "impl", "displayName": "Imp Lementer"}, "created": "2026-10-01T09:00:00.000+0200", "items": [{"field": "status", "from": "1", "fromString": "Open", "to": "10", "toString": "QA"}]}
+      ],
+      "worklog_authors": ["impl"],
+      "expect": {"verdict": "other", "matched": [], "implementer": "impl", "in_progress_by": null}
+    },
     "creator_is_reviewer": {
       "reviewer": "rev",
       "creator": "rev",
