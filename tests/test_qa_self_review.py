@@ -291,6 +291,26 @@ def test_cli_status_without_category_is_unread(monkeypatch):
     assert sr["reason"] == "could not read: status category of a move"
 
 
+@pytest.mark.parametrize(
+    ("category", "verdict"),
+    [
+        ({"key": "undefined"}, "unknown"),  # Jira's "No Category"
+        ({"key": "something-else"}, "unknown"),
+        ({}, "unknown"),
+        ({"key": "indeterminate"}, "self"),
+    ],
+)
+def test_cli_only_known_categories_count(monkeypatch, category, verdict):
+    # The reviewer made the move into status 3; unless its category is known,
+    # that move must not read as "not In Progress" and clear the reviewer.
+    statuses = [dict(s) for s in _FIXTURE["statuses"]]
+    next(s for s in statuses if s["id"] == "3")["statusCategory"] = category
+    result, _ = _run("reviewer_started_work", ["--json"], monkeypatch, get_all_statuses=lambda *a, **k: statuses)
+    sr = json.loads(result.stdout)["self_review"]
+    assert sr["verdict"] == verdict
+    assert sr["in_progress_complete"] is (verdict == "self")
+
+
 def test_cli_text_marks_in_progress_incomplete(monkeypatch):
     result, _ = _run("other_implementer", [], monkeypatch, get_all_statuses=RuntimeError("boom"))
     assert result.exit_code == 0, result.output

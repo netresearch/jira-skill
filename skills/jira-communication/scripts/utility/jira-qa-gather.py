@@ -218,6 +218,25 @@ def _unread_signals(readable: dict[str, bool]) -> list[str]:
     return [name for name, ok in readable.items() if not ok]
 
 
+# Jira's real status categories. "undefined" ("No Category") and anything else
+# say nothing about whether a status means work in progress.
+_KNOWN_CATEGORIES = frozenset({"new", "indeterminate", "done"})
+
+
+def _status_categories(statuses: list) -> dict[str, str]:
+    """Status id -> category key, for statuses whose category is known.
+
+    A status with no category, "No Category" (``undefined``) or an unknown key
+    stays out of the map, so a move into it reads as "category unknown", not
+    as "not In Progress".
+    """
+    return {
+        str(s.get("id")): key
+        for s in statuses
+        if isinstance(s, dict) and (key := (s.get("statusCategory") or {}).get("key")) in _KNOWN_CATEGORIES
+    }
+
+
 def _changelog_truncated(issue: dict) -> bool:
     """True when the embedded changelog holds fewer entries than its ``total``."""
     changelog = issue.get("changelog") or {}
@@ -502,13 +521,7 @@ def cli(
     try:
         statuses = client.get_all_statuses()
         if isinstance(statuses, list):
-            # A status without a category key stays out of the map, so a move
-            # into it reads as "category unknown", not as "not In Progress".
-            status_categories = {
-                str(s.get("id")): (s.get("statusCategory") or {}).get("key")
-                for s in statuses
-                if isinstance(s, dict) and (s.get("statusCategory") or {}).get("key")
-            }
+            status_categories = _status_categories(statuses)
     except Exception as exc:
         if debug:
             raise

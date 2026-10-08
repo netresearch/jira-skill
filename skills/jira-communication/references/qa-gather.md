@@ -59,7 +59,7 @@ The check compares you (the authenticated user, `GET /rest/api/2/myself`: `name`
 |--------|--------|
 | Handovers into QA | Authors of every changelog entry that moved the status from a non-QA status into a QA status. The most recent one is shown as `implementer` — the same handover the `jira-issue.py qa` verb uses (see `intent-verbs.md`); a match on it is named `implementer`, a match on an earlier one `earlier_handover` |
 | `worklog_authors` | Distinct authors of the issue's worklog entries |
-| Moves into In Progress | Authors of every move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work. The most recent one is shown as `in_progress_by`; a match on it is named `in_progress_by`, a match on an earlier one `earlier_in_progress`. A move into a status id the status list does not contain (a deleted status), or into a status listed without a category, has no known category: the signal counts as unread, the moves into known statuses still match, `reason` names `status category of a move`, and the text marks both lines `incomplete: a status category is unknown` |
+| Moves into In Progress | Authors of every move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work. The most recent one is shown as `in_progress_by`; a match on it is named `in_progress_by`, a match on an earlier one `earlier_in_progress`. A move into a status id the status list does not contain (a deleted status), or into a status listed without a category or with "No Category" (`undefined`) or any key other than `new`/`indeterminate`/`done`, has no known category: the signal counts as unread, the moves into known statuses still match, `reason` names `status category of a move`, and the text marks both lines `incomplete: a status category is unknown` |
 
 Verdict:
 
@@ -103,7 +103,7 @@ Top-level keys (stable):
   - `worklog_authors` — sorted list of account names, `null` if the worklog could not be read
   - `worklog_empty` — bool, `null` if the worklog could not be read
   - `resolution` — resolution name, or `null`
-  - `creator`, `reporter` — `"Display Name (name)"`, information only
+  - `creator`, `reporter` — `"Display Name (key)"`, the bare key when there is no display name, `null` when the field is empty; information only
 
 ## Sibling-search semantics
 
