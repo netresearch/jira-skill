@@ -325,6 +325,26 @@ def test_cli_only_known_categories_count(monkeypatch, category, verdict):
     assert sr["in_progress_complete"] is (verdict == "self")
 
 
+def test_cli_malformed_status_entry_is_skipped(monkeypatch):
+    # One entry that is not a status object must not make the whole category
+    # map unreadable: the other statuses still decide.
+    statuses = [*_FIXTURE["statuses"], "junk", None]
+    result, _ = _run("other_implementer", ["--json"], monkeypatch, get_all_statuses=lambda *a, **k: statuses)
+    sr = json.loads(result.stdout)["self_review"]
+    assert sr["verdict"] == "other"
+    assert sr["in_progress_complete"] is True
+
+
+@pytest.mark.parametrize("method", ["myself", "get_all_statuses", "issue_get_worklog", "get_issue_remote_links"])
+def test_cli_warnings_redact_credentials(monkeypatch, method):
+    exc = RuntimeError("401 for token=SECRET123 with Authorization: Bearer SECRET456")
+    result, _ = _run("other_implementer", [], monkeypatch, **{method: exc})
+    assert result.exit_code == 0, result.output
+    assert "token=***" in result.output
+    assert "SECRET123" not in result.output
+    assert "SECRET456" not in result.output
+
+
 def test_cli_new_and_done_are_known_categories(monkeypatch):
     # Moves into Closed (done) and back to Open (new) are known, not unread.
     result, _ = _run("closed_and_reopened_by_others", ["--json"], monkeypatch)
