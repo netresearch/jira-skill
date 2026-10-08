@@ -84,7 +84,7 @@ The changelog comes embedded in the issue payload (`expand=changelog`), the same
 Top-level keys (stable):
 
 - `issue_key` — string, the requested key
-- `issue` — full Jira issue dict from `client.issue()` with `expand=renderedFields`
+- `issue` — full Jira issue dict from `client.issue()` with `expand=renderedFields,changelog`, so `issue.changelog` is included
 - `description` — raw `fields.description` (string on Server/DC, ADF dict on Cloud), `null` when empty — same shape as `jira-issue.py work --json`
 - `comments` — list of comment dicts, all pages (falls back to the embedded block from the issue payload if the paginated fetch fails, with a warning)
 - `worklogs` — list of worklog dicts
