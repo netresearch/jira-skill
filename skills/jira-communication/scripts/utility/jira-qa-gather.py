@@ -313,22 +313,27 @@ def _worklog_empty_label(empty: bool | None) -> str:
     return "yes" if empty else "no"
 
 
+def _print_self_warning(sr: dict) -> None:
+    print(f"  WARNING: you ({sr['reviewer']}) would be reviewing your own work - matched: {', '.join(sr['matched'])}")
+    for e in sr["matched_events"]:
+        print(f"    {e['signal']}: {e['created']} ({e['from']} → {e['to']})")
+
+
+def _implementer_line(sr: dict) -> str:
+    handover = sr["handover"]
+    if not handover:
+        return "not found"
+    return (
+        f"{sr['implementer_display'] or '?'} ({sr['implementer'] or '?'}) "
+        f"at {handover['created']} ({handover['from']} → {handover['to']})"
+    )
+
+
 def _print_self_review(sr: dict) -> None:
     print(f"\nSelf-review check: {sr['verdict']} ({sr['reason']})")
     if sr["verdict"] == "self":
-        print(
-            f"  WARNING: you ({sr['reviewer']}) would be reviewing your own work - matched: {', '.join(sr['matched'])}"
-        )
-        for e in sr["matched_events"]:
-            print(f"    {e['signal']}: {e['created']} ({e['from']} → {e['to']})")
-    handover = sr["handover"]
-    if handover:
-        print(
-            f"  Implementer (moved into QA): {sr['implementer_display'] or '?'} ({sr['implementer'] or '?'}) "
-            f"at {handover['created']} ({handover['from']} → {handover['to']})"
-        )
-    else:
-        print("  Implementer (moved into QA): not found")
+        _print_self_warning(sr)
+    print(f"  Implementer (moved into QA): {_implementer_line(sr)}")
     print(f"  Reviewer (you): {sr['reviewer'] or 'unknown'}")
     print(f"  Handover authors (all rounds): {', '.join(sr['handover_authors']) or 'none'}")
     partial = "" if sr["in_progress_complete"] else " (incomplete: a status category is unknown)"
