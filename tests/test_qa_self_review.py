@@ -325,6 +325,22 @@ def test_cli_only_known_categories_count(monkeypatch, category, verdict):
     assert sr["in_progress_complete"] is (verdict == "self")
 
 
+def test_cli_new_and_done_are_known_categories(monkeypatch):
+    # Moves into Closed (done) and back to Open (new) are known, not unread.
+    result, _ = _run("closed_and_reopened_by_others", ["--json"], monkeypatch)
+    sr = json.loads(result.stdout)["self_review"]
+    assert sr["verdict"] == "other"
+    assert sr["in_progress_complete"] is True
+
+
+@pytest.mark.parametrize("payload", [None, {"errorMessages": ["boom"]}])
+def test_cli_status_list_that_is_not_a_list_is_unread(monkeypatch, payload):
+    result, _ = _run("other_implementer", ["--json"], monkeypatch, get_all_statuses=lambda *a, **k: payload)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["self_review"]["reason"] == "could not read: status categories"
+    assert "Failed to fetch status categories" not in result.output
+
+
 def test_cli_text_marks_in_progress_incomplete(monkeypatch):
     result, _ = _run("other_implementer", [], monkeypatch, get_all_statuses=RuntimeError("boom"))
     assert result.exit_code == 0, result.output
