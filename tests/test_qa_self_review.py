@@ -125,12 +125,14 @@ def test_print_shows_resolution(capsys):
     assert "Resolution: Done | Worklog empty: yes" in capsys.readouterr().out
 
 
-def test_unknown_reviewer_never_matches_a_missing_author():
-    # /myself failed and the handover has no author: None must not equal None.
+@pytest.mark.parametrize("reviewer", [None, ""])
+def test_unknown_reviewer_never_matches_a_missing_author(reviewer):
+    # /myself failed or returned no key, and the handover has no author (its
+    # key is ""): an unknown reviewer must not match an unknown author.
     case = _FIXTURE["cases"]["other_implementer"]
     issue = _issue(case)
     del issue["changelog"]["histories"][-1]["author"]
-    sr = _mod.compute_self_review(issue, _worklogs(case), None, _STATUS_SETS, _CATEGORIES)
+    sr = _mod.compute_self_review(issue, _worklogs(case), reviewer, _STATUS_SETS, _CATEGORIES)
     assert sr["matched"] == []
     assert sr["verdict"] == "unknown"
 
@@ -155,7 +157,7 @@ def test_move_to_unlisted_status_is_unknown_not_other():
     sr = _mod.compute_self_review(_issue(case), _worklogs(case), "rev", _STATUS_SETS, categories)
     assert sr["in_progress_by"] is None
     assert sr["verdict"] == "unknown"
-    assert "status categories" in sr["reason"]
+    assert sr["reason"] == "could not read: status category of a move"
 
 
 def test_resolution_and_worklog_empty():
@@ -278,14 +280,15 @@ def test_cli_status_without_category_is_unread(monkeypatch):
     result, _ = _run("other_implementer", ["--json"], monkeypatch, get_all_statuses=lambda *a, **k: statuses)
     sr = json.loads(result.stdout)["self_review"]
     assert sr["verdict"] == "unknown"
-    assert "status categories" in sr["reason"]
+    assert sr["reason"] == "could not read: status category of a move"
 
 
 def test_cli_text_marks_in_progress_incomplete(monkeypatch):
     result, _ = _run("other_implementer", [], monkeypatch, get_all_statuses=RuntimeError("boom"))
     assert result.exit_code == 0, result.output
-    assert "In progress by: none found (incomplete: status categories not readable)" in result.output
-    assert "In progress authors (all rounds): none (incomplete: status categories not readable)" in result.output
+    assert "Self-review check: unknown (could not read: status categories)" in result.output
+    assert "In progress by: none found (incomplete: a status category is unknown)" in result.output
+    assert "In progress authors (all rounds): none (incomplete: a status category is unknown)" in result.output
 
 
 def test_cli_json_carries_self_review(monkeypatch):

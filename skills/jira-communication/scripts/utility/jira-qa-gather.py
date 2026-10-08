@@ -274,7 +274,8 @@ def compute_self_review(
             "reviewer": bool(reviewer),
             "worklog": worklogs is not None,
             "worklog (incomplete)": worklog_complete,
-            "status categories": categories_known,
+            "status categories": status_categories is not None,
+            "status category of a move": status_categories is None or categories_known,
             "changelog (truncated)": not _changelog_truncated(issue),
             "implementer (handover has no author)": handover is None or bool(implementer),
         }
@@ -330,7 +331,7 @@ def _print_self_review(sr: dict) -> None:
         print("  Implementer (moved into QA): not found")
     print(f"  Reviewer (you): {sr['reviewer'] or 'unknown'}")
     print(f"  Handover authors (all rounds): {', '.join(sr['handover_authors']) or 'none'}")
-    partial = "" if sr["in_progress_complete"] else " (incomplete: status categories not readable)"
+    partial = "" if sr["in_progress_complete"] else " (incomplete: a status category is unknown)"
     print(f"  In progress by: {sr['in_progress_by'] or 'none found'}{partial}")
     print(f"  In progress authors (all rounds): {', '.join(sr['in_progress_authors']) or 'none'}{partial}")
     authors = sr["worklog_authors"]
