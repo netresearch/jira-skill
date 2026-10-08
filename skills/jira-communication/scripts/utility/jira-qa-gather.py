@@ -150,6 +150,74 @@ def _person_label(person) -> str | None:
     return f"{display} ({key})" if isinstance(display, str) and display else key
 
 
+def _author_key(transition: dict | None) -> str | None:
+    return (transition or {}).get("author_key") or None
+
+
+def _last_in_progress_transition(
+    transitions: list[dict], qa: set, status_categories: dict[str, str] | None
+) -> dict | None:
+    """Latest move into an "indeterminate" (in progress) status, or ``None``.
+
+    Moves out of a QA status are excluded too: a QA reject back to In Progress
+    is the reviewer's verdict, not implementation work.
+    """
+    if status_categories is None:
+        return None
+    for t in reversed(transitions):
+        if t["from"] in qa or t["to"] in qa:
+            continue
+        if status_categories.get(t["to_id"]) == "indeterminate":
+            return t
+    return None
+
+
+def _worklog_authors(worklogs: list[dict] | None) -> list[str] | None:
+    if worklogs is None:
+        return None
+    return sorted({_person_key(w.get("author")) for w in worklogs} - {""})
+
+
+def _reviewer_matches(
+    reviewer: str | None,
+    implementer: str | None,
+    worklog_authors: list[str] | None,
+    in_progress_by: str | None,
+) -> list[str]:
+    """Names of the implementation signals that point at the reviewer."""
+    if not reviewer:
+        return []
+    matched: list[str] = []
+    if implementer == reviewer:
+        matched.append("implementer")
+    if worklog_authors and reviewer in worklog_authors:
+        matched.append("worklog_author")
+    if in_progress_by == reviewer:
+        matched.append("in_progress_by")
+    return matched
+
+
+def _unread_signals(
+    reviewer: str | None, worklogs: list[dict] | None, status_categories: dict[str, str] | None
+) -> list[str]:
+    """Names of the inputs that could not be read: ``None`` (fetch failed) or ``""``."""
+    return [
+        name
+        for name, value in (("reviewer", reviewer), ("worklog", worklogs), ("status categories", status_categories))
+        if value is None or value == ""
+    ]
+
+
+def _self_review_verdict(matched: list[str], handover: dict | None, unread: list[str]) -> tuple[str, str]:
+    if matched:
+        return "self", "reviewer matches " + ", ".join(matched)
+    if handover is None:
+        return "unknown", "no transition into a QA status in the changelog"
+    if unread:
+        return "unknown", "could not read: " + ", ".join(unread)
+    return "other", "reviewer matches no implementation signal"
+
+
 def compute_self_review(
     issue: dict,
     worklogs: list[dict] | None,
@@ -171,47 +239,14 @@ def compute_self_review(
     transitions = extract_status_transitions_with_authors(issue)
     idx = last_into_qa_index(transitions, status_sets)
     handover = transitions[idx] if idx is not None else None
+    in_progress = _last_in_progress_transition(transitions, status_sets["qa"], status_categories)
+    worklog_authors = _worklog_authors(worklogs)
 
-    # Moves out of a QA status are excluded too: a QA reject back to In Progress
-    # is the reviewer's verdict, not implementation work.
-    qa = status_sets["qa"]
-    in_progress = None
-    if status_categories is not None:
-        for t in reversed(transitions):
-            if t["from"] in qa or t["to"] in qa:
-                continue
-            if status_categories.get(t["to_id"]) == "indeterminate":
-                in_progress = t
-                break
-
-    worklog_authors = None
-    if worklogs is not None:
-        worklog_authors = sorted({_person_key(w.get("author")) for w in worklogs} - {""})
-
-    implementer = (handover or {}).get("author_key") or None
-    in_progress_by = (in_progress or {}).get("author_key") or None
-    matched: list[str] = []
-    if reviewer:
-        if implementer == reviewer:
-            matched.append("implementer")
-        if worklog_authors and reviewer in worklog_authors:
-            matched.append("worklog_author")
-        if in_progress_by == reviewer:
-            matched.append("in_progress_by")
-
-    unread = [
-        name
-        for name, value in (("reviewer", reviewer), ("worklog", worklogs), ("status categories", status_categories))
-        if value is None or value == ""
-    ]
-    if matched:
-        verdict, reason = "self", "reviewer matches " + ", ".join(matched)
-    elif handover is None:
-        verdict, reason = "unknown", "no transition into a QA status in the changelog"
-    elif unread:
-        verdict, reason = "unknown", "could not read: " + ", ".join(unread)
-    else:
-        verdict, reason = "other", "reviewer matches no implementation signal"
+    implementer = _author_key(handover)
+    in_progress_by = _author_key(in_progress)
+    matched = _reviewer_matches(reviewer, implementer, worklog_authors, in_progress_by)
+    unread = _unread_signals(reviewer, worklogs, status_categories)
+    verdict, reason = _self_review_verdict(matched, handover, unread)
 
     resolution = fields.get("resolution")
     return {
@@ -234,6 +269,12 @@ def compute_self_review(
     }
 
 
+def _worklog_empty_label(empty: bool | None) -> str:
+    if empty is None:
+        return "unknown"
+    return "yes" if empty else "no"
+
+
 def _print_self_review(sr: dict) -> None:
     print(f"\nSelf-review check: {sr['verdict']} ({sr['reason']})")
     if sr["verdict"] == "self":
@@ -253,11 +294,7 @@ def _print_self_review(sr: dict) -> None:
     authors = sr["worklog_authors"]
     print(f"  Worklog authors: {'not readable' if authors is None else ', '.join(authors) or 'none'}")
     print(f"  Creator / reporter (information only): {sr['creator'] or '-'} / {sr['reporter'] or '-'}")
-    empty = sr["worklog_empty"]
-    print(
-        f"  Resolution: {sr['resolution'] or 'none'} | "
-        f"Worklog empty: {'unknown' if empty is None else 'yes' if empty else 'no'}"
-    )
+    print(f"  Resolution: {sr['resolution'] or 'none'} | Worklog empty: {_worklog_empty_label(sr['worklog_empty'])}")
 
 
 def _safe_message(exc: Exception) -> str:
