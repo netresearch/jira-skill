@@ -38,7 +38,7 @@ def _issue(case: dict) -> dict:
             "assignee": None,
             "project": {"key": "QA"},
             "creator": creator,
-            "reporter": creator,
+            "reporter": {"name": "rep", "displayName": "Rep Orter"},
             "resolution": None,
             "issuelinks": [],
         },
@@ -63,6 +63,7 @@ def test_verdict(name):
     assert sr["worklog_authors"] == sorted(set(case["worklog_authors"]))
     # Creator / reporter are shown, never matched.
     assert sr["creator"] == f"{case['creator'].title()} ({case['creator']})"
+    assert sr["reporter"] == "Rep Orter (rep)"
 
 
 def test_unreadable_worklog_is_unknown_not_other():
@@ -169,6 +170,7 @@ def test_cli_json_carries_self_review(monkeypatch):
     assert sr["verdict"] == "self"
     assert sr["reviewer"] == "rev"
     assert sr["implementer"] == "rev"
+    assert sr["handover"]["from"] == "In Progress"
     assert sr["handover"]["to"] == "QA"
     assert sr["worklog_empty"] is False
     assert mc.issue.call_args.kwargs["expand"] == "renderedFields,changelog"
@@ -188,8 +190,12 @@ def test_cli_text_other_has_no_warning(monkeypatch):
     assert result.exit_code == 0, result.output
     assert "Self-review check: other" in result.output
     assert "WARNING" not in result.output
-    assert "Implementer (moved into QA): Imp Lementer (impl)" in result.output
-    assert "Worklog empty: no" in result.output
+    out = result.output
+    assert "Implementer (moved into QA): Imp Lementer (impl) at 2026-10-02T09:00:00+02:00 (In Progress → QA)" in out
+    assert "Reviewer (you): rev" in out
+    assert "In progress by: impl" in out
+    assert "Creator / reporter (information only): Boss (boss) / Rep Orter (rep)" in out
+    assert "Worklog empty: no" in out
 
 
 def test_cli_text_without_handover(monkeypatch):
