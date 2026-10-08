@@ -59,21 +59,24 @@ The check compares you (the authenticated user, `GET /rest/api/2/myself`: `name`
 |--------|--------|
 | `implementer` | Author of the most recent changelog entry that moved the status from a non-QA status into a QA status — the same handover the `jira-issue.py qa` verb uses (see `intent-verbs.md`) |
 | `worklog_authors` | Distinct authors of the issue's worklog entries |
-| `in_progress_by` | Author of the most recent move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work |
+| `in_progress_by` | Author of the most recent move into a status whose category is In Progress (`statusCategory.key == "indeterminate"`), excluding moves into or out of a QA status — many instances put QA in that category too, and a QA reject back to In Progress is the reviewer's verdict, not implementation work. A newer move into a status id the status list does not contain (a deleted status) has no known category, so the signal counts as unread |
 
 Verdict:
 
 - `self` — you match at least one signal; `matched` and the text line name which.
-- `other` — no signal matches, a handover into QA exists, and all three inputs (you, the worklog, the status categories) could be read.
-- `unknown` — no transition into a QA status is in the changelog, or one of the inputs could not be read. A failed fetch never counts as "not you".
+- `other` — no signal matches, a handover into QA exists, and every input could be read: you, the worklog, the status categories, the full changelog and the author of the handover.
+- `unknown` — no transition into a QA status is in the changelog, or one of those inputs could not be read: a failed fetch, a changelog whose `total` exceeds the embedded entries (Cloud caps it), a handover entry without an author (deleted or anonymous user, post-function), or a move into a status the status list does not contain. `reason` names which. None of these counts as "not you".
 
 The creator and the reporter are printed for information only. Opening a ticket is not implementing it, so neither is a signal.
 
-Known limitation: any worklog entry counts. A reviewer who logged time for an earlier review round of the same ticket gets `self` on the next round; the text line says `worklog_author`, so check whose entry it is before handing the review off.
+Known limitations:
+
+- Any worklog entry counts. A reviewer who logged time for an earlier review round of the same ticket gets `self` on the next round; the text line says `worklog_author`, so check whose entry it is before handing the review off.
+- Jira returns no worklog entries when the Log Work field is hidden for the project, and that response looks the same as an empty worklog. On such a project the worklog signal cannot fire; the changelog signals still apply.
 
 The section also carries two facts reviewers otherwise look up by hand: `resolution` (its name, or none) and `worklog_empty` (yes/no; unknown when the worklog could not be read).
 
-The changelog comes embedded in the issue payload (`expand=changelog`), the same source the `qa` verb reads.
+The changelog comes embedded in the issue payload (`expand=changelog`), the same source the `qa` verb reads. With `--json` it is therefore part of the `issue` object, which grows with the ticket's history.
 
 ## JSON shape (with `--json`)
 

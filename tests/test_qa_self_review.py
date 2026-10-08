@@ -10,6 +10,7 @@ moved it to In Progress) and the worklog authors instead. Cases live in
 ``fixtures/qa_self_review.json``.
 """
 
+import copy
 import json
 from pathlib import Path
 
@@ -41,7 +42,8 @@ def _issue(case: dict) -> dict:
             "resolution": None,
             "issuelinks": [],
         },
-        "changelog": {"histories": case["histories"]},
+        # A copy: tests that edit a history must not leak into the shared fixture.
+        "changelog": {"histories": copy.deepcopy(case["histories"])},
     }
 
 
@@ -70,6 +72,41 @@ def test_unreadable_worklog_is_unknown_not_other():
     assert "worklog" in sr["reason"]
     assert sr["worklog_empty"] is None
     assert sr["worklog_authors"] is None
+
+
+def test_handover_without_author_is_unknown_not_other():
+    # A deleted/anonymous user or a post-function leaves the history without
+    # an author; the implementer is then unknown, not "someone else".
+    case = _FIXTURE["cases"]["other_implementer"]
+    issue = _issue(case)
+    del issue["changelog"]["histories"][-1]["author"]
+    sr = _mod.compute_self_review(issue, _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["implementer"] is None
+    assert sr["verdict"] == "unknown"
+    assert "implementer" in sr["reason"]
+
+
+def test_truncated_changelog_is_unknown_not_other():
+    # Cloud caps the embedded changelog; a later handover may be missing.
+    case = _FIXTURE["cases"]["other_implementer"]
+    issue = _issue(case)
+    issue["changelog"]["total"] = len(case["histories"]) + 1
+    sr = _mod.compute_self_review(issue, _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)
+    assert sr["verdict"] == "unknown"
+    assert "changelog" in sr["reason"]
+    issue["changelog"]["total"] = len(case["histories"])
+    assert _mod.compute_self_review(issue, _worklogs(case), "rev", _STATUS_SETS, _CATEGORIES)["verdict"] == "other"
+
+
+def test_move_to_unlisted_status_is_unknown_not_other():
+    # "In Progress" (id 3) missing from the categories, e.g. a deleted status:
+    # whoever made that move may have been the reviewer.
+    case = _FIXTURE["cases"]["other_implementer"]
+    categories = {k: v for k, v in _CATEGORIES.items() if k != "3"}
+    sr = _mod.compute_self_review(_issue(case), _worklogs(case), "rev", _STATUS_SETS, categories)
+    assert sr["in_progress_by"] is None
+    assert sr["verdict"] == "unknown"
+    assert "status categories" in sr["reason"]
 
 
 def test_resolution_and_worklog_empty():
@@ -142,3 +179,20 @@ def test_cli_text_other_has_no_warning(monkeypatch):
     assert "Self-review check: other" in result.output
     assert "WARNING" not in result.output
     assert "Implementer (moved into QA): Imp Lementer (impl)" in result.output
+    assert "Worklog empty: no" in result.output
+
+
+def test_cli_text_without_handover(monkeypatch):
+    result, _ = _run("no_into_qa", [], monkeypatch)
+    assert result.exit_code == 0, result.output
+    assert "Self-review check: unknown (no transition into a QA status in the changelog)" in result.output
+    assert "Implementer (moved into QA): not found" in result.output
+    assert "Worklog empty: yes" in result.output
+
+
+def test_cli_text_unreadable_worklog(monkeypatch):
+    result, _ = _run("other_implementer", [], monkeypatch, issue_get_worklog=RuntimeError("boom"))
+    assert result.exit_code == 0, result.output
+    assert "Self-review check: unknown (could not read: worklog)" in result.output
+    assert "Worklog authors: not readable" in result.output
+    assert "Worklog empty: unknown" in result.output

@@ -77,6 +77,18 @@
       ],
       "worklog_authors": ["impl"],
       "expect": {"verdict": "other", "matched": [], "implementer": "impl", "in_progress_by": "impl"}
+    },
+    "reviewer_made_the_latest_handover": {
+      "reviewer": "rev",
+      "creator": "boss",
+      "histories": [
+        {"author": {"name": "former", "displayName": "For Mer"}, "created": "2026-10-01T09:00:00.000+0200", "items": [{"field": "status", "from": "1", "fromString": "Open", "to": "3", "toString": "In Progress"}]},
+        {"author": {"name": "former", "displayName": "For Mer"}, "created": "2026-10-02T09:00:00.000+0200", "items": [{"field": "status", "from": "3", "fromString": "In Progress", "to": "10", "toString": "QA"}]},
+        {"author": {"name": "lead", "displayName": "Le Ad"}, "created": "2026-10-03T09:00:00.000+0200", "items": [{"field": "status", "from": "10", "fromString": "QA", "to": "3", "toString": "In Progress"}]},
+        {"author": {"name": "rev", "displayName": "Rev Iewer"}, "created": "2026-10-04T09:00:00.000+0200", "items": [{"field": "status", "from": "3", "fromString": "In Progress", "to": "10", "toString": "QA"}]}
+      ],
+      "worklog_authors": ["former"],
+      "expect": {"verdict": "self", "matched": ["implementer"], "implementer": "rev", "in_progress_by": "former"}
     }
   }
 }

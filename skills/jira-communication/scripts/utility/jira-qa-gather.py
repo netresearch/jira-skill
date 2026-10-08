@@ -156,20 +156,26 @@ def _author_key(transition: dict | None) -> str | None:
 
 def _last_in_progress_transition(
     transitions: list[dict], qa: set, status_categories: dict[str, str] | None
-) -> dict | None:
-    """Latest move into an "indeterminate" (in progress) status, or ``None``.
+) -> tuple[dict | None, bool]:
+    """Latest move into an "indeterminate" (in progress) status, and whether it is known.
 
-    Moves out of a QA status are excluded too: a QA reject back to In Progress
-    is the reviewer's verdict, not implementation work.
+    Moves into or out of a QA status are skipped: a QA reject back to In Progress
+    is the reviewer's verdict, not implementation work. The second value is
+    ``False`` when the answer cannot be trusted: the categories could not be
+    read, or a newer move went to a status id they do not list (a deleted
+    status), whose category is unknown.
     """
     if status_categories is None:
-        return None
+        return None, False
     for t in reversed(transitions):
         if t["from"] in qa or t["to"] in qa:
             continue
-        if status_categories.get(t["to_id"]) == "indeterminate":
-            return t
-    return None
+        category = status_categories.get(t["to_id"])
+        if category is None:
+            return None, False
+        if category == "indeterminate":
+            return t, True
+    return None, True
 
 
 def _worklog_authors(worklogs: list[dict] | None) -> list[str] | None:
@@ -197,15 +203,16 @@ def _reviewer_matches(
     return matched
 
 
-def _unread_signals(
-    reviewer: str | None, worklogs: list[dict] | None, status_categories: dict[str, str] | None
-) -> list[str]:
-    """Names of the inputs that could not be read: ``None`` (fetch failed) or ``""``."""
-    return [
-        name
-        for name, value in (("reviewer", reviewer), ("worklog", worklogs), ("status categories", status_categories))
-        if value is None or value == ""
-    ]
+def _unread_signals(readable: dict[str, bool]) -> list[str]:
+    """Names of the inputs that could not be read, in the order given."""
+    return [name for name, ok in readable.items() if not ok]
+
+
+def _changelog_truncated(issue: dict) -> bool:
+    """True when the embedded changelog holds fewer entries than its ``total``."""
+    changelog = issue.get("changelog") or {}
+    total = changelog.get("total")
+    return isinstance(total, int) and total > len(changelog.get("histories") or [])
 
 
 def _self_review_verdict(matched: list[str], handover: dict | None, unread: list[str]) -> tuple[str, str]:
@@ -233,19 +240,29 @@ def compute_self_review(
 
     ``worklogs`` / ``reviewer`` / ``status_categories`` are ``None`` when the
     corresponding fetch failed. A signal that could not be read never counts
-    as "not you": without all three, a non-match is ``unknown``, not ``other``.
+    as "not you": a non-match is ``unknown``, not ``other``, when any input is
+    missing, the changelog is truncated, the handover has no author, or a move
+    went to a status the categories do not list.
     """
     fields = issue.get("fields") or {}
     transitions = extract_status_transitions_with_authors(issue)
     idx = last_into_qa_index(transitions, status_sets)
     handover = transitions[idx] if idx is not None else None
-    in_progress = _last_in_progress_transition(transitions, status_sets["qa"], status_categories)
+    in_progress, categories_known = _last_in_progress_transition(transitions, status_sets["qa"], status_categories)
     worklog_authors = _worklog_authors(worklogs)
 
     implementer = _author_key(handover)
     in_progress_by = _author_key(in_progress)
     matched = _reviewer_matches(reviewer, implementer, worklog_authors, in_progress_by)
-    unread = _unread_signals(reviewer, worklogs, status_categories)
+    unread = _unread_signals(
+        {
+            "reviewer": bool(reviewer),
+            "worklog": worklogs is not None,
+            "status categories": categories_known,
+            "changelog (truncated)": not _changelog_truncated(issue),
+            "implementer (handover has no author)": handover is None or bool(implementer),
+        }
+    )
     verdict, reason = _self_review_verdict(matched, handover, unread)
 
     resolution = fields.get("resolution")
