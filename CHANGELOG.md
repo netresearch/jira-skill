@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.34.0] - 2026-10-08
+
+### Added
+
+- `jira-qa-gather.py` prints a "Self-review check" section and a `self_review` JSON object that say, from the changelog and the worklog, whether the reviewer worked on the ticket in any round: authored a handover into a QA status, moved it into an In Progress-category status outside QA, or logged work on it. The verdict is `self`, `other` or `unknown`; `unknown` replaces `other` whenever an input needed to rule the reviewer out could not be read or is incomplete (worklog, `/myself`, status list, a truncated changelog, an authorless handover, a move into an unlisted or uncategorised status), and `reason` names the cause. A `self` verdict adds a `WARNING:` line next to status and assignee. Workflows that unassign a ticket on its move into QA left the previous assignee-based hint silent. The handover selection moved into `lib/changelog.py` (`last_into_qa_index`), shared with the `qa` verb, and the issue is fetched with `expand=renderedFields,changelog`, so `--json` carries the changelog inside `issue` ([#286](https://github.com/netresearch/jira-skill/pull/286))
+- `jira-comment.py add --visibility role:<project role>|group:<group>` restricts a new comment to a project role or a group. The value is validated before anything is sent, and `--dry-run` shows the restriction. `references/comments.md` gains the section "Restricted comments (visibility)" ([#278](https://github.com/netresearch/jira-skill/pull/278))
+- `jira-create.py project` takes `--copy-roles` (adds the groups and users of each project role of `--from-project` that the new project lacks, before the bootstrap issue is created), `--category NAME|ID` (resolved before the project is created, so an unknown name aborts without side effects) and `--assignee-type PROJECT_LEAD|UNASSIGNED`. If the category or default assignee cannot be set, the remaining steps still run and the command exits 1 naming the partially configured project ([#287](https://github.com/netresearch/jira-skill/pull/287))
+- `tempo-account.py account create` takes `--category KEY` to set the account category ([#288](https://github.com/netresearch/jira-skill/pull/288))
+
+### Changed
+
+- `tempo-account.py account create` no longer requires `--customer-key`; without it the account is created open and non-global. With `--customer-key` and without `--category` the payload is unchanged ([#288](https://github.com/netresearch/jira-skill/pull/288))
+- The pre-commit hooks from `netresearch/skill-repo-skill` run at v2.4.0 ([#285](https://github.com/netresearch/jira-skill/pull/285))
+
 ## [3.33.0] - 2026-10-07
 
 ### Added

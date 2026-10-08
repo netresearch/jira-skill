@@ -6,7 +6,7 @@ description: "Use when writing or formatting Jira descriptions, comments, or any
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 metadata:
   author: Netresearch DTT GmbH
-  version: "3.33.0"
+  version: "3.34.0"
   repository: https://github.com/netresearch/jira-skill
 ---
 
