@@ -111,21 +111,31 @@ def account():
 @click.argument("key")
 @click.argument("name")
 @click.option("--lead", required=True, help="Username of the account lead")
-@click.option("--customer-key", required=True, help="Key of an existing Tempo customer this account belongs to")
+@click.option(
+    "--customer-key",
+    help="Key of an existing Tempo customer this account belongs to (omit for an account without customer)",
+)
+@click.option("--category", "category_key", help="Key of the Tempo account category (e.g. OPS)")
 @click.option("--dry-run", is_flag=True, help="Show what would be created without making changes")
 @click.pass_context
-def account_create(ctx, key: str, name: str, lead: str, customer_key: str, dry_run: bool):
+def account_create(
+    ctx, key: str, name: str, lead: str, customer_key: str | None, category_key: str | None, dry_run: bool
+):
     """Create a new Tempo account.
 
     KEY: Short, stable account key (e.g., NEWP)
 
     NAME: Full account display name (e.g., "Example Customer GmbH")
 
-    Requires an existing Tempo customer (see: tempo-account customer create).
+    --customer-key needs an existing Tempo customer (see: tempo-account
+    customer create). Without it the account has no customer and is created
+    as an open, non-global account.
 
-    Example:
+    Examples:
 
       tempo-account account create NEWP "Example Customer GmbH" --lead jane.doe --customer-key NEWP
+
+      tempo-account account create OPSNEWP "OPS Example Customer GmbH" --lead jane.doe --category OPS
     """
     client = ctx.obj["client"]
 
@@ -133,8 +143,15 @@ def account_create(ctx, key: str, name: str, lead: str, customer_key: str, dry_r
         "key": key,
         "name": name,
         "lead": {"name": lead},
-        "customer": {"key": customer_key},
     }
+    if customer_key:
+        data["customer"] = {"key": customer_key}
+    else:
+        # The payload shape that is known to work on Tempo Server without a customer.
+        data["status"] = "OPEN"
+        data["global"] = False
+    if category_key:
+        data["category"] = {"key": category_key}
 
     if dry_run:
         warning("DRY RUN - No account will be created")
@@ -142,7 +159,9 @@ def account_create(ctx, key: str, name: str, lead: str, customer_key: str, dry_r
         print(f"  Key: {key}")
         print(f"  Name: {name}")
         print(f"  Lead: {lead}")
-        print(f"  Customer: {customer_key}")
+        print(f"  Customer: {customer_key or '-'}")
+        if category_key:
+            print(f"  Category: {category_key}")
         return
 
     try:
@@ -162,7 +181,9 @@ def account_create(ctx, key: str, name: str, lead: str, customer_key: str, dry_r
         success(f"Created Tempo account: {name}")
         print(f"  Key: {key}")
         print(f"  Lead: {lead}")
-        print(f"  Customer: {customer_key}")
+        print(f"  Customer: {customer_key or '-'}")
+        if category_key:
+            print(f"  Category: {category_key}")
         if isinstance(result, dict) and result.get("id") is not None:
             print(f"  Account ID: {result['id']}")
             print("  Note: use this Account ID with 'tempo-account account link' to attach it to a project.")

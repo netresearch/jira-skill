@@ -67,4 +67,6 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/workflow/jira-create.py project OPSPROJ "OPS 
     --lead jdoe --copy-roles --category Support --assignee-type PROJECT_LEAD --bootstrap-issues --dry-run
 ```
 
+`tempo-account.py account create` takes `--customer-key` for an account that belongs to a Tempo customer and `--category KEY` for the account category (e.g. `OPS`). Without `--customer-key` the account is created without a customer, open and non-global.
+
 These exercise Jira Administrator / Tempo Administrator rights on whichever PAT is configured. On Jira Server a PAT carries the full permission set of the user who created it, so there is no separate, narrower credential for this — check before running these against an instance where that scope is not expected.

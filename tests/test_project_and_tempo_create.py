@@ -484,6 +484,62 @@ class TestTempoAccountCreate:
         )
         assert "42" in result.output
 
+    def test_account_create_without_customer_with_category(self):
+        mock_client = _make_mock_client()
+        mock_client.tempo_account_add_account.return_value = {"id": 43, "key": "OPSNEWP"}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _tempo_mod.cli,
+                [
+                    "account",
+                    "create",
+                    "OPSNEWP",
+                    "OPS Example Customer GmbH",
+                    "--lead",
+                    "jane.doe",
+                    "--category",
+                    "OPS",
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        mock_client.tempo_account_add_account.assert_called_once_with(
+            {
+                "key": "OPSNEWP",
+                "name": "OPS Example Customer GmbH",
+                "lead": {"name": "jane.doe"},
+                "status": "OPEN",
+                "global": False,
+                "category": {"key": "OPS"},
+            }
+        )
+
+    def test_account_create_with_customer_and_category(self):
+        mock_client = _make_mock_client()
+        mock_client.tempo_account_add_account.return_value = {"id": 44, "key": "NEWP"}
+        runner = click.testing.CliRunner()
+        with mock.patch("lib.client.get_jira_client", return_value=mock_client):
+            result = runner.invoke(
+                _tempo_mod.cli,
+                [
+                    "account",
+                    "create",
+                    "NEWP",
+                    "Example Customer GmbH",
+                    "--lead",
+                    "jane.doe",
+                    "--customer-key",
+                    "NEWP",
+                    "--category",
+                    "OPS",
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        payload = mock_client.tempo_account_add_account.call_args.args[0]
+        assert payload["customer"] == {"key": "NEWP"}
+        assert payload["category"] == {"key": "OPS"}
+        assert "status" not in payload
+
     def test_account_link_dry_run(self):
         mock_client = _make_mock_client()
         mock_client.project.return_value = {"id": 10101}
