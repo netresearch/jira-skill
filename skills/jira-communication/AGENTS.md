@@ -12,7 +12,7 @@ Python CLI scripts using `uv run`. Each script is standalone with PEP 723 inline
 
 ## Setup & environment
 
-Development requires Python 3.10+ and `uv`. No virtual environment needed - `uv run` handles dependencies.
+Development requires Python 3.11+ and `uv`. No virtual environment needed - `uv run` handles dependencies.
 
 ## Build & tests
 

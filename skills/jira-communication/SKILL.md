@@ -4,7 +4,7 @@
 name: jira-communication
 description: "Use when handling Jira issues, sprints, boards, links, fields, worklogs, attachments, or users, or on any Jira intent without a key (\"create/find a ticket\", \"pick a project\"). Auto-triggers on Jira URLs and issue keys (PROJ-123). Also use when MCP Atlassian tools fail or are unavailable for Jira Server/DC."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires python 3.10+, uv. Jira Server/DC or Cloud instance with API access."
+compatibility: "Requires python 3.11+, uv. Jira Server/DC or Cloud instance with API access."
 metadata:
   author: Netresearch DTT GmbH
   version: "3.34.0"

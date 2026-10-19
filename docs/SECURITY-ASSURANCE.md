@@ -62,7 +62,7 @@ The repository ships no server component and no container image. It keeps no dat
 | A secret is committed | Betterleaks scans every push to `main` and every pull request to `main` | `.github/workflows/security.yml` |
 | A vulnerable dependency is used | Python dependencies are declared per script with upper bounds (PEP 723 blocks, for example `atlassian-python-api>=3.41.0,<4`) and audited with pip-audit weekly and on pull requests that change the scripts; dependency review and Composer Audit run on pull requests | script headers; `.github/workflows/dependency-audit.yml`, `.github/workflows/security.yml` |
 | Insecure code or workflow patterns | CodeQL (`actions`, `python`), bandit at severity medium, Opengrep, zizmor, ruff and ShellCheck (style severity in `validate.yml`) run on pull requests | `.github/workflows/codeql.yml`, `ci.yml`, `security.yml`, `validate.yml`, `lint.yml` |
-| A script regresses unnoticed | The pytest suite in `tests/` runs on Python 3.10 to 3.14 for every pull request to `main` and every push to `main`, with the Jira client mocked | `.github/workflows/ci.yml`, `tests/conftest.py` |
+| A script regresses unnoticed | The pytest suite in `tests/` runs on Python 3.11 to 3.14 for every pull request to `main` and every push to `main`, with the Jira client mocked | `.github/workflows/ci.yml`, `tests/conftest.py` |
 | A release archive is tampered with | The release workflow publishes `SHA256SUMS.txt` with a Sigstore signature and build-provenance attestations; the documented release process cuts releases from signed annotated tags | `.github/workflows/release.yml`; `AGENTS.md` (Release workflow) |
 
 Which of these checks must pass before a pull request can merge is set in the branch protection of `main`, not in this repository.

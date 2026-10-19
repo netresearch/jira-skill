@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/netresearch/jira-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/netresearch/jira-skill/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT%20%2B%20CC--BY--SA--4.0-blue.svg)](#license)
-[![Python](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12%7C3.13%7C3.14-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.11%7C3.12%7C3.13%7C3.14-blue)](https://www.python.org/)
 
 A Claude Code plugin providing comprehensive Jira integration through two specialized skills.
 
@@ -317,7 +317,7 @@ The security assurance case for this plugin (how Jira credentials are read and w
 Checks that run in this repository:
 
 - Every pull request: Skill Validation (`lint.yml` and `validate.yml`: skill structure, plugin manifest sync, markdownlint, yamllint, actionlint, JSON syntax, version parity, ShellCheck, ruff; `validate.yml` runs ShellCheck at style severity) and Eval Validation (`eval-validate.yml`).
-- Pull requests to `main`: CI (`ci.yml`: the pytest suite on Python 3.10 to 3.14 and bandit at severity medium over the scripts), CodeQL for `actions` and `python` (`codeql.yml`), `security.yml` with Betterleaks (secret scanning), zizmor (workflow static analysis), dependency review, Composer Audit and Opengrep SAST, Harness Verification (`harness-verify.yml`) and Template Drift (`check-template-drift.yml`). The organisation's security policy sets when dependency review and Opengrep fail: see [dependencies](https://github.com/netresearch/.github/blob/main/SECURITY.md#dependencies-software-composition-analysis) and [static analysis (SAST)](https://github.com/netresearch/.github/blob/main/SECURITY.md#static-analysis-sast).
+- Pull requests to `main`: CI (`ci.yml`: the pytest suite on Python 3.11 to 3.14 and bandit at severity medium over the scripts), CodeQL for `actions` and `python` (`codeql.yml`), `security.yml` with Betterleaks (secret scanning), zizmor (workflow static analysis), dependency review, Composer Audit and Opengrep SAST, Harness Verification (`harness-verify.yml`) and Template Drift (`check-template-drift.yml`). The organisation's security policy sets when dependency review and Opengrep fail: see [dependencies](https://github.com/netresearch/.github/blob/main/SECURITY.md#dependencies-software-composition-analysis) and [static analysis (SAST)](https://github.com/netresearch/.github/blob/main/SECURITY.md#static-analysis-sast).
 - Also on every pull request: Labeler (`labeler.yml`), the DCO sign-off check, SonarCloud Code Analysis (with its code-scanning result check `SonarCloud`) and the CodeRabbit review status (GitHub Apps) and, for dependency-update pull requests, auto-merge (`auto-merge-deps.yml`).
 - Pull requests that change `skills/jira-communication/scripts/` or the workflow itself, and weekly: Dependency Audit (`dependency-audit.yml`) runs pip-audit over the PEP 723 dependencies of `skills/jira-communication/scripts`. Dependency review does not read PEP 723 blocks; this workflow covers them. OpenSSF Scorecard (`scorecard.yml`) and CodeQL (`codeql.yml`) also run weekly.
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = [
 #     "atlassian-python-api>=3.41.0,<4",
 #     "click>=8.1.0,<9",
@@ -76,13 +76,13 @@ def check_runtime(verbose: bool = False) -> tuple[bool, dict]:
     # Check Python version
     py_version = sys.version_info
     info["python_version"] = f"{py_version.major}.{py_version.minor}.{py_version.micro}"
-    if py_version >= (3, 10):
+    if py_version >= (3, 11):
         if verbose:
             success(f"Python version: {py_version.major}.{py_version.minor}.{py_version.micro}")
     else:
         error(
-            f"Python version {py_version.major}.{py_version.minor} < 3.10 required",
-            "Please upgrade Python to 3.10 or later",
+            f"Python version {py_version.major}.{py_version.minor} < 3.11 required",
+            "Please upgrade Python to 3.11 or later",
         )
         checks_passed = False
 
