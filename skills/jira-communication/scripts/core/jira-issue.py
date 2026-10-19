@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = [
 #     "atlassian-python-api>=3.41.0,<4",
 #     "click>=8.1.0,<9",
@@ -12,7 +12,7 @@
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -506,7 +506,7 @@ def time_in_status_cmd(ctx, issue_key: str, status_filter: str | None):
 
         transitions = extract_status_transitions(issue)
         issue_created = parse_jira_datetime(created_raw)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         per_status = compute_time_in_status(issue_created, transitions, current_status, now)
 

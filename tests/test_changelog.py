@@ -4,7 +4,7 @@
 """Tests for changelog helpers in lib/changelog.py."""
 
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Add scripts to path for lib imports
@@ -26,8 +26,6 @@ _QA = frozenset({"QA", "Review", "QA2", "UAT"})
 _WORKING = frozenset({"In Progress", "Open", "QA failed"})
 _RESOLVED = frozenset({"Closed", "Resolved", "Done"})
 _SETS = {"qa": _QA, "working": _WORKING, "resolved": _RESOLVED}
-
-UTC = timezone.utc
 
 
 def _dt(y, m, d, h=0, mi=0):
