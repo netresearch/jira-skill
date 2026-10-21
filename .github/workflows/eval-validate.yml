@@ -6,10 +6,16 @@ name: Eval Validation
 # declares `permissions: contents: read` at top level (read-only validator);
 # the calling job mirrors it explicitly.
 
+# `merge_group`: `eval-validate / Eval Validation` is a required context, so it
+# has to report on a merge queue's gh-readonly-queue ref too. The reusable
+# resolves the base copy of evals.json on `pull_request` only; on
+# `merge_group` it validates the structure as on `push`, without the samples
+# requirement for new or changed evals, which the pull request run enforced.
 on:
   push:
     branches: [main, master]
   pull_request:
+  merge_group:
 
 permissions: {}
 

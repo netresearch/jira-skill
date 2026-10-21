@@ -6,9 +6,12 @@ name: Harness Verification
 # skill-repo-skill reusable. The reusable declares `permissions: contents:
 # read` at top level (read-only validator); the calling job mirrors it.
 
+# `merge_group` so the check can be required under a merge queue: a required
+# context whose workflow does not run on the queue ref never reports there.
 on:
   pull_request:
     branches: [main, master]
+  merge_group:
 
 permissions: {}
 
