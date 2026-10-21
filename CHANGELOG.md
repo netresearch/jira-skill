@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING CHANGES
+
+- Python 3.10 is no longer supported. Every script declares `requires-python = ">=3.11"` in its PEP 723 header, `jira-validate.py` rejects Python 3.10, and the `compatibility` line of `skills/jira-communication/SKILL.md` names Python 3.11+. Behaviour on Python 3.11 and later is unchanged ([#291](https://github.com/netresearch/jira-skill/pull/291))
+
 ## [3.34.0] - 2026-10-08
 
 ### Added
