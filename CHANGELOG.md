@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-21
+
 ### BREAKING CHANGES
 
 - Python 3.10 is no longer supported. Every script declares `requires-python = ">=3.11"` in its PEP 723 header, `jira-validate.py` rejects Python 3.10, and the `compatibility` line of `skills/jira-communication/SKILL.md` names Python 3.11+. Behaviour on Python 3.11 and later is unchanged ([#291](https://github.com/netresearch/jira-skill/pull/291))
@@ -957,7 +959,9 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v3.33.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/netresearch/jira-skill/compare/v3.34.0...v4.0.0
+[3.34.0]: https://github.com/netresearch/jira-skill/compare/v3.33.0...v3.34.0
 [3.33.0]: https://github.com/netresearch/jira-skill/compare/v3.32.3...v3.33.0
 [3.32.4]: https://github.com/netresearch/jira-skill/compare/v3.32.3...v3.32.4
 [3.32.3]: https://github.com/netresearch/jira-skill/compare/v3.32.2...v3.32.3
