@@ -28,7 +28,7 @@ import click
 from lib.client import LazyJiraClient
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import comment_to_text, error, format_output, success, warning
-from lib.ticket_state import print_ticket_state
+from lib.ticket_state import print_ticket_state, with_ticket_state
 from lib.users import check_mentions_cli, person_label
 
 # Trailing UTC offset in any ISO-8601 spelling: "Z", "+01:00" or "+0100".
@@ -256,7 +256,7 @@ def add(
         if ctx.obj["quiet"]:
             print(result.get("id", "ok"))
         elif ctx.obj["json"]:
-            format_output(result, as_json=True)
+            format_output(with_ticket_state(ctx.obj["client"], issue_key, result), as_json=True)
         else:
             success(f"Added worklog to {issue_key}: {time_spent}")
             if comment:

@@ -27,7 +27,7 @@ from lib.client import LazyJiraClient, resolve_assignee, resolve_subtask_type
 from lib.input import read_stdin_utf8
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, format_output, success, warning
-from lib.ticket_state import print_ticket_state
+from lib.ticket_state import print_ticket_state, with_ticket_state
 from lib.users import check_mentions_cli
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -246,7 +246,7 @@ def issue(
         if ctx.obj["quiet"]:
             print(result["key"])
         elif ctx.obj["json"]:
-            format_output(result, as_json=True)
+            format_output(with_ticket_state(client, result["key"], result, writing=False), as_json=True)
         else:
             success(f"Created issue: {result['key']}")
             print(f"  Summary: {summary}")

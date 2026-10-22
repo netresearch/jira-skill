@@ -9,10 +9,11 @@ Open and unassigned, or that belongs to someone else, and never see it: the
 status field is the one signal colleagues read, and no output showed it.
 
 ``print_ticket_state`` appends status, assignee, resolution and time tracking,
-plus a hint for each state that is likely wrong for the action. It prints to
-stderr in text mode only, so ``--json`` and ``--quiet`` output stays exactly as
-it was, and it never fails the command: a lookup error costs one line.
-``JIRA_TICKET_STATE=0`` turns it off.
+plus a hint for each state that is likely wrong for the action. In text mode
+it prints to stderr. With ``--json``, ``with_ticket_state`` adds the same facts
+as a ``ticket_state`` field to an object output and leaves every existing key
+alone. ``--quiet`` gets nothing. It never fails the command: a lookup error
+costs one line or an ``error`` field. ``JIRA_TICKET_STATE=0`` turns it off.
 """
 
 import os
@@ -130,16 +131,69 @@ def print_ticket_state(client, key: str, ctx_obj: dict | None = None, writing: b
     if ctx_obj.get("json") or ctx_obj.get("quiet") or not _enabled():
         return
     try:
-        issue = client.issue(key, fields=FIELDS)
-        fields = issue.get("fields") if isinstance(issue, dict) else None
-        if not isinstance(fields, dict):
+        state = _fetch_state(client, key)
+        if state is None:
             return
-        try:
-            me = _user_id(client.myself())
-        except Exception:
-            me = None
-        lines = render_ticket_state(issue.get("key") or key, fields, me, writing)
+        lines = render_ticket_state(state[0], state[1], state[2], writing)
     except Exception as exc:
         print(f"── {key}: ticket state unavailable ({type(exc).__name__})", file=sys.stderr)
         return
     print("\n".join(lines), file=sys.stderr)
+
+
+def _fetch_state(client, key: str) -> tuple[str, dict, str | None] | None:
+    """Return (key, fields, caller id) for ``key``, or None without usable data.
+
+    Lookup errors of the issue read propagate; a failed ``myself()`` only
+    leaves the caller unknown.
+    """
+    issue = client.issue(key, fields=FIELDS)
+    fields = issue.get("fields") if isinstance(issue, dict) else None
+    if not isinstance(fields, dict):
+        return None
+    try:
+        me = _user_id(client.myself())
+    except Exception:
+        me = None
+    return issue.get("key") or key, fields, me
+
+
+def ticket_state_data(key: str, fields: dict, me: str | None, writing: bool) -> dict:
+    """The state as a JSON-ready dict: the same facts and hints as the text block."""
+    status = fields.get("status") or {}
+    assignee = _user_id(fields.get("assignee"))
+    tracking = fields.get("timetracking") or {}
+    return {
+        "key": key,
+        "status": status.get("name"),
+        "status_category": (status.get("statusCategory") or {}).get("key"),
+        "issuetype": (fields.get("issuetype") or {}).get("name"),
+        "resolution": (fields.get("resolution") or {}).get("name"),
+        "assignee": assignee,
+        "assignee_is_you": None if me is None or assignee is None else assignee == me,
+        "time_spent_seconds": tracking.get("timeSpentSeconds"),
+        "original_estimate_seconds": tracking.get("originalEstimateSeconds"),
+        "remaining_estimate_seconds": tracking.get("remainingEstimateSeconds"),
+        "labels": list(fields.get("labels") or []),
+        "hints": ticket_hints(fields, me, writing),
+    }
+
+
+def with_ticket_state(client, key: str, data, writing: bool = True):
+    """Return ``data`` with a ``ticket_state`` field for ``--json`` output.
+
+    Only a dict gains the field, so every key a consumer already reads stays
+    where it was; a list or any other shape is returned unchanged. A lookup
+    error is recorded as ``{"key": ..., "error": "<ExceptionType>"}`` and
+    never fails the command. ``JIRA_TICKET_STATE=0`` leaves ``data`` as is.
+    """
+    if not isinstance(data, dict) or not _enabled():
+        return data
+    try:
+        state = _fetch_state(client, key)
+        if state is None:
+            return data
+        ticket_state = ticket_state_data(state[0], state[1], state[2], writing)
+    except Exception as exc:
+        ticket_state = {"key": key, "error": type(exc).__name__}
+    return {**data, "ticket_state": ticket_state}

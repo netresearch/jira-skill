@@ -27,7 +27,7 @@ import click
 from lib.client import LazyJiraClient, _sanitize_error
 from lib.input import read_stdin_utf8
 from lib.output import error, format_output, format_table, success, warning
-from lib.ticket_state import print_ticket_state
+from lib.ticket_state import print_ticket_state, with_ticket_state
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -241,17 +241,21 @@ def _emit_create_output(ctx, *, from_key: str, to_key: str, canonical_name: str,
     """Render the create result in json / quiet / human form."""
     if ctx.obj["json"]:
         format_output(
-            {
-                "from": from_key,
-                "to": to_key,
-                "source": to_key,
-                "target": from_key,
-                "type": canonical_name,
-                "outward": verbs["outward"],
-                "inward": verbs["inward"],
-                "sentence": sentence,
-                "created": True,
-            },
+            with_ticket_state(
+                ctx.obj["client"],
+                from_key,
+                {
+                    "from": from_key,
+                    "to": to_key,
+                    "source": to_key,
+                    "target": from_key,
+                    "type": canonical_name,
+                    "outward": verbs["outward"],
+                    "inward": verbs["inward"],
+                    "sentence": sentence,
+                    "created": True,
+                },
+            ),
             as_json=True,
         )
     elif ctx.obj["quiet"]:

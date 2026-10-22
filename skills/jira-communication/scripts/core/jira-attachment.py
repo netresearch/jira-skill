@@ -516,6 +516,9 @@ def add(ctx, issue_key: str, file_path: str, dry_run: bool):
                 print("")
         elif ctx.obj["json"]:
             print(json.dumps(result if isinstance(result, list) else [result], indent=2))
+            # The output is a list, whose shape a consumer relies on: the state goes
+            # to stderr as text instead of into the JSON.
+            print_ticket_state(ctx.obj["client"], issue_key, {})
         else:
             success(f"Attached {path.name} ({file_size:,} bytes) to {issue_key}")
             print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)

@@ -40,7 +40,7 @@ from lib.input import read_stdin_utf8
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 from lib.render import print_comment, print_description
-from lib.ticket_state import print_ticket_state
+from lib.ticket_state import print_ticket_state, with_ticket_state
 from lib.users import check_mentions_cli, person_label
 
 
@@ -777,7 +777,8 @@ def update(
         if ctx.obj["quiet"]:
             print(issue_key)
         elif ctx.obj["json"]:
-            format_output({"key": issue_key, "updated": list(update_fields.keys())}, as_json=True)
+            data = {"key": issue_key, "updated": list(update_fields.keys())}
+            format_output(with_ticket_state(ctx.obj["client"], issue_key, data), as_json=True)
         else:
             success(f"Updated {issue_key}")
             for key in update_fields:
