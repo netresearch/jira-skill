@@ -43,6 +43,20 @@ Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
 
 Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global flags before subcommand: `jira-issue.py --json get PROJ-123`.
 
+## Every write ends with the ticket's state
+
+After a successful write, these commands print the ticket's state to stderr: `jira-comment.py add`/`edit`, `jira-transition.py do`/`path`, `jira-issue.py update`, `jira-worklog.py add`, `jira-weblink.py add`, `jira-link.py create` (the first key), `jira-attachment.py upload` and `jira-create.py issue`:
+
+```text
+── PROJ-123 · Task · Open · resolution: – · assignee: unassigned
+   time: logged 15m / estimate – / remaining – · labels: –
+(!) ticket is "Open" while you work on it: claim it (assign + start work)
+```
+
+**Read the `(!)` lines and act on them before reporting the work done.** They appear when the ticket is Open or Backlog while you write to it, unassigned while In Progress, assigned to someone else, already done while you write to it, done without a resolution, carries a resolution while not done, or has more time logged than estimated. An unassigned ticket in a review status such as QA gets no hint: it waits for the team pool by design.
+
+The block costs one extra read per write and never fails the command. It is left out with `--json` and `--quiet`, so machine output is unchanged, and `JIRA_TICKET_STATE=0` turns it off. `logged` is Jira's own time tracking: time booked elsewhere shows only once it is synced into a Jira worklog.
+
 ## Posting wiki markup rewrites and checks it first
 
 Every `--comment` and `--description` option that writes wiki markup runs three gates before the write, all on by default, because text that renders wrong is silent — the API returns 2xx either way. That is all seven: `jira-comment.py add`/`edit`, `jira-transition.py do --comment`, `jira-transition.py path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`. A body smuggled in through `--fields-json` is not gated — that option writes raw fields by design. `jira-version.py` writes two `--description` fields that are NOT gated (`create` and `update`); whether Jira renders a version description as wiki markup at all is unverified, and its help string claiming it does may simply be wrong.

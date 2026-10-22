@@ -27,6 +27,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, extract_adf_text, format_output, success, warning
+from lib.ticket_state import print_ticket_state
 from lib.users import check_mentions_cli, person_label
 
 
@@ -270,6 +271,7 @@ def add(
             print(f"  Comment ID: {result.get('id', 'N/A')}")
             if visibility:
                 print(f"  Visible to: {_visibility_label(visibility)}")
+            print_ticket_state(client, issue_key, ctx.obj)
 
     except Exception as e:
         if ctx.obj["debug"]:
@@ -359,6 +361,7 @@ def edit(
             format_output(result, as_json=True)
         else:
             success(f"Updated comment {comment_id} on {issue_key}")
+            print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)
 
     except Exception as e:
         if ctx.obj["debug"]:

@@ -28,6 +28,7 @@ import click
 from lib.client import LazyJiraClient
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import comment_to_text, error, format_output, success, warning
+from lib.ticket_state import print_ticket_state
 from lib.users import check_mentions_cli, person_label
 
 # Trailing UTC offset in any ISO-8601 spelling: "Z", "+01:00" or "+0100".
@@ -261,6 +262,7 @@ def add(
             if comment:
                 print(f"  Comment: {comment}")
             print(f"  Worklog ID: {result.get('id', 'N/A')}")
+            print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)
 
     except Exception as e:
         if ctx.obj["debug"]:

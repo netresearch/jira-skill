@@ -27,6 +27,7 @@ import click
 from lib.client import LazyJiraClient
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, format_output, format_table, success, warning
+from lib.ticket_state import print_ticket_state
 from lib.users import check_mentions_cli
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -581,6 +582,7 @@ def do_transition(
                     print(f"  Comment added: {comment[:50]}...")
                 else:
                     print(f"  Comment added: {comment}")
+            print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)
 
     except Exception as e:
         if ctx.obj["debug"]:
@@ -761,6 +763,7 @@ def path_transition(
             print(f"  Path: {' -> '.join(chain)}")
             if resolution:
                 print(f"  Resolution: {resolution}")
+            print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)
 
     except SystemExit:
         raise

@@ -103,7 +103,11 @@ class TestUpdateVerification:
         result, _ = _run(["update", "FX-1095", "--summary", "New title"], mc)
         assert result.exit_code == 0, result.output
         assert "Updated FX-1095" in result.output
-        mc.issue.assert_not_called()
+        # The only read allowed is the ticket state block (lib/ticket_state.py),
+        # which asks for its own field set, never for the updated field.
+        from lib.ticket_state import FIELDS as TICKET_STATE_FIELDS
+
+        assert [c.kwargs.get("fields") for c in mc.issue.call_args_list] == [TICKET_STATE_FIELDS]
 
     def test_json_output_on_verified_change(self):
         mc = _make_mock_client()
