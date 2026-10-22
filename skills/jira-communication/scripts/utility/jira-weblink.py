@@ -24,6 +24,7 @@ if _lib_path.exists():
 import click
 from lib.client import LazyJiraClient
 from lib.output import error, format_output, success, warning
+from lib.ticket_state import print_ticket_state
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -120,6 +121,7 @@ def add(ctx, issue_key: str, url: str, title: str, dry_run: bool):
             print("ok")
         else:
             success(f"Added web link to {issue_key}: {title} \u2014 {url}")
+            print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)
 
     except Exception as e:
         if ctx.obj["debug"]:

@@ -27,6 +27,7 @@ import click
 from lib.client import LazyJiraClient, _sanitize_error
 from lib.input import read_stdin_utf8
 from lib.output import error, format_output, format_table, success, warning
+from lib.ticket_state import print_ticket_state
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -257,6 +258,7 @@ def _emit_create_output(ctx, *, from_key: str, to_key: str, canonical_name: str,
         print("ok")
     else:
         success(f"Created: {sentence} (link-type: {canonical_name})")
+        print_ticket_state(ctx.obj["client"], from_key, ctx.obj)
 
 
 @cli.command("list-types")

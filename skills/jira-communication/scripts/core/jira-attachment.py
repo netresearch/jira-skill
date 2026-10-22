@@ -38,6 +38,7 @@ from lib.client import (
 )
 from lib.config import load_config
 from lib.output import error, success, warning
+from lib.ticket_state import print_ticket_state
 from urllib3.util import parse_url
 
 # Chunk size for streaming large file downloads (1 MB)
@@ -517,6 +518,7 @@ def add(ctx, issue_key: str, file_path: str, dry_run: bool):
             print(json.dumps(result if isinstance(result, list) else [result], indent=2))
         else:
             success(f"Attached {path.name} ({file_size:,} bytes) to {issue_key}")
+            print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)
 
     except CaptchaError:
         raise
