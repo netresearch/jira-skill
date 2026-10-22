@@ -63,6 +63,17 @@ def run_cli(mod, args, mock_client=None):
 
 
 @pytest.fixture(autouse=True)
+def _ticket_state_on(monkeypatch):
+    """Run every test with the ticket state block in its default state (on).
+
+    SKILL.md tells users to export ``JIRA_TICKET_STATE=0`` to silence it, and a
+    developer shell that did so made the tests asserting the block fail. A
+    test about the switch sets the variable itself, inside its own body.
+    """
+    monkeypatch.delenv("JIRA_TICKET_STATE", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _no_live_render(monkeypatch):
     """Stop any test from reaching the real Jira renderer.
 

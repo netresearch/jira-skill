@@ -65,7 +65,7 @@ def _workflow_hints(fields: dict, me: str | None, writing: bool) -> list[str]:
     # waiting for the team pool by design, and Open is covered by the claim hint.
     if writing and assignee is None and status_name.lower() == "in progress":
         hints.append("ticket is unassigned while you work on it: assign it")
-    if assignee and me and assignee != me and not done:
+    if writing and assignee and me and assignee != me and not done:
         hints.append(f"ticket is assigned to {_user_label(fields.get('assignee'))}, not to you")
     if writing and done:
         hints.append(f'ticket is already "{status_name}": reopen it if the work continues')
@@ -117,6 +117,11 @@ def render_ticket_state(key: str, fields: dict, me: str | None, writing: bool) -
 
 def print_ticket_state(client, key: str, ctx_obj: dict | None = None, writing: bool = True) -> None:
     """Print the state block for ``key`` to stderr, unless output is machine-read.
+
+    ``writing`` is True when the command wrote *to* the ticket (comment,
+    worklog, link, update). A transition or a create produced the state it
+    shows, so it passes False: the claim, foreign-assignee and reopen hints
+    would describe its own result, while the resolution and time checks stay.
 
     ``ctx_obj`` is the Click context object of the calling script; its ``json``
     and ``quiet`` flags suppress the block.

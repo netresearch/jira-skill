@@ -45,7 +45,7 @@ Run directly. Scripts report `✓`/`✗`. Destructive ops: `--dry-run`. Global f
 
 ## Every write ends with the ticket's state
 
-After a successful write, these commands print the ticket's state to stderr: `jira-comment.py add`/`edit`, `jira-transition.py do`/`path`, `jira-issue.py update`, `jira-worklog.py add`, `jira-weblink.py add`, `jira-link.py create` (the first key), `jira-attachment.py upload` and `jira-create.py issue`:
+After a successful write, these commands print the ticket's state to stderr: `jira-comment.py add`/`edit`, `jira-transition.py do`/`path`, `jira-issue.py update`, `jira-worklog.py add`, `jira-weblink.py add`, `jira-link.py create` (FROM_KEY, which is `--target` in the named form), `jira-attachment.py add` and `jira-create.py issue`:
 
 ```text
 ── PROJ-123 · Task · Open · resolution: – · assignee: unassigned
@@ -53,7 +53,7 @@ After a successful write, these commands print the ticket's state to stderr: `ji
 (!) ticket is "Open" while you work on it: claim it (assign + start work)
 ```
 
-**Read the `(!)` lines and act on them before reporting the work done.** They appear when the ticket is Open or Backlog while you write to it, unassigned while In Progress, assigned to someone else, already done while you write to it, done without a resolution, carries a resolution while not done, or has more time logged than estimated. An unassigned ticket in a review status such as QA gets no hint: it waits for the team pool by design.
+**Read the `(!)` lines and act on them before reporting the work done.** They appear when the ticket is Open or Backlog while you write to it, unassigned while In Progress, assigned to someone else while you write to it, already done while you write to it, done without a resolution, carries a resolution while not done, or has more time logged than estimated. An unassigned ticket in a review status such as QA gets no hint: it waits for the team pool by design. After a transition or a create only the resolution and time checks run, because the status and assignee are what the command just set.
 
 The block costs one extra read per write and never fails the command. It is left out with `--json` and `--quiet`, so machine output is unchanged, and `JIRA_TICKET_STATE=0` turns it off. `logged` is Jira's own time tracking: time booked elsewhere shows only once it is synced into a Jira worklog.
 

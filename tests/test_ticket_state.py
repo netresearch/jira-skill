@@ -13,6 +13,7 @@ from lib.ticket_state import print_ticket_state, render_ticket_state, ticket_hin
 _comment_mod = load_script("jira-comment", "workflow")
 _worklog_mod = load_script("jira-worklog", "core")
 _transition_mod = load_script("jira-transition", "workflow")
+_create_mod = load_script("jira-create", "workflow")
 
 ME = {"name": "jdoe", "displayName": "Jane Doe"}
 
@@ -107,6 +108,12 @@ class TestHints:
     def test_foreign_assignee(self):
         fields = _fields(status="In Progress", category="indeterminate", assignee={"name": "bob"})
         assert ticket_hints(fields, "jdoe", writing=True) == ["ticket is assigned to bob, not to you"]
+
+    def test_foreign_assignee_only_when_writing(self):
+        # A create for a colleague, or a transition that hands a ticket over,
+        # sets that assignee on purpose.
+        fields = _fields(status="In Progress", category="indeterminate", assignee={"name": "bob"})
+        assert ticket_hints(fields, "jdoe", writing=False) == []
 
     def test_foreign_assignee_silent_without_known_identity(self):
         fields = _fields(status="In Progress", category="indeterminate", assignee={"name": "bob"})
@@ -233,3 +240,26 @@ class TestCommandWiring:
         result, _ = run_cli(_transition_mod, ["do", "PROJ-123", "301"], mc)
         assert result.exit_code == 0, result.output
         assert "── PROJ-123 · Task · QA" in result.output
+
+    def test_transition_to_done_does_not_say_reopen(self):
+        mc = _client(_fields(status="Done", category="done", assignee=ME, resolution="Fixed"))
+        mc.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": "Done"}]
+        result, _ = run_cli(_transition_mod, ["do", "PROJ-123", "31"], mc)
+        assert result.exit_code == 0, result.output
+        assert "── PROJ-123 · Task · Done · resolution: Fixed" in result.output
+        assert "(!)" not in result.output
+
+    def test_transition_to_done_without_resolution_still_warns(self):
+        mc = _client(_fields(status="Done", category="done"))
+        mc.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": "Done"}]
+        result, _ = run_cli(_transition_mod, ["do", "PROJ-123", "31"], mc)
+        assert result.exit_code == 0, result.output
+        assert '(!) ticket is "Done" without a resolution' in result.output
+
+    def test_created_ticket_does_not_say_claim(self):
+        mc = _client(_fields(assignee={"name": "bob"}), key="PROJ-125")
+        mc.create_issue.return_value = {"key": "PROJ-125", "id": "125"}
+        result, _ = run_cli(_create_mod, ["issue", "PROJ", "Summary", "--type", "Task"], mc)
+        assert result.exit_code == 0, result.output
+        assert "── PROJ-125 · Task · Open" in result.output
+        assert "(!)" not in result.output

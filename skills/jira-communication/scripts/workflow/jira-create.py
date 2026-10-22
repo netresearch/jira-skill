@@ -252,7 +252,7 @@ def issue(
             print(f"  Summary: {summary}")
             print(f"  Type: {issue_type}")
             print(f"  URL: {client.url}/browse/{result['key']}")
-            print_ticket_state(client, result["key"], ctx.obj)
+            print_ticket_state(client, result["key"], ctx.obj, writing=False)
 
     except Exception as e:
         if ctx.obj["debug"]:
