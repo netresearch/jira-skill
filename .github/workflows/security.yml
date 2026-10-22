@@ -6,6 +6,13 @@ name: Security
 #   betterleaks      — secret scanning (MIT-licensed, no paid licence required).
 #   zizmor           — static analysis of this repo's own workflows.
 #   dependency-review — on pull requests only.
+#   codeql           — CodeQL (actions, plus python/JS/Go when present).
+#                      Replaces code-scanning default setup, which never
+#                      analyses pull requests from forks: with a ruleset
+#                      `code_scanning` rule for CodeQL, every outside
+#                      contribution stayed blocked. Default setup must be
+#                      disabled in the repository settings, or GitHub refuses
+#                      the uploads of this job.
 #   composer-audit   — `composer audit` AND an Opengrep SAST scan; the called
 #                      reusable runs both unless skip-opengrep is set. Every
 #                      skill repo ships a composer.json for split-licensing /
@@ -65,6 +72,15 @@ jobs:
       contents: read
       security-events: write
 
+  codeql:
+    uses: netresearch/.github/.github/workflows/codeql.yml@main
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    with:
+      languages: auto
+
   # One stable check name for this workflow, so a branch rule has something it
   # can require on EVERY event (same gate as templates/typo3-extension's
   # checks.yml).
@@ -84,6 +100,7 @@ jobs:
       - zizmor
       - dependency-review
       - composer-audit
+      - codeql
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

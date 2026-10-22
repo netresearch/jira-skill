@@ -2,11 +2,16 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: Lint
 
-# Skill validation (SKILL.md word cap, plugin.json schema, markdown lint, …)
+# Skill validation (SKILL.md body length, plugin.json schema, markdown lint
+# of the root *.md files, …)
 # via the skill-repo-skill reusable. The reusable declares `permissions:
 # contents: read` at top level; the calling job mirrors it explicitly so the
 # grant is visible at the call site and independent of the repo default.
 
+# `merge_group`: `Skill Validation / Skill Validation` is a required context,
+# and a merge queue waits for every required context on its
+# gh-readonly-queue ref. Without the trigger the check never reports there and
+# the queue ejects the entry when its timeout expires.
 on:
   push:
     branches: [main]
