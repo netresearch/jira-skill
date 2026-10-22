@@ -33,6 +33,11 @@ on:
   # ref; a workflow without this trigger never reports there and the queue
   # ejects the entry when its timeout expires.
   merge_group:
+  # Weekly run over the unchanged tree: CodeQL picks up new queries and
+  # composer-audit new advisories even when nothing is pushed. CodeQL default
+  # setup scanned weekly, and this workflow replaces it.
+  schedule:
+    - cron: '30 4 * * 1'
 
 permissions: {}
 
