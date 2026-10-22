@@ -49,15 +49,15 @@ def _duration(seconds) -> str:
     return f"{hours}h" if hours else f"{minutes}m"
 
 
-def ticket_hints(fields: dict, me: str | None, writing: bool) -> list[str]:
-    """Hints for states that are likely wrong for the action just taken."""
+def _workflow_hints(fields: dict, me: str | None, writing: bool) -> list[str]:
+    """Hints on status, assignee and resolution."""
     hints = []
     status = fields.get("status") or {}
     category = ((status.get("statusCategory") or {}).get("key") or "").lower()
     status_name = status.get("name", "?")
     assignee = _user_id(fields.get("assignee"))
     resolution = fields.get("resolution")
-    tracking = fields.get("timetracking") or {}
+    done = category == "done"
 
     if writing and category == "new":
         hints.append(f'ticket is "{status_name}" while you work on it: claim it (assign + start work)')
@@ -65,19 +65,30 @@ def ticket_hints(fields: dict, me: str | None, writing: bool) -> list[str]:
     # waiting for the team pool by design, and Open is covered by the claim hint.
     if writing and assignee is None and status_name.lower() == "in progress":
         hints.append("ticket is unassigned while you work on it: assign it")
-    if assignee and me and assignee != me and category != "done":
+    if assignee and me and assignee != me and not done:
         hints.append(f"ticket is assigned to {_user_label(fields.get('assignee'))}, not to you")
-    if writing and category == "done":
+    if writing and done:
         hints.append(f'ticket is already "{status_name}": reopen it if the work continues')
-    if category == "done" and not resolution:
+    if done and not resolution:
         hints.append(f'ticket is "{status_name}" without a resolution')
-    if resolution and category and category != "done":
+    if resolution and category and not done:
         hints.append(f'ticket carries resolution "{resolution.get("name", "?")}" but is "{status_name}"')
+    return hints
+
+
+def _time_hints(fields: dict) -> list[str]:
+    """Hint when more time is logged than estimated."""
+    tracking = fields.get("timetracking") or {}
     spent = tracking.get("timeSpentSeconds")
     estimate = tracking.get("originalEstimateSeconds")
-    if isinstance(spent, int) and isinstance(estimate, int) and estimate > 0 and spent > estimate:
-        hints.append(f"logged time {_duration(spent)} exceeds the estimate {_duration(estimate)}")
-    return hints
+    if isinstance(spent, int) and isinstance(estimate, int) and 0 < estimate < spent:
+        return [f"logged time {_duration(spent)} exceeds the estimate {_duration(estimate)}"]
+    return []
+
+
+def ticket_hints(fields: dict, me: str | None, writing: bool) -> list[str]:
+    """Hints for states that are likely wrong for the action just taken."""
+    return _workflow_hints(fields, me, writing) + _time_hints(fields)
 
 
 def render_ticket_state(key: str, fields: dict, me: str | None, writing: bool) -> list[str]:
