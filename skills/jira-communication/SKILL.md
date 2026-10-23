@@ -7,7 +7,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python 3.11+, uv. Jira Server/DC or Cloud instance with API access."
 metadata:
   author: Netresearch DTT GmbH
-  version: "4.2.0"
+  version: "4.3.0"
   repository: https://github.com/netresearch/jira-skill
 allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(${CLAUDE_SKILL_DIR}/scripts/*) Read Write
 ---
