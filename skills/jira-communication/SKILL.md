@@ -111,7 +111,7 @@ State what happened, not how good it is — `references/no-editorializing.md`.
 - `references/links.md` — links
 - `references/agile.md` — sprints/boards
 - `references/no-editorializing.md` — no self-praise
-- `references/fields-and-users.md` — custom field IDs, users, issue types
+- `references/fields-and-users.md` — custom field IDs, users, issue types, screen fields (`jira-fields.py meta`)
 - `references/watchers.md` — watch, subscribe, list watchers
 - `references/versions.md` — fix/affects versions, releases, version CRUD
 - `references/qa-gather.md` — audit bundle (siblings, prose URLs, self-review check from changelog + worklog — not the assignee)

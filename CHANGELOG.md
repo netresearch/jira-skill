@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-fields.py meta PROJECT TYPE` and `meta --edit KEY`: list the fields of a create or edit screen with id, name, required flag, type and allowed values, so a "not on the appropriate screen" refusal is diagnosed without raw `createmeta`/`editmeta` calls. Eval `screen_fields_via_meta_not_raw_rest`
+
 ## [4.2.0] - 2026-10-23
 
 ### Added

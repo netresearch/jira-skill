@@ -268,5 +268,27 @@
         "pattern": "ACME"
       }
     ]
+  },
+  {
+    "name": "screen_fields_via_meta_not_raw_rest",
+    "prompt": "Setting customfield_12345 on a new ACME Task fails with 'not on the appropriate screen'. Find out which fields the ACME Task create screen accepts.",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-fields\\.py\\s+(--json\\s+)?meta\\s+ACME"
+      },
+      {
+        "type": "content",
+        "pattern": "customfield_12345.*(screen|admin)|(screen|admin).*customfield_12345"
+      }
+    ],
+    "samples": {
+      "passing": "uv run scripts/utility/jira-fields.py meta ACME Task lists the create screen; customfield_12345 is not on it, so a Jira admin has to add it to the ACME Task screen.",
+      "failing": [
+        "curl -s -H \"Authorization: Bearer $JIRA_PERSONAL_TOKEN\" \"$JIRA_URL/rest/api/2/issue/createmeta?projectKeys=ACME&expand=projects.issuetypes.fields\"",
+        "uv run scripts/utility/jira-fields.py meta ACME Task lists 12 fields."
+      ]
+    }
   }
 ]
