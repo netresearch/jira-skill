@@ -248,7 +248,8 @@ def _fetch_create_meta(client, project: str, type_id: str) -> list[dict]:
         batch = page.get("values", page.get("fields", []))
         fields.extend(batch)
         start += len(batch)
-        if not batch or page.get("isLast", True) or start >= page.get("total", start):
+        # Cloud sends no isLast, so the end is read from total there.
+        if not batch or page.get("isLast") is True or start >= page.get("total", 0):
             return fields
 
 
