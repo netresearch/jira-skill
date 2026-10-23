@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-issue.py work KEY` prints a `!! CLAIM KEY` notice on stderr (a `claim` field with `--json`) when the ticket is not assigned to the caller or its status says nobody works on it (category To Do or Done, or a configured QA or resolved status), naming `jira-issue.py update KEY --assignee me` and `jira-transition.py list KEY`. `jira-comment.py add` prints a one-line warning before posting on such a ticket and still posts; `--quiet`, `--dry-run` and `JIRA_TICKET_STATE=0` skip it ([#302](https://github.com/netresearch/jira-skill/pull/302))
+
 ## [4.1.0] - 2026-10-23
 
 ### Added
