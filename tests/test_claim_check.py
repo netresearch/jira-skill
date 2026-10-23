@@ -98,7 +98,8 @@ class TestWorkClaimNotice:
         mc.get.side_effect = lambda *a, **k: (seen.append(_stderr_so_far()), {"comments": [], "total": 0})[1]
         result, _ = run_cli(_issue_mod, ["work", "NRS-4833"], mc)
         assert result.exit_code == 0, result.output
-        assert seen and "CLAIM NRS-4833" in seen[0]
+        assert seen
+        assert "CLAIM NRS-4833" in seen[0]
 
     def test_mine_and_in_progress_gets_no_notice(self):
         mc = _work_client(_status("In Progress", "indeterminate"), ME)
@@ -183,7 +184,8 @@ class TestCommentClaimWarning:
         mc.issue_add_comment.side_effect = lambda *a, **k: (seen.append(_stderr_so_far()), {"id": "4711"})[1]
         result, _ = run_cli(_comment_mod, ["add", "NRS-4833", "I am on it"], mc)
         assert result.exit_code == 0, result.output
-        assert seen and "NRS-4833 is not claimed" in seen[0]
+        assert seen
+        assert "NRS-4833 is not claimed" in seen[0]
         mc.issue_add_comment.assert_called_once()
 
     def test_someone_elses_ticket_in_qa_warns(self):

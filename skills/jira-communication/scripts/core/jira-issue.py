@@ -1021,14 +1021,16 @@ def _resolve_status_sets_for_ctx(ctx, issue_key: str | None = None) -> dict:
 
 
 def _claim_for_work(ctx, issue: dict, issue_key: str) -> dict | None:
-    """The claim check for `work`, or None when it cannot be computed.
+    """Run the claim check for `work`; return its JSON field, or None.
 
-    It must never cost the triage itself: a failing status-set lookup prints
-    one warning and the bundle follows as before.
+    In text mode the notice goes to stderr here, before the bundle. It must
+    never cost the triage itself: a failing status-set lookup prints one
+    warning and the bundle follows as before.
     """
+    key = issue.get("key") or issue_key
     try:
-        return claim_check(
-            issue.get("key") or issue_key,
+        claim = claim_check(
+            key,
             issue.get("fields") or {},
             caller_id(ctx.obj["client"]),
             _resolve_status_sets_for_ctx(ctx, issue_key),
@@ -1038,6 +1040,10 @@ def _claim_for_work(ctx, issue: dict, issue_key: str) -> dict | None:
             raise
         warning(f"claim check unavailable ({type(exc).__name__})")
         return None
+    if not ctx.obj["json"]:
+        for line in claim_notice(key, claim):
+            print(line, file=sys.stderr)
+    return {k: claim[k] for k in ("needed", "reasons", "commands")}
 
 
 @cli.command()
@@ -1068,9 +1074,6 @@ def work(ctx, issue_key: str, truncate: int | None):
             return
 
         claim = _claim_for_work(ctx, issue, issue_key)
-        if claim is not None and not ctx.obj["json"]:
-            for line in claim_notice(issue.get("key") or issue_key, claim):
-                print(line, file=sys.stderr)
 
         comments, _ = fetch_comments_paginated(client, issue_key)
         web_links = []
@@ -1087,7 +1090,7 @@ def work(ctx, issue_key: str, truncate: int | None):
                 "attachments": fields.get("attachment") or [],
                 "issueLinks": fields.get("issuelinks") or [],
                 "webLinks": web_links,
-                "claim": None if claim is None else {k: claim[k] for k in ("needed", "reasons", "commands")},
+                "claim": claim,
             }
             format_output(_intent_bundle_payload(issue, comments, extras=extras), as_json=True)
             return
