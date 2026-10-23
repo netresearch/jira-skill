@@ -8,12 +8,13 @@ import json
 import pytest
 from conftest import load_script, make_mock_client, run_cli
 from lib import ticket_state
-from lib.ticket_state import print_ticket_state, render_ticket_state, ticket_hints
+from lib.ticket_state import print_ticket_state, render_ticket_state, ticket_hints, with_ticket_state
 
 _comment_mod = load_script("jira-comment", "workflow")
 _worklog_mod = load_script("jira-worklog", "core")
 _transition_mod = load_script("jira-transition", "workflow")
 _create_mod = load_script("jira-create", "workflow")
+_link_mod = load_script("jira-link", "utility")
 
 ME = {"name": "jdoe", "displayName": "Jane Doe"}
 
@@ -217,14 +218,120 @@ class TestPrinting:
 
 
 class TestCommandWiring:
-    def test_json_comment_output_stays_parseable(self):
+    def test_json_comment_carries_ticket_state_and_keeps_its_keys(self):
         mc = _client(_fields())
         mc.issue_add_comment.return_value = {"id": "1"}
         result, _ = run_cli(_comment_mod, ["--json", "add", "PROJ-123", "text"], mc)
         assert result.exit_code == 0, result.output
-        assert json.loads(result.stdout)["id"] == "1"
+        payload = json.loads(result.stdout)
+        assert payload["id"] == "1"
+        state = payload["ticket_state"]
+        assert state["key"] == "PROJ-123"
+        assert state["status"] == "Open"
+        assert state["assignee"] is None
+        assert state["hints"] == ['ticket is "Open" while you work on it: claim it (assign + start work)']
         assert "── PROJ-123" not in result.output
+
+    def test_quiet_comment_has_no_state(self):
+        mc = _client(_fields())
+        mc.issue_add_comment.return_value = {"id": "1"}
+        result, _ = run_cli(_comment_mod, ["--quiet", "add", "PROJ-123", "text"], mc)
+        assert result.exit_code == 0, result.output
+        assert result.stdout == "1\n"
         mc.issue.assert_not_called()
+
+    @pytest.mark.parametrize("flags", [["--json", "--quiet"], ["--quiet", "--json"]])
+    def test_json_quiet_link_create_has_no_state(self, flags):
+        # jira-link checks --json before --quiet, so the guard must sit in
+        # with_ticket_state, not in the call site's branch order.
+        mc = _client(_fields())
+        mc.get_issue_link_types.return_value = [{"name": "Cause", "outward": "causes", "inward": "is caused by"}]
+        mc.create_issue_link.return_value = None
+        result, _ = run_cli(_link_mod, [*flags, "create", "PROJ-1", "PROJ-2", "--type", "Cause"], mc)
+        assert result.exit_code == 0, result.output
+        assert "ticket_state" not in result.output
+        mc.issue.assert_not_called()
+
+    def test_json_link_create_carries_state_of_from_key(self):
+        mc = _client(_fields(), key="PROJ-1")
+        mc.get_issue_link_types.return_value = [{"name": "Cause", "outward": "causes", "inward": "is caused by"}]
+        mc.create_issue_link.return_value = None
+        result, _ = run_cli(_link_mod, ["--json", "create", "PROJ-1", "PROJ-2", "--type", "Cause"], mc)
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.stdout)
+        assert payload["from"] == "PROJ-1"
+        assert payload["ticket_state"]["key"] == "PROJ-1"
+        mc.issue.assert_called_with("PROJ-1", fields=ticket_state.FIELDS)
+
+    def test_json_transition_to_done_has_no_write_hints(self):
+        mc = _client(_fields(status="Done", category="done", assignee=ME, resolution="Fixed"))
+        mc.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": "Done"}]
+        result, _ = run_cli(_transition_mod, ["--json", "do", "PROJ-123", "31"], mc)
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.stdout)
+        assert payload["to_status"] == "Done"
+        assert payload["ticket_state"]["resolution"] == "Fixed"
+        assert payload["ticket_state"]["assignee_is_you"] is True
+        assert payload["ticket_state"]["hints"] == []
+
+
+class TestWithTicketState:
+    def test_adds_field_to_a_dict_without_touching_its_keys(self):
+        data = {"id": "1", "key": "PROJ-123"}
+        out = with_ticket_state(_client(_fields()), "PROJ-123", data)
+        assert {k: out[k] for k in data} == data
+        assert out["ticket_state"]["status_category"] == "new"
+        assert "ticket_state" not in data
+
+    def test_time_and_labels(self):
+        fields = _fields(
+            status="In Progress",
+            category="indeterminate",
+            assignee=ME,
+            spent=5 * 3600,
+            estimate=4 * 3600,
+            remaining=0,
+            labels=["needs-code-review"],
+        )
+        state = with_ticket_state(_client(fields), "PROJ-123", {})["ticket_state"]
+        assert state["time_spent_seconds"] == 5 * 3600
+        assert state["original_estimate_seconds"] == 4 * 3600
+        assert state["remaining_estimate_seconds"] == 0
+        assert state["labels"] == ["needs-code-review"]
+        assert state["hints"] == ["logged time 5h exceeds the estimate 4h"]
+
+    def test_list_is_returned_unchanged(self):
+        mc = _client(_fields())
+        data = [{"id": "1"}]
+        assert with_ticket_state(mc, "PROJ-123", data) is data
+        mc.issue.assert_not_called()
+
+    def test_quiet_leaves_data_alone(self):
+        mc = _client(_fields())
+        assert with_ticket_state(mc, "PROJ-123", {"id": "1"}, ctx_obj={"quiet": True, "json": True}) == {"id": "1"}
+        mc.issue.assert_not_called()
+
+    def test_env_switch_leaves_data_alone(self, monkeypatch):
+        monkeypatch.setenv("JIRA_TICKET_STATE", "0")
+        mc = _client(_fields())
+        assert with_ticket_state(mc, "PROJ-123", {"id": "1"}) == {"id": "1"}
+        mc.issue.assert_not_called()
+
+    def test_lookup_error_becomes_an_error_field(self):
+        mc = make_mock_client()
+        mc.issue.side_effect = RuntimeError("boom")
+        out = with_ticket_state(mc, "PROJ-123", {"id": "1"})
+        assert out == {"id": "1", "ticket_state": {"key": "PROJ-123", "error": "RuntimeError"}}
+
+    def test_unknown_identity_gives_null_ownership(self):
+        mc = _client(_fields(status="In Progress", category="indeterminate", assignee={"name": "bob"}))
+        mc.myself.side_effect = RuntimeError("no myself")
+        state = with_ticket_state(mc, "PROJ-123", {})["ticket_state"]
+        assert state["assignee"] == "bob"
+        assert state["assignee_is_you"] is None
+
+    def test_non_dict_issue_adds_nothing(self):
+        assert with_ticket_state(make_mock_client(), "PROJ-123", {"id": "1"}) == {"id": "1"}
 
     def test_worklog_add_shows_logged_time(self):
         fields = _fields(status="In Progress", category="indeterminate", assignee=ME, spent=3600)

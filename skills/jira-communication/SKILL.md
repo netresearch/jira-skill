@@ -55,7 +55,9 @@ After a successful write, these commands print the ticket's state to stderr: `ji
 
 **Read the `(!)` lines and act on them before reporting the work done.** They appear when the ticket is Open or Backlog while you write to it, unassigned while In Progress, assigned to someone else while you write to it, already done while you write to it, done without a resolution, carries a resolution while not done, or has more time logged than estimated. An unassigned ticket in a review status such as QA gets no hint: it waits for the team pool by design. After a transition or a create only the resolution and time checks run, because the status and assignee are what the command just set.
 
-The block costs one extra read per write and never fails the command. It is left out with `--json` and `--quiet`, so machine output is unchanged, and `JIRA_TICKET_STATE=0` turns it off. `logged` is Jira's own time tracking: time booked elsewhere shows only once it is synced into a Jira worklog.
+With `--json` the same facts arrive as a `ticket_state` field in the output object, beside the keys it already had: `key`, `status`, `status_category`, `issuetype`, `resolution`, `assignee`, `assignee_is_you`, `time_spent_seconds`, `original_estimate_seconds`, `remaining_estimate_seconds`, `labels` and `hints`, the last being the `(!)` lines as strings. **Read `ticket_state.hints` as you would the `(!)` lines.** `jira-attachment.py add --json` prints a list, so its state goes to stderr as text instead. `--quiet` prints no state.
+
+The state costs one extra read per write and never fails the command: a lookup error prints one line, or becomes `"ticket_state": {"key": …, "error": "<type>"}` in JSON. `JIRA_TICKET_STATE=0` turns it off everywhere. `logged` is Jira's own time tracking: time booked elsewhere shows only once it is synced into a Jira worklog.
 
 ## Posting wiki markup rewrites and checks it first
 

@@ -27,7 +27,7 @@ import click
 from lib.client import LazyJiraClient
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, format_output, format_table, success, warning
-from lib.ticket_state import print_ticket_state
+from lib.ticket_state import print_ticket_state, with_ticket_state
 from lib.users import check_mentions_cli
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -571,8 +571,9 @@ def do_transition(
         if ctx.obj["quiet"]:
             print(issue_key)
         elif ctx.obj["json"]:
+            data = {"key": issue_key, "transition": matching["name"], "to_status": _get_to_status(matching)}
             format_output(
-                {"key": issue_key, "transition": matching["name"], "to_status": _get_to_status(matching)}, as_json=True
+                with_ticket_state(ctx.obj["client"], issue_key, data, writing=False, ctx_obj=ctx.obj), as_json=True
             )
         else:
             success(f"Transitioned {issue_key}")
@@ -755,7 +756,10 @@ def path_transition(
             sys.exit(1)
 
         if as_json:
-            format_output({"key": issue_key, "status": current, "steps": chain}, as_json=True)
+            data = {"key": issue_key, "status": current, "steps": chain}
+            format_output(
+                with_ticket_state(ctx.obj["client"], issue_key, data, writing=False, ctx_obj=ctx.obj), as_json=True
+            )
         elif quiet:
             print(issue_key)
         else:
