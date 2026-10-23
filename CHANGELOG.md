@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-10-23
+
 ### Added
 
 - `jira-issue.py work KEY` prints a `!! CLAIM KEY` notice on stderr (a `claim` field with `--json`) when the ticket is not assigned to the caller or its status says nobody works on it (category To Do or Done, or a configured QA or resolved status), naming `jira-issue.py update KEY --assignee me` and `jira-transition.py list KEY`. `jira-comment.py add` prints a one-line warning before posting only when both hold — the ticket is not the caller's and its status says nobody works on it — and still posts; `--quiet`, `--dry-run` and `JIRA_TICKET_STATE=0` skip it ([#302](https://github.com/netresearch/jira-skill/pull/302))
@@ -974,7 +976,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/netresearch/jira-skill/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/netresearch/jira-skill/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/netresearch/jira-skill/compare/v3.34.0...v4.0.0
 [3.34.0]: https://github.com/netresearch/jira-skill/compare/v3.33.0...v3.34.0
