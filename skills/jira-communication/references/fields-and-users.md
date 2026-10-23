@@ -54,6 +54,24 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py --json search ""
 
 The key you need for `--fields-json` is the `id` (e.g. `customfield_<N>`) — not the human name.
 
+## Fields a screen accepts
+
+A field that exists is not always settable: Jira refuses one that is missing from
+the project's screen with `Field '<id>' cannot be set. It is not on the
+appropriate screen, or unknown.` List what the screen holds, with the required
+flag and the allowed values, instead of calling `createmeta`/`editmeta` by hand:
+
+```bash
+# create screen of an issue type (name or id)
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py meta PROJ Task
+# edit screen of an existing issue
+uv run ${CLAUDE_SKILL_DIR}/scripts/utility/jira-fields.py meta --edit PROJ-123
+```
+
+`--json` prints the raw field objects (incl. every allowed value), `--quiet` the
+ids only. A field absent from this list has to be added to the screen by a Jira
+admin; no payload shape makes Jira accept it.
+
 ## Issue types per project
 
 ```bash

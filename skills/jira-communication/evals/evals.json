@@ -268,5 +268,16 @@
         "pattern": "ACME"
       }
     ]
+  },
+  {
+    "name": "screen_fields_via_meta_not_raw_rest",
+    "prompt": "Setting customfield_12345 on a new ACME Task fails with 'not on the appropriate screen'. Find out which fields the ACME Task create screen accepts.",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "jira-fields\\.py\\s+(--json\\s+)?meta\\s+ACME"
+      }
+    ]
   }
 ]

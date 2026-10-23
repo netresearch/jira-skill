@@ -222,5 +222,113 @@ def list_types(ctx, project: str | None):
         sys.exit(1)
 
 
+def _resolve_issue_type_id(types: list[dict], issue_type: str) -> str | None:
+    """Return the id of the issue type matching an id or a name (case-insensitive)."""
+    for t in types:
+        if str(t.get("id", "")) == issue_type:
+            return str(t["id"])
+    for t in types:
+        if t.get("name", "").lower() == issue_type.lower():
+            return str(t["id"])
+    return None
+
+
+def _fetch_create_meta(client, project: str, type_id: str) -> list[dict]:
+    """Fetch every field of the create screen, following pagination.
+
+    Server/DC lists the fields under ``values``, Cloud under ``fields``.
+    """
+    fields: list[dict] = []
+    start = 0
+    while True:
+        page = client.get(
+            f"rest/api/2/issue/createmeta/{project}/issuetypes/{type_id}",
+            params={"startAt": start, "maxResults": 100},
+        )
+        batch = page.get("values", page.get("fields", []))
+        fields.extend(batch)
+        start += len(batch)
+        if not batch or page.get("isLast", True) or start >= page.get("total", start):
+            return fields
+
+
+def _meta_rows(fields: list[dict]) -> list[dict]:
+    rows = []
+    for f in fields:
+        allowed = [
+            str(v.get("value") or v.get("name") or v.get("key") or v.get("id")) for v in f.get("allowedValues", [])
+        ]
+        shown = ", ".join(allowed[:5]) + (f" (+{len(allowed) - 5})" if len(allowed) > 5 else "")
+        rows.append(
+            {
+                "ID": f.get("fieldId", f.get("key", "")),
+                "Name": f.get("name", ""),
+                "Required": "Yes" if f.get("required") else "",
+                "Type": f.get("schema", {}).get("type", "-"),
+                "Allowed": shown,
+            }
+        )
+    rows.sort(key=lambda r: (r["Required"] != "Yes", r["Name"].lower()))
+    return rows
+
+
+@cli.command("meta")
+@click.argument("project", required=False)
+@click.argument("issue_type", required=False)
+@click.option("--edit", "edit_key", help="Show the edit screen of this issue instead of a create screen")
+@click.pass_context
+def meta(ctx, project: str | None, issue_type: str | None, edit_key: str | None):
+    """Show the fields a screen accepts: id, name, required, allowed values.
+
+    PROJECT and ISSUE_TYPE (name or id) select a create screen. With --edit KEY
+    the edit screen of that issue is shown instead. A field missing here is not
+    on the screen, so Jira refuses to set it ("not on the appropriate screen").
+
+    Examples:
+
+      jira-fields.py meta PROJ Task
+
+      jira-fields.py meta PROJ 10002 --json
+
+      jira-fields.py meta --edit PROJ-123
+    """
+    client = ctx.obj["client"]
+
+    try:
+        if edit_key:
+            client.with_context(issue_key=edit_key)
+            data = client.get(f"rest/api/2/issue/{edit_key}/editmeta")
+            fields = [{"fieldId": k, **v} for k, v in data.get("fields", {}).items()]
+        else:
+            if not project or not issue_type:
+                error("PROJECT and ISSUE_TYPE are required unless --edit KEY is given")
+                sys.exit(2)
+            client.with_context(issue_key=f"{project}-1")
+            types = get_project_issue_types(client, project)
+            type_id = _resolve_issue_type_id(types, issue_type)
+            if type_id is None:
+                names = ", ".join(sorted(t.get("name", "") for t in types))
+                error(f"Issue type '{issue_type}' not found in {project}. Available: {names}")
+                sys.exit(1)
+            fields = _fetch_create_meta(client, project, type_id)
+
+        if ctx.obj["json"]:
+            format_output(fields, as_json=True)
+        elif ctx.obj["quiet"]:
+            for f in fields:
+                print(f.get("fieldId", ""))
+        else:
+            if not fields:
+                warning("The screen has no fields")
+                return
+            print(format_table(_meta_rows(fields), ["ID", "Name", "Required", "Type", "Allowed"]))
+
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to read screen metadata: {e}")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     cli()
