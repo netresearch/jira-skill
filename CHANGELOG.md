@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-10-23
+
+### Added
+
+- Every writing command of `jira-communication` ends with the ticket's state on stderr: status and resolution, issue type, assignee, time spent against the original and remaining estimate, labels, and hints such as `ticket is "Open" while you work on it` or `resolution is set while the ticket is not done`. `JIRA_TICKET_STATE=0` turns it off; `--quiet` and `--json` print no text block ([#296](https://github.com/netresearch/jira-skill/pull/296))
+- The `--json` output of those commands carries the same facts and hints as a `ticket_state` field; existing keys are unchanged. `jira-attachment.py add --json` prints a list, so its state goes to stderr as text ([#298](https://github.com/netresearch/jira-skill/pull/298))
+
+### Changed
+
+- CodeQL runs in the `codeql` job of `security.yml`; the separate `codeql.yml` workflow is removed ([#297](https://github.com/netresearch/jira-skill/pull/297))
+
 ## [4.0.0] - 2026-10-21
 
 ### BREAKING CHANGES
@@ -959,7 +970,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/netresearch/jira-skill/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/netresearch/jira-skill/compare/v3.34.0...v4.0.0
 [3.34.0]: https://github.com/netresearch/jira-skill/compare/v3.33.0...v3.34.0
 [3.33.0]: https://github.com/netresearch/jira-skill/compare/v3.32.3...v3.33.0
