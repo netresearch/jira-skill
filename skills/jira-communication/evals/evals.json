@@ -277,6 +277,10 @@
         "type": "tool_use",
         "tool": "Bash",
         "pattern": "jira-fields\\.py\\s+(--json\\s+)?meta\\s+ACME"
+      },
+      {
+        "type": "content",
+        "pattern": "customfield_12345.*(screen|admin)|(screen|admin).*customfield_12345"
       }
     ]
   }
