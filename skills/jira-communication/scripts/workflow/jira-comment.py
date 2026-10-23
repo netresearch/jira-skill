@@ -27,7 +27,7 @@ from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import error, extract_adf_text, format_output, success, warning
-from lib.ticket_state import print_ticket_state, with_ticket_state
+from lib.ticket_state import print_ticket_state, warn_if_unclaimed, with_ticket_state
 from lib.users import check_mentions_cli, person_label
 
 
@@ -256,6 +256,7 @@ def add(
         )
         return
     check_mentions_cli(client, comment_text, skip=no_verify_mentions)
+    me = warn_if_unclaimed(client, issue_key, ctx.obj)
 
     try:
         # Only pass visibility when set: without the option the call is exactly what it was.
@@ -265,13 +266,13 @@ def add(
         if ctx.obj["quiet"]:
             print(result.get("id", "ok"))
         elif ctx.obj["json"]:
-            format_output(with_ticket_state(client, issue_key, result, ctx_obj=ctx.obj), as_json=True)
+            format_output(with_ticket_state(client, issue_key, result, ctx_obj=ctx.obj, me=me), as_json=True)
         else:
             success(f"Added comment to {issue_key}")
             print(f"  Comment ID: {result.get('id', 'N/A')}")
             if visibility:
                 print(f"  Visible to: {_visibility_label(visibility)}")
-            print_ticket_state(client, issue_key, ctx.obj)
+            print_ticket_state(client, issue_key, ctx.obj, me=me)
 
     except Exception as e:
         if ctx.obj["debug"]:

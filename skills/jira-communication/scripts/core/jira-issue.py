@@ -40,7 +40,7 @@ from lib.input import read_stdin_utf8
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
 from lib.output import compact_json, error, extract_adf_text, format_output, success, warning
 from lib.render import print_comment, print_description
-from lib.ticket_state import print_ticket_state, with_ticket_state
+from lib.ticket_state import caller_id, claim_check, claim_notice, print_ticket_state, with_ticket_state
 from lib.users import check_mentions_cli, person_label
 
 
@@ -1020,6 +1020,26 @@ def _resolve_status_sets_for_ctx(ctx, issue_key: str | None = None) -> dict:
     return load_status_sets(profile=profile, issue_key=issue_key)
 
 
+def _claim_for_work(ctx, issue: dict, issue_key: str) -> dict | None:
+    """The claim check for `work`, or None when it cannot be computed.
+
+    It must never cost the triage itself: a failing status-set lookup prints
+    one warning and the bundle follows as before.
+    """
+    try:
+        return claim_check(
+            issue.get("key") or issue_key,
+            issue.get("fields") or {},
+            caller_id(ctx.obj["client"]),
+            _resolve_status_sets_for_ctx(ctx, issue_key),
+        )
+    except Exception as exc:
+        if ctx.obj["debug"]:
+            raise
+        warning(f"claim check unavailable ({type(exc).__name__})")
+        return None
+
+
 @cli.command()
 @click.argument("issue_key")
 @click.option("--truncate", type=int, metavar="N", help="Truncate description and each comment to N chars")
@@ -1028,6 +1048,10 @@ def work(ctx, issue_key: str, truncate: int | None):
     """Fetch full working context: description + all comments + attachments + links.
 
     Use when starting work on a ticket or doing triage. Single call.
+
+    When the ticket is not assigned to you or its status is not a working one
+    (not started, in review, resolved), a CLAIM notice on stderr names the
+    commands that take it; --json carries it as the "claim" field.
 
     Example:
 
@@ -1042,6 +1066,11 @@ def work(ctx, issue_key: str, truncate: int | None):
         if ctx.obj["quiet"]:
             print(issue["key"])
             return
+
+        claim = _claim_for_work(ctx, issue, issue_key)
+        if claim is not None and not ctx.obj["json"]:
+            for line in claim_notice(issue.get("key") or issue_key, claim):
+                print(line, file=sys.stderr)
 
         comments, _ = fetch_comments_paginated(client, issue_key)
         web_links = []
@@ -1058,6 +1087,7 @@ def work(ctx, issue_key: str, truncate: int | None):
                 "attachments": fields.get("attachment") or [],
                 "issueLinks": fields.get("issuelinks") or [],
                 "webLinks": web_links,
+                "claim": None if claim is None else {k: claim[k] for k in ("needed", "reasons", "commands")},
             }
             format_output(_intent_bundle_payload(issue, comments, extras=extras), as_json=True)
             return

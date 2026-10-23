@@ -19,6 +19,8 @@ costs one line or an ``error`` field. ``JIRA_TICKET_STATE=0`` turns it off.
 import os
 import sys
 
+from lib.config import load_status_sets
+
 FIELDS = "status,assignee,resolution,timetracking,labels,issuetype,updated"
 
 _OFF_VALUES = {"0", "false", "no", "off"}
@@ -116,7 +118,82 @@ def render_ticket_state(key: str, fields: dict, me: str | None, writing: bool) -
     return lines
 
 
-def print_ticket_state(client, key: str, ctx_obj: dict | None = None, writing: bool = True) -> None:
+def _status_claim_reason(fields: dict, status_sets: dict | None) -> str | None:
+    """Why the status says nobody is working on the ticket, or None.
+
+    The status category decides, not ``working_status_names``: that set lists
+    where rejected work lands and includes Open, To Do and Backlog.
+    """
+    sets = status_sets or {}
+    status = fields.get("status") or {}
+    name = status.get("name", "?")
+    category = ((status.get("statusCategory") or {}).get("key") or "").lower()
+    if category == "done" or name in sets.get("resolved", ()):
+        return f'status "{name}" is resolved: reopen it'
+    if category == "new":
+        return f'status "{name}" is not started'
+    if name in sets.get("qa", ()):
+        return f'status "{name}" is a review status'
+    return None
+
+
+def _assignee_claim_reason(fields: dict, me: str | None) -> str | None:
+    """Why the assignee is not the caller, or None (also when the caller is unknown)."""
+    assignee = _user_id(fields.get("assignee"))
+    if assignee is None:
+        return "unassigned"
+    if me and assignee != me:
+        return f"assigned to {_user_label(fields.get('assignee'))}"
+    return None
+
+
+def claim_check(key: str, fields: dict, me: str | None, status_sets: dict | None) -> dict:
+    """Whether the caller still has to take ``key`` before working on it.
+
+    Returns ``{"needed", "reasons", "commands", "assignee", "status"}``;
+    ``assignee`` and ``status`` hold the single reasons or None. The commands
+    never name a transition: workflows differ, so the start or reopen
+    transition is picked from ``jira-transition.py list``.
+    """
+    assignee = _assignee_claim_reason(fields, me)
+    status = _status_claim_reason(fields, status_sets)
+    commands = []
+    if assignee:
+        commands.append(f"jira-issue.py update {key} --assignee me")
+    if status:
+        commands.append(f"jira-transition.py list {key}")
+        commands.append(f'jira-transition.py do {key} "<start or reopen transition from the list>"')
+    reasons = [r for r in (assignee, status) if r]
+    return {"needed": bool(reasons), "reasons": reasons, "commands": commands, "assignee": assignee, "status": status}
+
+
+def claim_notice(key: str, check: dict) -> list[str]:
+    """The claim check as text lines, empty when nothing is needed."""
+    if not check["needed"]:
+        return []
+    lines = [f"!! CLAIM {key} before you comment, measure or edit: " + "; ".join(check["reasons"])]
+    lines.extend(f"   {n}. {cmd}" for n, cmd in enumerate(check["commands"], 1))
+    return lines
+
+
+def claim_warning(key: str, check: dict) -> str | None:
+    """One line for a comment on a ticket nobody works on, or None.
+
+    Only when both hold: the caller is not the assignee and the status is not
+    a working one. Commenting on someone else's ticket in progress is normal.
+    """
+    if not (check["assignee"] and check["status"]):
+        return None
+    return (
+        f"{key} is not claimed ({check['assignee']}; {check['status']}). "
+        f"If you are taking it: jira-issue.py update {key} --assignee me, "
+        f"then the start transition from jira-transition.py list {key}"
+    )
+
+
+def print_ticket_state(
+    client, key: str, ctx_obj: dict | None = None, writing: bool = True, me: str | None = None
+) -> None:
     """Print the state block for ``key`` to stderr, unless output is machine-read.
 
     ``writing`` is True when the command wrote *to* the ticket (comment,
@@ -125,13 +202,14 @@ def print_ticket_state(client, key: str, ctx_obj: dict | None = None, writing: b
     would describe its own result, while the resolution and time checks stay.
 
     ``ctx_obj`` is the Click context object of the calling script; its ``json``
-    and ``quiet`` flags suppress the block.
+    and ``quiet`` flags suppress the block. ``me`` is the caller's id when the
+    command already looked it up, which saves the ``myself()`` call.
     """
     ctx_obj = ctx_obj or {}
     if ctx_obj.get("json") or ctx_obj.get("quiet") or not _enabled():
         return
     try:
-        state = _fetch_state(client, key)
+        state = _fetch_state(client, key, me)
         if state is None:
             return
         lines = render_ticket_state(state[0], state[1], state[2], writing)
@@ -141,21 +219,25 @@ def print_ticket_state(client, key: str, ctx_obj: dict | None = None, writing: b
     print("\n".join(lines), file=sys.stderr)
 
 
-def _fetch_state(client, key: str) -> tuple[str, dict, str | None] | None:
+def caller_id(client) -> str | None:
+    """The caller's user id, or None when ``myself()`` fails."""
+    try:
+        return _user_id(client.myself())
+    except Exception:
+        return None
+
+
+def _fetch_state(client, key: str, me: str | None = None) -> tuple[str, dict, str | None] | None:
     """Return (key, fields, caller id) for ``key``, or None without usable data.
 
     Lookup errors of the issue read propagate; a failed ``myself()`` only
-    leaves the caller unknown.
+    leaves the caller unknown. A known ``me`` skips the ``myself()`` call.
     """
     issue = client.issue(key, fields=FIELDS)
     fields = issue.get("fields") if isinstance(issue, dict) else None
     if not isinstance(fields, dict):
         return None
-    try:
-        me = _user_id(client.myself())
-    except Exception:
-        me = None
-    return issue.get("key") or key, fields, me
+    return issue.get("key") or key, fields, me or caller_id(client)
 
 
 def ticket_state_data(key: str, fields: dict, me: str | None, writing: bool) -> dict:
@@ -179,7 +261,7 @@ def ticket_state_data(key: str, fields: dict, me: str | None, writing: bool) -> 
     }
 
 
-def with_ticket_state(client, key: str, data, writing: bool = True, ctx_obj: dict | None = None):
+def with_ticket_state(client, key: str, data, writing: bool = True, ctx_obj: dict | None = None, me: str | None = None):
     """Return ``data`` with a ``ticket_state`` field for ``--json`` output.
 
     Only a dict gains the field, so every key a consumer already reads stays
@@ -187,15 +269,43 @@ def with_ticket_state(client, key: str, data, writing: bool = True, ctx_obj: dic
     error is recorded as ``{"key": ..., "error": "<ExceptionType>"}`` and
     never fails the command. ``JIRA_TICKET_STATE=0`` leaves ``data`` as is, and
     so does a ``quiet`` flag in ``ctx_obj``: some commands check ``--json``
-    before ``--quiet``, and ``--quiet`` must not gain the field.
+    before ``--quiet``, and ``--quiet`` must not gain the field. ``me`` is as
+    in :func:`print_ticket_state`.
     """
     if not isinstance(data, dict) or (ctx_obj or {}).get("quiet") or not _enabled():
         return data
     try:
-        state = _fetch_state(client, key)
+        state = _fetch_state(client, key, me)
         if state is None:
             return data
         ticket_state = ticket_state_data(state[0], state[1], state[2], writing)
     except Exception as exc:
         ticket_state = {"key": key, "error": type(exc).__name__}
     return {**data, "ticket_state": ticket_state}
+
+
+def warn_if_unclaimed(client, key: str, ctx_obj: dict | None = None) -> str | None:
+    """Before a comment: warn on stderr when nobody works on ``key``.
+
+    Prints :func:`claim_warning` and returns the caller's id, so the state
+    block after the write needs no second ``myself()``. Silent under
+    ``--quiet`` and ``JIRA_TICKET_STATE=0``; a lookup error is ignored, the
+    write goes ahead either way. Costs one issue read. The QA and resolved
+    status names come from the profile in ``ctx_obj`` or the issue key.
+    """
+    ctx_obj = ctx_obj or {}
+    if ctx_obj.get("quiet") or not _enabled():
+        return None
+    me = caller_id(client)
+    try:
+        status_sets = load_status_sets(profile=ctx_obj.get("profile"), issue_key=key)
+        issue = client.issue(key, fields="status,assignee")
+        fields = issue.get("fields") if isinstance(issue, dict) else None
+        if not isinstance(fields, dict):
+            return me
+        line = claim_warning(key, claim_check(key, fields, me, status_sets))
+    except Exception:
+        return me
+    if line:
+        print(f"⚠ {line}", file=sys.stderr)
+    return me
