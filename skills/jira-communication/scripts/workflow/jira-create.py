@@ -246,7 +246,9 @@ def issue(
         if ctx.obj["quiet"]:
             print(result["key"])
         elif ctx.obj["json"]:
-            format_output(with_ticket_state(client, result["key"], result, writing=False), as_json=True)
+            format_output(
+                with_ticket_state(client, result["key"], result, writing=False, ctx_obj=ctx.obj), as_json=True
+            )
         else:
             success(f"Created issue: {result['key']}")
             print(f"  Summary: {summary}")

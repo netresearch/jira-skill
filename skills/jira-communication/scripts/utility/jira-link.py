@@ -255,6 +255,7 @@ def _emit_create_output(ctx, *, from_key: str, to_key: str, canonical_name: str,
                     "sentence": sentence,
                     "created": True,
                 },
+                ctx_obj=ctx.obj,
             ),
             as_json=True,
         )

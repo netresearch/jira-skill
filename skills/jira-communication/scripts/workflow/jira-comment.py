@@ -265,7 +265,7 @@ def add(
         if ctx.obj["quiet"]:
             print(result.get("id", "ok"))
         elif ctx.obj["json"]:
-            format_output(with_ticket_state(client, issue_key, result), as_json=True)
+            format_output(with_ticket_state(client, issue_key, result, ctx_obj=ctx.obj), as_json=True)
         else:
             success(f"Added comment to {issue_key}")
             print(f"  Comment ID: {result.get('id', 'N/A')}")
@@ -358,7 +358,7 @@ def edit(
             else:
                 print("ok")
         elif ctx.obj["json"]:
-            format_output(with_ticket_state(ctx.obj["client"], issue_key, result), as_json=True)
+            format_output(with_ticket_state(ctx.obj["client"], issue_key, result, ctx_obj=ctx.obj), as_json=True)
         else:
             success(f"Updated comment {comment_id} on {issue_key}")
             print_ticket_state(ctx.obj["client"], issue_key, ctx.obj)

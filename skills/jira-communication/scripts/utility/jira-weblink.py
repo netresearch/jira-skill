@@ -116,7 +116,7 @@ def add(ctx, issue_key: str, url: str, title: str, dry_run: bool):
             data = {"key": issue_key, "url": url, "title": title, "created": True}
             if link_id is not None:
                 data["id"] = link_id
-            format_output(with_ticket_state(ctx.obj["client"], issue_key, data), as_json=True)
+            format_output(with_ticket_state(ctx.obj["client"], issue_key, data, ctx_obj=ctx.obj), as_json=True)
         elif ctx.obj["quiet"]:
             print("ok")
         else:

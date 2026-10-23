@@ -256,7 +256,7 @@ def add(
         if ctx.obj["quiet"]:
             print(result.get("id", "ok"))
         elif ctx.obj["json"]:
-            format_output(with_ticket_state(ctx.obj["client"], issue_key, result), as_json=True)
+            format_output(with_ticket_state(ctx.obj["client"], issue_key, result, ctx_obj=ctx.obj), as_json=True)
         else:
             success(f"Added worklog to {issue_key}: {time_spent}")
             if comment:

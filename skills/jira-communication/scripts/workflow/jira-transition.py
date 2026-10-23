@@ -572,7 +572,9 @@ def do_transition(
             print(issue_key)
         elif ctx.obj["json"]:
             data = {"key": issue_key, "transition": matching["name"], "to_status": _get_to_status(matching)}
-            format_output(with_ticket_state(ctx.obj["client"], issue_key, data, writing=False), as_json=True)
+            format_output(
+                with_ticket_state(ctx.obj["client"], issue_key, data, writing=False, ctx_obj=ctx.obj), as_json=True
+            )
         else:
             success(f"Transitioned {issue_key}")
             print(f"  Status: {_get_to_status(matching)}")
@@ -755,7 +757,9 @@ def path_transition(
 
         if as_json:
             data = {"key": issue_key, "status": current, "steps": chain}
-            format_output(with_ticket_state(ctx.obj["client"], issue_key, data, writing=False), as_json=True)
+            format_output(
+                with_ticket_state(ctx.obj["client"], issue_key, data, writing=False, ctx_obj=ctx.obj), as_json=True
+            )
         elif quiet:
             print(issue_key)
         else:

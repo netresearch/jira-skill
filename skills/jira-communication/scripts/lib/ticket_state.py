@@ -179,15 +179,17 @@ def ticket_state_data(key: str, fields: dict, me: str | None, writing: bool) -> 
     }
 
 
-def with_ticket_state(client, key: str, data, writing: bool = True):
+def with_ticket_state(client, key: str, data, writing: bool = True, ctx_obj: dict | None = None):
     """Return ``data`` with a ``ticket_state`` field for ``--json`` output.
 
     Only a dict gains the field, so every key a consumer already reads stays
     where it was; a list or any other shape is returned unchanged. A lookup
     error is recorded as ``{"key": ..., "error": "<ExceptionType>"}`` and
-    never fails the command. ``JIRA_TICKET_STATE=0`` leaves ``data`` as is.
+    never fails the command. ``JIRA_TICKET_STATE=0`` leaves ``data`` as is, and
+    so does a ``quiet`` flag in ``ctx_obj``: some commands check ``--json``
+    before ``--quiet``, and ``--quiet`` must not gain the field.
     """
-    if not isinstance(data, dict) or not _enabled():
+    if not isinstance(data, dict) or (ctx_obj or {}).get("quiet") or not _enabled():
         return data
     try:
         state = _fetch_state(client, key)

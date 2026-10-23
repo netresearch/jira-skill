@@ -14,6 +14,7 @@ _comment_mod = load_script("jira-comment", "workflow")
 _worklog_mod = load_script("jira-worklog", "core")
 _transition_mod = load_script("jira-transition", "workflow")
 _create_mod = load_script("jira-create", "workflow")
+_link_mod = load_script("jira-link", "utility")
 
 ME = {"name": "jdoe", "displayName": "Jane Doe"}
 
@@ -239,6 +240,29 @@ class TestCommandWiring:
         assert result.stdout == "1\n"
         mc.issue.assert_not_called()
 
+    @pytest.mark.parametrize("flags", [["--json", "--quiet"], ["--quiet", "--json"]])
+    def test_json_quiet_link_create_has_no_state(self, flags):
+        # jira-link checks --json before --quiet, so the guard must sit in
+        # with_ticket_state, not in the call site's branch order.
+        mc = _client(_fields())
+        mc.get_issue_link_types.return_value = [{"name": "Cause", "outward": "causes", "inward": "is caused by"}]
+        mc.create_issue_link.return_value = None
+        result, _ = run_cli(_link_mod, [*flags, "create", "PROJ-1", "PROJ-2", "--type", "Cause"], mc)
+        assert result.exit_code == 0, result.output
+        assert "ticket_state" not in result.output
+        mc.issue.assert_not_called()
+
+    def test_json_link_create_carries_state_of_from_key(self):
+        mc = _client(_fields(), key="PROJ-1")
+        mc.get_issue_link_types.return_value = [{"name": "Cause", "outward": "causes", "inward": "is caused by"}]
+        mc.create_issue_link.return_value = None
+        result, _ = run_cli(_link_mod, ["--json", "create", "PROJ-1", "PROJ-2", "--type", "Cause"], mc)
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.stdout)
+        assert payload["from"] == "PROJ-1"
+        assert payload["ticket_state"]["key"] == "PROJ-1"
+        mc.issue.assert_called_with("PROJ-1", fields=ticket_state.FIELDS)
+
     def test_json_transition_to_done_has_no_write_hints(self):
         mc = _client(_fields(status="Done", category="done", assignee=ME, resolution="Fixed"))
         mc.get_issue_transitions.return_value = [{"id": "31", "name": "Done", "to": "Done"}]
@@ -280,6 +304,11 @@ class TestWithTicketState:
         mc = _client(_fields())
         data = [{"id": "1"}]
         assert with_ticket_state(mc, "PROJ-123", data) is data
+        mc.issue.assert_not_called()
+
+    def test_quiet_leaves_data_alone(self):
+        mc = _client(_fields())
+        assert with_ticket_state(mc, "PROJ-123", {"id": "1"}, ctx_obj={"quiet": True, "json": True}) == {"id": "1"}
         mc.issue.assert_not_called()
 
     def test_env_switch_leaves_data_alone(self, monkeypatch):

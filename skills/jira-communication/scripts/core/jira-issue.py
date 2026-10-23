@@ -778,7 +778,7 @@ def update(
             print(issue_key)
         elif ctx.obj["json"]:
             data = {"key": issue_key, "updated": list(update_fields.keys())}
-            format_output(with_ticket_state(ctx.obj["client"], issue_key, data), as_json=True)
+            format_output(with_ticket_state(ctx.obj["client"], issue_key, data, ctx_obj=ctx.obj), as_json=True)
         else:
             success(f"Updated {issue_key}")
             for key in update_fields:
