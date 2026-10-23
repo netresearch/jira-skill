@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-10-23
+
 ### Added
 
 - `jira-fields.py meta PROJECT TYPE` and `meta --edit KEY`: list the fields of a create or edit screen with id, name, required flag, type and allowed values, so a "not on the appropriate screen" refusal is diagnosed without raw `createmeta`/`editmeta` calls. Eval `screen_fields_via_meta_not_raw_rest`
@@ -980,7 +982,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.2.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.3.0...HEAD
+[4.3.0]: https://github.com/netresearch/jira-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/jira-skill/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/netresearch/jira-skill/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/netresearch/jira-skill/compare/v3.34.0...v4.0.0
