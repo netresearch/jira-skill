@@ -248,17 +248,28 @@ def _fetch_create_meta(client, project: str, type_id: str) -> list[dict]:
         batch = page.get("values", page.get("fields", []))
         fields.extend(batch)
         start += len(batch)
-        # Cloud sends no isLast, so the end is read from total there.
-        if not batch or page.get("isLast") is True or start >= page.get("total", 0):
+        if not batch:
             return fields
+        # Server/DC marks the end with isLast; Cloud sends none, and there the
+        # end is read from total.
+        if "isLast" in page:
+            if page["isLast"]:
+                return fields
+        elif start >= page.get("total", 0):
+            return fields
+
+
+def _allowed_label(value) -> str:
+    """Label of one allowed value: an option object, or a plain string/number."""
+    if isinstance(value, dict):
+        return str(value.get("value") or value.get("name") or value.get("key") or value.get("id"))
+    return str(value)
 
 
 def _meta_rows(fields: list[dict]) -> list[dict]:
     rows = []
     for f in fields:
-        allowed = [
-            str(v.get("value") or v.get("name") or v.get("key") or v.get("id")) for v in f.get("allowedValues", [])
-        ]
+        allowed = [_allowed_label(v) for v in f.get("allowedValues", [])]
         shown = ", ".join(allowed[:5]) + (f" (+{len(allowed) - 5})" if len(allowed) > 5 else "")
         rows.append(
             {

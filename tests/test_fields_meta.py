@@ -61,6 +61,29 @@ def test_create_meta_pages_by_total_when_cloud_sends_no_is_last():
     assert mc.get.call_count == 2
 
 
+def test_create_meta_follows_is_last_false_without_total():
+    mc = _client_with_pages(
+        {"startAt": 0, "isLast": False, "values": [_SUMMARY]},
+        {"startAt": 1, "isLast": True, "values": [_RESPONSIBLE]},
+    )
+    result, mc = run_cli(_fields_mod, ["--quiet", "meta", "PROJ", "Task"], mc)
+    assert result.exit_code == 0, result.output
+    assert result.output.split() == ["summary", "customfield_12608"]
+
+
+def test_table_shows_plain_string_allowed_values():
+    colour = {
+        "fieldId": "customfield_1",
+        "name": "Colour",
+        "schema": {"type": "array"},
+        "allowedValues": ["red", "blue"],
+    }
+    mc = _client_with_pages({"startAt": 0, "total": 1, "isLast": True, "values": [colour]})
+    result, _ = run_cli(_fields_mod, ["meta", "PROJ", "Task"], mc)
+    assert result.exit_code == 0, result.output
+    assert "red, blue" in result.output
+
+
 def test_table_lists_required_first_and_truncates_allowed_values():
     mc = _client_with_pages({"startAt": 0, "total": 3, "isLast": True, "values": [_RESPONSIBLE, _PRIORITY, _SUMMARY]})
     result, _ = run_cli(_fields_mod, ["meta", "PROJ", "Domain"], mc)
