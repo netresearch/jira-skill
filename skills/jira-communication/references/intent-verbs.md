@@ -24,6 +24,8 @@ jira-issue.py qa-fail KEY   # description + reviewer rejection + implementer sco
 jira-issue.py act     KEY   # meta + available transitions
 ```
 
+`work` opens with a `!! CLAIM KEY` notice on stderr when the ticket is not assigned to you or its status category is To Do/Done or its name is in `qa_status_names` or `resolved_status_names` (Reopened has category To Do); `--json` carries it as `claim: {needed, reasons, commands}`. `working_status_names` plays no part: it lists where rejected work lands and includes Open and Backlog.
+
 `jira-issue.py get KEY` is unchanged — it still prints the full issue (description, attachments, links) by default. Use `--fields summary,status,assignee,…` for a meta-only lookup.
 
 ## QA-handover heuristic (`qa` verb)

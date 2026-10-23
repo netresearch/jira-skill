@@ -31,6 +31,8 @@ On Jira URL or issue key (PROJ-123), pick by **intent** — each is one call:
 
 Auth issues → `jira-setup.py`. **Anti-pattern:** `get` + `comment list` — use the matching verb.
 
+**`work` flags a ticket you have not taken:** when it is not assigned to you, or its status says nobody works on it (To Do category, a review status such as QA, or resolved), a `!! CLAIM KEY` notice on stderr (`claim` in `--json`) lists the commands — `jira-issue.py update KEY --assignee me`, then the start or reopen transition from `jira-transition.py list KEY`. Run them before your first comment, measurement or edit. `jira-comment.py add` warns once before posting when the ticket is neither yours nor in a working status; it still posts.
+
 ## Scripts
 
 Under `${CLAUDE_SKILL_DIR}/scripts/{core,workflow,utility}/`.
@@ -57,7 +59,7 @@ After a successful write, these commands print the ticket's state to stderr: `ji
 
 With `--json` the same facts arrive as a `ticket_state` field in the output object, beside the keys it already had: `key`, `status`, `status_category`, `issuetype`, `resolution`, `assignee`, `assignee_is_you`, `time_spent_seconds`, `original_estimate_seconds`, `remaining_estimate_seconds`, `labels` and `hints`, the last being the `(!)` lines as strings. **Read `ticket_state.hints` as you would the `(!)` lines.** `jira-attachment.py add --json` prints a list, so its state goes to stderr as text instead. `--quiet` prints no state.
 
-The state costs one extra read per write and never fails the command: a lookup error prints one line, or becomes `"ticket_state": {"key": …, "error": "<type>"}` in JSON. `JIRA_TICKET_STATE=0` turns it off everywhere. `logged` is Jira's own time tracking: time booked elsewhere shows only once it is synced into a Jira worklog.
+The state costs one extra read per write (`jira-comment.py add` reads once more before posting, for its claim warning) and never fails the command: a lookup error prints one line, or becomes `"ticket_state": {"key": …, "error": "<type>"}` in JSON. `JIRA_TICKET_STATE=0` turns it off everywhere, together with the warning `jira-comment.py add` prints before posting; the `work` claim notice stays. `logged` is Jira's own time tracking: time booked elsewhere shows only once it is synced into a Jira worklog.
 
 ## Posting wiki markup rewrites and checks it first
 
