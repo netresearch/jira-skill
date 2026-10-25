@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/scripts/detect_jira_issues.py || true",
+            "command": "uv run \"${CLAUDE_PLUGIN_ROOT}/scripts/detect_jira_issues.py\" || true",
             "timeout": 3
           }
         ]
