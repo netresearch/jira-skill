@@ -1,6 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 
 """
 UserPromptSubmit hook to detect Jira issue keys in user messages.
