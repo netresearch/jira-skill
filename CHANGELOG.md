@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `JIRA_CLOUD=true` now routes JQL search and user lookup as Cloud when `JIRA_URL` is not an `*.atlassian.net` host, such as a Cloud site behind a reverse proxy or a custom domain. `get_jira_client` already passed the flag to the library, but `LazyJiraClient.jql()` and `is_cloud_client()` decided from the URL alone, so `jira-search.py`, `jira-qa-gather.py` and `jira-worklog-query.py` hit the removed `/rest/api/2/search` and failed with "The requested API has been removed" (CHANGE-2046). `is_cloud_client()` now returns the client's boolean `cloud` attribute when it has one, which `JIRA_CLOUD=false` also overrides for an `atlassian.net` URL, and falls back to the URL otherwise; `jql()` uses it. New tests `test_cloud_flag_overrides_non_cloud_url`, `test_cloud_flag_false_overrides_cloud_url` and `test_find_users_honours_cloud_flag_over_url`.
+- A `JIRA_CLOUD` value other than `true` or `false` (case-insensitive), such as `1` or an empty string, now falls back to URL detection instead of forcing Server/DC. With `jql()` trusting the flag, `JIRA_CLOUD=1` on an `atlassian.net` URL would otherwise hit the removed search endpoint. New test `TestJiraClientCloudFlag`.
+
 ## [4.3.0] - 2026-10-23
 
 ### Added

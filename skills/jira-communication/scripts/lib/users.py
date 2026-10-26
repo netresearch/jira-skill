@@ -29,8 +29,15 @@ _LITERAL_BLOCK_RE = re.compile(r"\{(code|noformat)(?::[^}\n]*)?\}.*?\{\1\}", re.
 
 
 def is_cloud_client(client) -> bool:
-    """Mock-friendly Cloud detection via the URL (repo convention — the
-    ``cloud`` attribute is easy to omit in mocks, see LazyJiraClient.jql)."""
+    """Whether ``client`` talks to Jira Cloud.
+
+    A boolean ``cloud`` attribute wins: ``get_jira_client`` sets it from
+    ``JIRA_CLOUD``, so a Cloud site behind a proxy or custom domain is routed
+    as Cloud. Without one (a bare mock), the URL decides.
+    """
+    cloud = getattr(client, "cloud", None)
+    if isinstance(cloud, bool):
+        return cloud
     url = getattr(client, "url", "")
     return is_cloud_url(url) if isinstance(url, str) else False
 
