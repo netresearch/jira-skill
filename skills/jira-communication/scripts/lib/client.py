@@ -498,9 +498,7 @@ class LazyJiraClient:
         # supports Cloud /rest/api/3/search/jql natively (tracked upstream as
         # https://github.com/atlassian-api/atlassian-python-api/issues/1631).
         client = self._ensure_client()
-        # URL-based Cloud detection is more robust than the library's ``cloud``
-        # attribute, which has shifted across versions and is easy to omit in mocks.
-        if not is_cloud_url(getattr(client, "url", "") or ""):
+        if not is_cloud_client(client):
             return client.jql(jql, fields=fields, start=start, limit=limit, **kwargs)
         return self._jql_cloud(client, jql, start, limit, fields, expand=kwargs.get("expand"))
 
@@ -619,8 +617,10 @@ def get_jira_client(
     auth_mode = get_auth_mode(config)
 
     # Determine if Cloud or Server/DC
-    is_cloud = config.get("JIRA_CLOUD", "").lower() == "true"
-    if "JIRA_CLOUD" not in config:
+    cloud_setting = config.get("JIRA_CLOUD", "").strip().lower()
+    if cloud_setting in ("true", "false"):
+        is_cloud = cloud_setting == "true"
+    else:
         is_cloud = is_cloud_url(jira_url)
 
     try:

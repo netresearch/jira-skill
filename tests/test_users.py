@@ -70,6 +70,13 @@ def test_find_users_uses_username_on_server_and_query_on_cloud():
     assert mc.user_find_by_user_string.call_args.kwargs.get("query") == "jane"
 
 
+def test_find_users_honours_cloud_flag_over_url():
+    mc = make_mock_client(url="http://proxy.internal:4723/jira", cloud=True)
+    mc.user_find_by_user_string = mock.Mock(return_value=[CLOUD_JANE])
+    assert find_users(mc, "jane") == [CLOUD_JANE]
+    assert mc.user_find_by_user_string.call_args.kwargs.get("query") == "jane"
+
+
 # ─── verify_mentions ─────────────────────────────────────────────────────────
 
 

@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 # Add scripts to path for lib imports
 _test_dir = Path(__file__).parent
 _scripts_path = _test_dir.parent / "skills" / "jira-communication" / "scripts"
@@ -177,8 +179,8 @@ class TestLazyJiraClientJqlOverride:
     def _make_lazy(self, *, cloud: bool, pages: list[dict] | None = None):
         """Build a LazyJiraClient backed by a mock client.
 
-        Cloud detection in the override uses ``is_cloud_url(client.url)``,
-        so we set ``client.url`` rather than ``client.cloud``.
+        A bare mock has no boolean ``cloud`` attribute, so the override falls
+        back to ``is_cloud_url(client.url)``; we set ``client.url`` only.
 
         If *pages* is provided it becomes the ``client.get`` side-effect, one
         response per cursor request. Otherwise ``client.get`` returns a single
@@ -218,6 +220,30 @@ class TestLazyJiraClientJqlOverride:
                 params={"jql": "project = FOO", "maxResults": 25, "fields": "summary"},
             )
             mock_client.jql.assert_not_called()
+        finally:
+            patcher.stop()
+
+    def test_cloud_flag_overrides_non_cloud_url(self):
+        """cloud=True (JIRA_CLOUD=true) routes a proxied Cloud site to the new endpoint."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=False)
+        mock_client.url = "http://proxy.internal:4723/jira"
+        mock_client.cloud = True
+        try:
+            lazy.jql("project = FOO", limit=25)
+            mock_client.get.assert_called_once()
+            assert mock_client.get.call_args.args[0] == "rest/api/3/search/jql"
+            mock_client.jql.assert_not_called()
+        finally:
+            patcher.stop()
+
+    def test_cloud_flag_false_overrides_cloud_url(self):
+        """cloud=False (JIRA_CLOUD=false) delegates to the library even on an atlassian.net URL."""
+        lazy, mock_client, patcher = self._make_lazy(cloud=True)
+        mock_client.cloud = False
+        try:
+            lazy.jql("project = FOO", limit=25)
+            mock_client.jql.assert_called_once()
+            mock_client.get.assert_not_called()
         finally:
             patcher.stop()
 
@@ -411,6 +437,34 @@ class TestJiraClientTimeout:
             # Verify timeout was passed
             call_kwargs = MockJira.call_args[1]
             assert call_kwargs.get("timeout") == JIRA_TIMEOUT
+
+
+class TestJiraClientCloudFlag:
+    """get_jira_client() honours JIRA_CLOUD=true/false and falls back to the URL otherwise."""
+
+    @staticmethod
+    def _cloud_kwarg(config):
+        with mock.patch("lib.client.load_config", return_value=config), mock.patch("lib.client.Jira") as MockJira:
+            MockJira.return_value._session = mock.Mock()
+            get_jira_client()
+            return MockJira.call_args[1]["cloud"]
+
+    @pytest.mark.parametrize(
+        ("url", "setting", "expected"),
+        [
+            ("https://proxy.example.com/jira", "true", True),
+            ("https://example.atlassian.net", "FALSE", False),
+            ("https://example.atlassian.net", None, True),
+            ("https://example.atlassian.net", "", True),
+            ("https://example.atlassian.net", "1", True),
+            ("https://jira.example.com", "yes", False),
+        ],
+    )
+    def test_cloud_setting(self, url, setting, expected):
+        config = {"JIRA_URL": url, "JIRA_USERNAME": "u@example.com", "JIRA_API_TOKEN": "t"}
+        if setting is not None:
+            config["JIRA_CLOUD"] = setting
+        assert self._cloud_kwarg(config) is expected
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
