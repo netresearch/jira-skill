@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.1] - 2026-10-29
+
 ### Fixed
 
 - `JIRA_CLOUD=true` now routes JQL search and user lookup as Cloud when `JIRA_URL` is not an `*.atlassian.net` host, such as a Cloud site behind a reverse proxy or a custom domain. `get_jira_client` already passed the flag to the library, but `LazyJiraClient.jql()` and `is_cloud_client()` decided from the URL alone, so `jira-search.py`, `jira-qa-gather.py` and `jira-worklog-query.py` hit the removed `/rest/api/2/search` and failed with "The requested API has been removed" (CHANGE-2046). `is_cloud_client()` now returns the client's boolean `cloud` attribute when it has one, which `JIRA_CLOUD=false` also overrides for an `atlassian.net` URL, and falls back to the URL otherwise; `jql()` uses it. New tests `test_cloud_flag_overrides_non_cloud_url`, `test_cloud_flag_false_overrides_cloud_url` and `test_find_users_honours_cloud_flag_over_url`.
@@ -990,7 +992,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.3.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.3.1...HEAD
+[4.3.1]: https://github.com/netresearch/jira-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/jira-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/jira-skill/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/netresearch/jira-skill/compare/v4.0.0...v4.1.0
