@@ -248,6 +248,10 @@ def migrate_env_to_profile() -> None:
         profile_data["username"] = config.get("JIRA_USERNAME", "")
         profile_data["api_token"] = config.get("JIRA_API_TOKEN", "")
 
+    cloud_setting = config.get("JIRA_CLOUD", "").strip().lower()
+    if cloud_setting in ("true", "false"):
+        profile_data["cloud"] = cloud_setting == "true"
+
     profile_data["projects"] = []
 
     write_profile("default", profile_data)
@@ -394,6 +398,12 @@ def main(
 
     config = {"JIRA_URL": url}
 
+    # Save the chosen type. Without it the scripts fall back to the URL, which
+    # is wrong for a Cloud site behind a proxy or a custom domain, and an
+    # exported JIRA_CLOUD would fill the missing key in the env file.
+    is_cloud = jira_type == "cloud"
+    config["JIRA_CLOUD"] = "true" if is_cloud else "false"
+
     if jira_type == "cloud":
         click.echo("Jira Cloud authentication requires:")
         click.echo("  1. Your Atlassian account email")
@@ -487,6 +497,8 @@ def main(
             else:
                 profile_data["auth"] = "pat"
                 profile_data["token"] = config["JIRA_PERSONAL_TOKEN"]
+
+            profile_data["cloud"] = is_cloud
 
             if project_list:
                 profile_data["projects"] = project_list

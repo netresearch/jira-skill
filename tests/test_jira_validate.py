@@ -349,3 +349,37 @@ class TestCheckEnvironmentVerboseOutput:
         assert config is not None
         captured = capsys.readouterr()
         assert "Environment file" in captured.out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: reported server_type honours JIRA_CLOUD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestServerTypeHonoursCloudFlag:
+    """--json reports the deployment type the scripts will actually use."""
+
+    @staticmethod
+    def _server_type(config):
+        from click.testing import CliRunner
+
+        with (
+            mock.patch.object(jira_validate, "check_runtime", return_value=(True, {})),
+            mock.patch.object(jira_validate, "check_environment", return_value=config),
+            mock.patch.object(jira_validate, "check_connectivity", return_value=(True, {"user": "Jane"})),
+        ):
+            result = CliRunner().invoke(jira_validate.main, ["--json"])
+        return json.loads(result.output)["server_type"]
+
+    def test_cloud_flag_reports_cloud_for_proxy_url(self):
+        config = {
+            "JIRA_URL": "http://proxy.internal/jira",
+            "JIRA_CLOUD": "true",
+            "JIRA_USERNAME": "u",
+            "JIRA_API_TOKEN": "t",
+        }
+        assert self._server_type(config) == "cloud"
+
+    def test_cloud_flag_false_reports_server_for_atlassian_url(self):
+        config = {"JIRA_URL": "https://acme.atlassian.net", "JIRA_CLOUD": "false", "JIRA_PERSONAL_TOKEN": "t"}
+        assert self._server_type(config) == "server"

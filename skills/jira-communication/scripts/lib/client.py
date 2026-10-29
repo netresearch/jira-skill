@@ -11,7 +11,7 @@ from requests import Response
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .config import get_auth_mode, is_cloud_url, load_config, validate_config
+from .config import get_auth_mode, load_config, resolve_is_cloud, validate_config
 from .errors import AuthenticationError, CaptchaError, _sanitize_error  # noqa: F401  (re-exported)
 from .users import find_users, is_cloud_client
 
@@ -617,11 +617,7 @@ def get_jira_client(
     auth_mode = get_auth_mode(config)
 
     # Determine if Cloud or Server/DC
-    cloud_setting = config.get("JIRA_CLOUD", "").strip().lower()
-    if cloud_setting in ("true", "false"):
-        is_cloud = cloud_setting == "true"
-    else:
-        is_cloud = is_cloud_url(jira_url)
+    is_cloud = resolve_is_cloud(config)
 
     try:
         if auth_mode == "pat":

@@ -283,6 +283,25 @@ def is_cloud_url(url: str) -> bool:
     return netloc == "atlassian.net" or netloc.endswith(".atlassian.net")
 
 
+def resolve_is_cloud(config: dict) -> bool:
+    """Whether ``config`` describes a Jira Cloud site.
+
+    ``JIRA_CLOUD`` set to ``true`` or ``false`` (case-insensitive) wins, so a
+    Cloud site behind a proxy or custom domain can be declared as Cloud. Any
+    other value, or no value, falls back to ``is_cloud_url(JIRA_URL)``.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        True if the site is to be treated as Jira Cloud
+    """
+    cloud_setting = str(config.get("JIRA_CLOUD", "")).strip().lower()
+    if cloud_setting in ("true", "false"):
+        return cloud_setting == "true"
+    return is_cloud_url(config.get("JIRA_URL", "") or "")
+
+
 def profile_to_config(prof: dict) -> dict:
     """Convert a profile dict to the env-style config dict used by the client.
 
@@ -310,6 +329,11 @@ def profile_to_config(prof: dict) -> dict:
         if not prof.get("token"):
             raise ValueError("Profile is missing required 'token' field for PAT auth")
         config["JIRA_PERSONAL_TOKEN"] = prof["token"]
+
+    if "cloud" in prof:
+        if not isinstance(prof["cloud"], bool):
+            raise ValueError("Profile field 'cloud' must be true or false")
+        config["JIRA_CLOUD"] = "true" if prof["cloud"] else "false"
 
     return config
 

@@ -62,6 +62,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --profile server query "p
 | `token` | If `auth: "pat"` | Personal access token (Server/DC) |
 | `username` | If `auth: "cloud"` | Atlassian account email |
 | `api_token` | If `auth: "cloud"` | Atlassian API token |
+| `cloud` | No | `true` or `false`; sets the deployment type, like `JIRA_CLOUD`. Needed for a Cloud site whose `url` is not `*.atlassian.net` (a reverse proxy or a custom domain). Without it, the type comes from the URL |
 | `projects` | No | List of project prefixes for auto-resolution from issue keys |
 
 ### Top-Level Keys
