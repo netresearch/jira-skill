@@ -354,12 +354,22 @@ class TestSetupSavesCloudOverride:
         assert result.exit_code == 0, result.output
         assert "JIRA_CLOUD=false" in env_file.read_text().splitlines()
 
-    def test_env_file_has_no_jira_cloud_when_url_detection_agrees(self, tmp_path):
+    def test_env_file_gets_jira_cloud_when_url_detection_agrees(self, tmp_path):
         env_file = tmp_path / "env.jira"
         args = ["--url", "https://acme.atlassian.net", "--output", str(env_file)]
         result = self._run(args, "y\nu@example.com\ntoken\ny\n", tmp_path / "profiles.json")
         assert result.exit_code == 0, result.output
-        assert "JIRA_CLOUD" not in env_file.read_text()
+        assert "JIRA_CLOUD=true" in env_file.read_text().splitlines()
+
+    def test_saved_type_beats_an_exported_jira_cloud(self, tmp_path, monkeypatch):
+        """load_env fills a key missing from the file from os.environ, so the
+        chosen type must be written even when the URL already suggests it."""
+        monkeypatch.setenv("JIRA_CLOUD", "true")
+        env_file = tmp_path / "env.jira"
+        args = ["--url", "https://jira.example.com", "--type", "server", "--output", str(env_file)]
+        result = self._run(args, "pat-token\ny\n", tmp_path / "profiles.json")
+        assert result.exit_code == 0, result.output
+        assert jira_setup.load_env(str(env_file))["JIRA_CLOUD"] == "false"
 
     def test_profile_gets_cloud_true_for_proxied_cloud(self, tmp_path):
         profiles_file = tmp_path / "profiles.json"

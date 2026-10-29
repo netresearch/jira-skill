@@ -398,11 +398,11 @@ def main(
 
     config = {"JIRA_URL": url}
 
-    # A type that differs from URL detection (a Cloud site behind a proxy or a
-    # custom domain) must be saved, or the scripts fall back to the URL.
-    cloud_override = None if jira_type == detect_jira_type(url) else jira_type == "cloud"
-    if cloud_override is not None:
-        config["JIRA_CLOUD"] = "true" if cloud_override else "false"
+    # Save the chosen type. Without it the scripts fall back to the URL, which
+    # is wrong for a Cloud site behind a proxy or a custom domain, and an
+    # exported JIRA_CLOUD would fill the missing key in the env file.
+    is_cloud = jira_type == "cloud"
+    config["JIRA_CLOUD"] = "true" if is_cloud else "false"
 
     if jira_type == "cloud":
         click.echo("Jira Cloud authentication requires:")
@@ -498,8 +498,7 @@ def main(
                 profile_data["auth"] = "pat"
                 profile_data["token"] = config["JIRA_PERSONAL_TOKEN"]
 
-            if cloud_override is not None:
-                profile_data["cloud"] = cloud_override
+            profile_data["cloud"] = is_cloud
 
             if project_list:
                 profile_data["projects"] = project_list

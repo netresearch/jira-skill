@@ -237,7 +237,7 @@ Scripts auto-detect auth mode:
 - If `JIRA_USERNAME` + `JIRA_API_TOKEN` set → Cloud basic auth
 - URL containing `.atlassian.net` → Cloud mode
 
-Override with `JIRA_CLOUD=true` or `JIRA_CLOUD=false`, or with `"cloud": true` / `"cloud": false` in a profile. A `JIRA_CLOUD` value other than `true` or `false` is ignored, and the URL decides. A profile `cloud` value that is not a JSON boolean, such as `"true"`, is a configuration error. A Cloud site behind a reverse proxy or a custom domain needs the override. `jira-setup.py` writes it when the type you choose differs from the one the URL suggests.
+Override with `JIRA_CLOUD=true` or `JIRA_CLOUD=false`, or with `"cloud": true` / `"cloud": false` in a profile. A `JIRA_CLOUD` value other than `true` or `false` is ignored, and the URL decides. A profile `cloud` value that is not a JSON boolean, such as `"true"`, is a configuration error. A Cloud site behind a reverse proxy or a custom domain needs the override. `jira-setup.py` always writes the type you choose.
 
 ## `{task}` inline checkboxes CAN be ticked via API — use the tasklist endpoint
 

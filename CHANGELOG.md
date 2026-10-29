@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `JIRA_CLOUD` value other than `true` or `false` (case-insensitive), such as `1` or an empty string, now falls back to URL detection instead of forcing Server/DC. With `jql()` trusting the flag, `JIRA_CLOUD=1` on an `atlassian.net` URL would otherwise hit the removed search endpoint. New test `TestJiraClientCloudFlag`.
 - `jira-validate.py --json` reports `server_type` from `JIRA_CLOUD` as well as the URL, and the wiki-render preflight (`lib/preview.py`) skips a Cloud site declared by `JIRA_CLOUD=true` instead of calling the Server/DC-only render endpoint. Both decided from the URL alone. All callers share the new `resolve_is_cloud()` in `lib/config.py`.
 - A profile can declare its deployment type with `"cloud": true` or `"cloud": false`, which sets `JIRA_CLOUD`. Profiles had no way to do this, so a Cloud site behind a proxy configured as a profile was always routed as Server/DC. A value other than a boolean is rejected.
-- `jira-setup.py` saves the chosen type when it differs from what the URL suggests: `JIRA_CLOUD` in the env file, `cloud` in the profile. Before, a Cloud site behind a proxy set up as Cloud was saved without the flag, and every script then treated it as Server/DC. `--migrate` carries `JIRA_CLOUD` into the profile.
+- `jira-setup.py` saves the chosen type: `JIRA_CLOUD` in the env file, `cloud` in the profile. Before, a Cloud site behind a proxy set up as Cloud was saved without the flag, and every script then treated it as Server/DC. Writing the type also when the URL suggests it keeps an exported `JIRA_CLOUD` from filling the missing key in the env file. `--migrate` carries `JIRA_CLOUD` into the profile.
 
 ## [4.3.0] - 2026-10-23
 
