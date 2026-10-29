@@ -248,6 +248,10 @@ def migrate_env_to_profile() -> None:
         profile_data["username"] = config.get("JIRA_USERNAME", "")
         profile_data["api_token"] = config.get("JIRA_API_TOKEN", "")
 
+    cloud_setting = config.get("JIRA_CLOUD", "").strip().lower()
+    if cloud_setting in ("true", "false"):
+        profile_data["cloud"] = cloud_setting == "true"
+
     profile_data["projects"] = []
 
     write_profile("default", profile_data)
@@ -394,6 +398,12 @@ def main(
 
     config = {"JIRA_URL": url}
 
+    # A type that differs from URL detection (a Cloud site behind a proxy or a
+    # custom domain) must be saved, or the scripts fall back to the URL.
+    cloud_override = None if jira_type == detect_jira_type(url) else jira_type == "cloud"
+    if cloud_override is not None:
+        config["JIRA_CLOUD"] = "true" if cloud_override else "false"
+
     if jira_type == "cloud":
         click.echo("Jira Cloud authentication requires:")
         click.echo("  1. Your Atlassian account email")
@@ -487,6 +497,9 @@ def main(
             else:
                 profile_data["auth"] = "pat"
                 profile_data["token"] = config["JIRA_PERSONAL_TOKEN"]
+
+            if cloud_override is not None:
+                profile_data["cloud"] = cloud_override
 
             if project_list:
                 profile_data["projects"] = project_list

@@ -319,3 +319,69 @@ class TestValidateCredentialsSanitization:
             )
             assert not ok
             assert "superSecret123" not in msg
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: a type that differs from URL detection is saved
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSetupSavesCloudOverride:
+    """A Cloud site behind a proxy or custom domain keeps its type after setup."""
+
+    @staticmethod
+    def _run(args, user_input, profiles_file):
+        from click.testing import CliRunner
+
+        with (
+            mock.patch.object(jira_setup, "validate_url", return_value=(True, "reachable")),
+            mock.patch.object(jira_setup, "validate_credentials", return_value=(True, "Jane")),
+            mock.patch.object(jira_setup, "PROFILES_FILE", profiles_file),
+        ):
+            return CliRunner().invoke(jira_setup.main, args, input=user_input)
+
+    def test_env_file_gets_jira_cloud_true_for_proxied_cloud(self, tmp_path):
+        env_file = tmp_path / "env.jira"
+        args = ["--url", "https://proxy.example.com/jira", "--type", "cloud", "--output", str(env_file)]
+        result = self._run(args, "u@example.com\ntoken\ny\n", tmp_path / "profiles.json")
+        assert result.exit_code == 0, result.output
+        assert "JIRA_CLOUD=true" in env_file.read_text().splitlines()
+
+    def test_env_file_gets_jira_cloud_false_for_server_on_atlassian_url(self, tmp_path):
+        env_file = tmp_path / "env.jira"
+        args = ["--url", "https://acme.atlassian.net", "--type", "server", "--output", str(env_file)]
+        result = self._run(args, "pat-token\ny\n", tmp_path / "profiles.json")
+        assert result.exit_code == 0, result.output
+        assert "JIRA_CLOUD=false" in env_file.read_text().splitlines()
+
+    def test_env_file_has_no_jira_cloud_when_url_detection_agrees(self, tmp_path):
+        env_file = tmp_path / "env.jira"
+        args = ["--url", "https://acme.atlassian.net", "--output", str(env_file)]
+        result = self._run(args, "y\nu@example.com\ntoken\ny\n", tmp_path / "profiles.json")
+        assert result.exit_code == 0, result.output
+        assert "JIRA_CLOUD" not in env_file.read_text()
+
+    def test_profile_gets_cloud_true_for_proxied_cloud(self, tmp_path):
+        profiles_file = tmp_path / "profiles.json"
+        args = ["--url", "https://proxy.example.com/jira", "--type", "cloud", "--profile", "p", "--projects", "X"]
+        result = self._run(args, "u@example.com\ntoken\ny\n", profiles_file)
+        assert result.exit_code == 0, result.output
+        assert json.loads(profiles_file.read_text())["profiles"]["p"]["cloud"] is True
+
+    def test_migration_carries_jira_cloud_into_the_profile(self, tmp_path):
+        env_file = tmp_path / "env.jira"
+        env_file.write_text("x")
+        profiles_file = tmp_path / "profiles.json"
+        legacy = {
+            "JIRA_URL": "https://proxy.example.com/jira",
+            "JIRA_USERNAME": "u",
+            "JIRA_API_TOKEN": "t",
+            "JIRA_CLOUD": "true",
+        }
+        with (
+            mock.patch.object(jira_setup, "DEFAULT_ENV_FILE", env_file),
+            mock.patch.object(jira_setup, "PROFILES_FILE", profiles_file),
+            mock.patch.object(jira_setup, "load_env", return_value=legacy),
+        ):
+            jira_setup.migrate_env_to_profile()
+        assert json.loads(profiles_file.read_text())["profiles"]["default"]["cloud"] is True

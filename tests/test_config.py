@@ -21,6 +21,7 @@ from lib.config import (
     load_env,
     load_profiles,
     profile_to_config,
+    resolve_is_cloud,
     resolve_profile,
     validate_config,
 )
@@ -290,6 +291,49 @@ class TestProfileToConfig:
         config = profile_to_config(prof)
         errors = validate_config(config)
         assert errors == []
+
+    @pytest.mark.parametrize(("cloud", "expected"), [(True, "true"), (False, "false")])
+    def test_cloud_field_becomes_jira_cloud(self, cloud, expected):
+        prof = {"url": "http://proxy.internal/jira", "auth": "cloud", "username": "u", "api_token": "t", "cloud": cloud}
+        assert profile_to_config(prof)["JIRA_CLOUD"] == expected
+
+    def test_no_cloud_field_sets_no_jira_cloud(self):
+        prof = {"url": "https://jira.example.com", "auth": "pat", "token": "t"}
+        assert "JIRA_CLOUD" not in profile_to_config(prof)
+
+    def test_non_bool_cloud_field_raises_value_error(self):
+        prof = {"url": "https://jira.example.com", "auth": "pat", "token": "t", "cloud": "yes"}
+        with pytest.raises(ValueError, match="'cloud' must be true or false"):
+            profile_to_config(prof)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: resolve_is_cloud()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestResolveIsCloud:
+    @pytest.mark.parametrize(
+        ("url", "setting", "expected"),
+        [
+            ("http://proxy.internal/jira", "true", True),
+            ("https://acme.atlassian.net", "FALSE", False),
+            ("https://acme.atlassian.net", " true ", True),
+            ("https://acme.atlassian.net", None, True),
+            ("https://acme.atlassian.net", "", True),
+            ("https://acme.atlassian.net", "1", True),
+            ("https://jira.example.com", "yes", False),
+            ("https://jira.example.com", None, False),
+        ],
+    )
+    def test_setting_wins_only_when_true_or_false(self, url, setting, expected):
+        config = {"JIRA_URL": url}
+        if setting is not None:
+            config["JIRA_CLOUD"] = setting
+        assert resolve_is_cloud(config) is expected
+
+    def test_missing_url_is_not_cloud(self):
+        assert resolve_is_cloud({}) is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

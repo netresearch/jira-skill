@@ -33,10 +33,10 @@ from lib.config import (
     DEFAULT_ENV_FILE,
     PROFILES_FILE,
     get_auth_mode,
-    is_cloud_url,
     load_config,
     load_profiles,
     profile_to_config,
+    resolve_is_cloud,
     validate_config,
 )
 from lib.output import error, format_table, success, warning
@@ -365,7 +365,7 @@ def main(
     if profile:
         result["profile"] = profile
     result["url"] = config["JIRA_URL"]
-    result["server_type"] = "cloud" if is_cloud_url(config["JIRA_URL"]) else "server"
+    result["server_type"] = "cloud" if resolve_is_cloud(config) else "server"
     auth_mode = get_auth_mode(config)
     result["auth_mode"] = auth_mode
     if auth_mode == "cloud":

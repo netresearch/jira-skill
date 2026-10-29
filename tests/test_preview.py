@@ -212,6 +212,31 @@ class TestDegradesInsteadOfBlocking:
         verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
         assert not verdict.available and "Server/DC" in verdict.reason
 
+    def test_cloud_flag_skips_a_proxied_cloud_site(self, monkeypatch):
+        monkeypatch.setattr(
+            "lib.preview.load_config",
+            lambda **kwargs: {
+                "JIRA_URL": "http://proxy.internal/jira",
+                "JIRA_CLOUD": "true",
+                "JIRA_PERSONAL_TOKEN": "t",
+            },
+        )
+        verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
+        assert not verdict.available
+        assert "Server/DC" in verdict.reason
+
+    def test_cloud_flag_false_renders_on_an_atlassian_url(self, monkeypatch):
+        monkeypatch.setattr(
+            "lib.preview.load_config",
+            lambda **kwargs: {
+                "JIRA_URL": "https://acme.atlassian.net",
+                "JIRA_CLOUD": "false",
+                "JIRA_PERSONAL_TOKEN": "t",
+            },
+        )
+        verdict = preflight_render("x", session=FakeSession(FakeResponse(200, STRUCK_HTML)))
+        assert verdict.available
+
     def test_no_credentials(self, monkeypatch):
         monkeypatch.setattr("lib.preview.load_config", lambda **kwargs: {"JIRA_URL": "https://jira.example.de"})
         # No session passed, so the credential branch is the one under test.

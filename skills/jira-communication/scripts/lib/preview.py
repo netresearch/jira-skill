@@ -35,7 +35,7 @@ from typing import Any
 
 import requests
 
-from lib.config import is_cloud_url, load_config
+from lib.config import load_config, resolve_is_cloud
 
 RENDER_PATH = "/rest/api/1.0/render"
 DEFAULT_TIMEOUT = 10
@@ -175,7 +175,7 @@ def preflight_render(
     base_url = config.get("JIRA_URL")
     if not base_url:
         return RenderVerdict(False, [], "JIRA_URL is not configured")
-    if is_cloud_url(base_url):
+    if resolve_is_cloud(config):
         # Cloud has no api/1.0 wiki renderer and uses ADF anyway. Saying so
         # beats a 404 the caller has to interpret.
         return RenderVerdict(False, [], "preview endpoint is Server/DC only")
