@@ -4,6 +4,7 @@
 """Tests for detect_jira_issues.py hook script."""
 
 import json
+import os
 import sys
 from pathlib import Path
 from unittest import mock
@@ -343,3 +344,128 @@ class TestMainOutput:
         """A record is brought up to date through its fields, not only its prose."""
         captured = self._run_hook("Check WEB-1381", tmp_path, capsys)
         assert "--json get" in captured.out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests: main() stays silent for task notifications and names a key once per
+# session (#276)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# The prompt Claude Code passes to the hook when a background subagent reports
+# back, as captured from a real session (Claude Code 2.1.316). The hook input
+# carries no other field that marks the frame.
+SUBAGENT_REPORT = """<task-notification>
+<task-id>a1d923bd7b082510e</task-id>
+<tool-use-id>toolu_01RPbRuTfnu5ebqqPEamQACW</tool-use-id>
+<output-file>/tmp/claude-1000/project/session/tasks/a1d923bd7b082510e.output</output-file>
+<status>completed</status>
+<summary>Agent "Probe report" finished</summary>
+<result>Updated WEB-1381 and checked NRS-4167.</result>
+</task-notification>"""
+
+
+class TestSessionNoise:
+    """The hook speaks for prompts the user typed, once per key and session."""
+
+    SESSION = "01dd3f54-f309-4a12-88a6-ccffa583560d"
+
+    @pytest.fixture(autouse=True)
+    def _isolated_state(self, tmp_path):
+        self.state_dir = tmp_path / "state"
+        with (
+            mock.patch("detect_jira_issues.STATE_DIR", self.state_dir, create=True),
+            mock.patch("detect_jira_issues.PROFILES_FILE", tmp_path / "nonexistent" / "profiles.json"),
+        ):
+            yield
+
+    def _run(self, capsys, prompt, session_id=SESSION):
+        payload = {"hook_event_name": "UserPromptSubmit", "prompt": prompt}
+        if session_id is not None:
+            payload["session_id"] = session_id
+        with mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.read.return_value = json.dumps(payload)
+            from detect_jira_issues import main
+
+            main()
+        return capsys.readouterr().out
+
+    @staticmethod
+    def _detected(out):
+        for line in out.splitlines():
+            if line.startswith("Detected Jira issue reference(s): "):
+                return line.removeprefix("Detected Jira issue reference(s): ").split(", ")
+        return []
+
+    def test_subagent_report_stays_silent(self, capsys):
+        assert self._run(capsys, SUBAGENT_REPORT) == ""
+
+    def test_background_command_notification_stays_silent(self, capsys):
+        prompt = (
+            "<task-notification>\n<task-id>bjgrw5t5o</task-id>\n<status>completed</status>\n"
+            '<summary>Background command "echo WEB-1381" completed (exit code 0)</summary>\n'
+            "</task-notification>"
+        )
+        assert self._run(capsys, prompt) == ""
+
+    def test_key_from_report_still_fires_when_user_types_it(self, capsys):
+        """A silenced report must not mark its keys as already named."""
+        self._run(capsys, SUBAGENT_REPORT)
+        assert self._detected(self._run(capsys, "Look at WEB-1381")) == ["WEB-1381"]
+
+    def test_typed_key_fires_once_per_session(self, capsys):
+        assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+        assert self._run(capsys, "Did WEB-1381 work?") == ""
+
+    def test_new_key_fires_with_only_the_new_key(self, capsys):
+        self._run(capsys, "Fix WEB-1381")
+        assert self._detected(self._run(capsys, "WEB-1381 and NRS-4167")) == ["NRS-4167"]
+
+    def test_other_session_fires_again(self, capsys):
+        self._run(capsys, "Fix WEB-1381")
+        out = self._run(capsys, "Fix WEB-1381", session_id="9f0c2b8e-0000-4000-8000-000000000001")
+        assert self._detected(out) == ["WEB-1381"]
+
+    def test_without_session_id_fires_every_time(self, capsys):
+        assert self._detected(self._run(capsys, "Fix WEB-1381", session_id=None)) == ["WEB-1381"]
+        assert self._detected(self._run(capsys, "Fix WEB-1381", session_id=None)) == ["WEB-1381"]
+
+    @pytest.mark.parametrize("session_id", ["../escape", "a/b", "", 42])
+    def test_unusable_session_id_fires_every_time(self, capsys, session_id):
+        assert self._detected(self._run(capsys, "Fix WEB-1381", session_id=session_id)) == ["WEB-1381"]
+        assert self._detected(self._run(capsys, "Fix WEB-1381", session_id=session_id)) == ["WEB-1381"]
+        assert not self.state_dir.exists() or list(self.state_dir.iterdir()) == []
+
+    def test_corrupt_state_file_fails_open(self, capsys):
+        self.state_dir.mkdir(mode=0o700)
+        (self.state_dir / f"{self.SESSION}.json").write_text("{not json")
+        assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+
+    def test_unwritable_state_dir_fails_open(self, capsys, tmp_path):
+        blocker = tmp_path / "blocker"
+        blocker.write_text("a file where the parent directory should be")
+        with mock.patch("detect_jira_issues.STATE_DIR", blocker / "state", create=True):
+            assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+            assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+
+    @pytest.mark.skipif(not hasattr(os, "getuid"), reason="POSIX permissions")
+    def test_state_dir_open_to_others_is_not_used(self, capsys):
+        self.state_dir.mkdir(mode=0o700)
+        self.state_dir.chmod(0o777)
+        self._run(capsys, "Fix WEB-1381")
+        assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+        assert list(self.state_dir.iterdir()) == []
+
+    @pytest.mark.skipif(not hasattr(os, "getuid"), reason="POSIX permissions")
+    def test_symlinked_state_dir_is_not_used(self, capsys, tmp_path):
+        target = tmp_path / "elsewhere"
+        target.mkdir(mode=0o700)
+        self.state_dir.symlink_to(target)
+        self._run(capsys, "Fix WEB-1381")
+        assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+        assert list(target.iterdir()) == []
+
+    @pytest.mark.skipif(not hasattr(os, "getuid"), reason="POSIX permissions")
+    def test_state_dir_is_private(self, capsys):
+        self._run(capsys, "Fix WEB-1381")
+        assert self.state_dir.stat().st_mode & 0o777 == 0o700
+        assert [p.name for p in self.state_dir.iterdir()] == [f"{self.SESSION}.json"]
