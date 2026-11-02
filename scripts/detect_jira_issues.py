@@ -10,14 +10,55 @@
 UserPromptSubmit hook to detect Jira issue keys in user messages.
 Provides context about detected issues, suggests using the jira skill,
 and resolves Jira profiles when multi-profile support is configured.
+
+The hook stays silent for background-task reports (subagent results,
+finished background commands) and names each key at most once per
+session. Registered for SessionStart after compaction or /clear,
+it forgets the keys of that session, because the earlier hint is no
+longer in the model's context.
 """
 
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
+
+# Claude Code also runs UserPromptSubmit for the reports of background
+# subagents and the completions of background commands. Their hook input
+# carries the same fields as a typed prompt (session_id, cwd, prompt_id,
+# permission_mode, hook_event_name, prompt) and nothing that marks the
+# origin; the only signal is the wrapper the prompt text starts with.
+TASK_NOTIFICATION_TAG = "<task-notification>"
+
+# Windows has no getuid and reports no POSIX owner or mode bits.
+POSIX_OWNERSHIP = hasattr(os, "getuid")
+
+
+def _default_state_dir() -> Path | None:
+    """Return the per-user directory for the per-session key records.
+
+    POSIX: a 0700 directory in the temp dir, named after the uid; owner and
+    mode are checked before each use. Windows: the temp dir can be a shared
+    one (TEMP may point at %SYSTEMROOT%\\Temp) and mode bits say nothing, so
+    the state lives under %LOCALAPPDATA%, which belongs to the user profile;
+    without it there is no deduplication.
+    """
+    if POSIX_OWNERSHIP:
+        return Path(tempfile.gettempdir()) / f"jira-skill-hook-{os.getuid()}"
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        return None
+    return Path(local_app_data) / "jira-skill" / "hook-state"
+
+
+STATE_DIR = _default_state_dir()
+
+# Session ids are UUIDs; anything else is not used as a file name.
+SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 # Jira issue key pattern: PROJECT-123
 # Common project prefixes for Netresearch
@@ -157,6 +198,90 @@ def resolve_profile_suggestion(issue_keys: list[str], hosts: list[str]) -> str |
     return None
 
 
+def is_task_notification(prompt: str) -> bool:
+    """Return True for a background-task report Claude Code submits itself."""
+    return prompt.lstrip().startswith(TASK_NOTIFICATION_TAG)
+
+
+def _state_file(session_id: object) -> Path | None:
+    """Return the state file for a session, or None if it cannot be used safely.
+
+    Refuses a malformed session id and a state directory that is a symlink,
+    belongs to another user, or is open to group or others.
+    """
+    if STATE_DIR is None:
+        return None
+    if not isinstance(session_id, str) or not SESSION_ID_PATTERN.fullmatch(session_id):
+        return None
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = STATE_DIR.lstat()
+    if not stat.S_ISDIR(info.st_mode):
+        return None
+    # Windows reads every writable directory as 0o777; there the location
+    # under %LOCALAPPDATA% keeps the state per user (see _default_state_dir).
+    if POSIX_OWNERSHIP and (info.st_uid != os.getuid() or info.st_mode & 0o077):
+        return None
+    return STATE_DIR / f"{session_id}.json"
+
+
+def _read_seen(state_file: Path) -> set[str] | None:
+    """Return the keys recorded in a state file, or None if it is unreadable."""
+    try:
+        seen = json.loads(state_file.read_text())
+    except FileNotFoundError:
+        return set()
+    if not isinstance(seen, list):
+        return None
+    return {key for key in seen if isinstance(key, str)}
+
+
+def filter_unseen_keys(session_id: object, issue_keys: list[str]) -> list[str]:
+    """Return the keys not yet named in this session.
+
+    Fails open: without a usable session id or state file, every key counts
+    as unseen, which is the behaviour without deduplication.
+    """
+    try:
+        state_file = _state_file(session_id)
+        seen = _read_seen(state_file) if state_file else None
+    except Exception:
+        return issue_keys
+    if seen is None:
+        return issue_keys
+    return [key for key in issue_keys if key not in seen]
+
+
+def record_seen_keys(session_id: object, issue_keys: list[str]) -> None:
+    """Add keys to the session's record; any failure leaves it unchanged."""
+    try:
+        state_file = _state_file(session_id)
+        if state_file is None:
+            return
+        seen = _read_seen(state_file) or set()
+        # Write to a temporary file and rename it over the state file, so a
+        # concurrent reader never sees a partly written file.
+        fd, tmp_name = tempfile.mkstemp(dir=STATE_DIR, prefix=".tmp-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump(sorted(seen | set(issue_keys)), handle)
+            os.replace(tmp_name, state_file)
+        finally:
+            # After a successful replace the temporary name no longer exists.
+            Path(tmp_name).unlink(missing_ok=True)
+    except Exception:
+        return
+
+
+def forget_session(session_id: object) -> None:
+    """Drop the session's record, so its keys are named again."""
+    try:
+        state_file = _state_file(session_id)
+        if state_file is not None:
+            state_file.unlink(missing_ok=True)
+    except Exception:
+        return
+
+
 def main():
     try:
         input_data = sys.stdin.read()
@@ -167,18 +292,37 @@ def main():
         return
 
     # Parse user prompt
+    session_id = None
     try:
         data = json.loads(input_data)
         prompt = data.get("prompt", "") or data.get("content", "") or data.get("message", "")
+        session_id = data.get("session_id")
+        event = data.get("hook_event_name")
     except (json.JSONDecodeError, TypeError):
         prompt = input_data
+        event = None
+
+    # After compaction or /clear the earlier hint has left the
+    # model's context; forget the session's keys so they are named again.
+    if event == "SessionStart":
+        forget_session(session_id)
+        return
 
     if not prompt:
+        return
+
+    # A background subagent's report quotes keys the user did not type. Stay
+    # silent and leave the session state alone, so a key that only appeared
+    # in a report still fires once the user names it.
+    if is_task_notification(prompt):
         return
 
     # Extract issue keys and hosts
     issue_keys = extract_issue_keys(prompt)
     hosts = extract_jira_hosts(prompt)
+
+    if issue_keys:
+        issue_keys = filter_unseen_keys(session_id, issue_keys)
 
     if issue_keys:
         keys_str = ", ".join(issue_keys)
@@ -229,6 +373,9 @@ Use Jira wiki markup (not Markdown) for descriptions and comments.
 Bringing a record up to date means its fields, not only its prose — read them
 with --json get before deciding what was stale.
 </system-reminder>""")
+        # Record only after printing: a run killed before this point names the
+        # keys again next time instead of never.
+        record_seen_keys(session_id, issue_keys)
 
 
 if __name__ == "__main__":
