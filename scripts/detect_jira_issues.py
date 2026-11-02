@@ -12,8 +12,10 @@ Provides context about detected issues, suggests using the jira skill,
 and resolves Jira profiles when multi-profile support is configured.
 
 The hook stays silent for background-task reports (subagent results,
-finished background commands), and names each key at most once per session (see TASK_NOTIFICATION_TAG and
-filter_unseen_keys).
+finished background commands) and names each key at most once per
+session. Registered for SessionStart after compaction or /clear,
+it forgets the keys of that session, because the earlier hint is no
+longer in the model's context.
 """
 
 import json
@@ -33,11 +35,14 @@ from urllib.parse import urlparse
 TASK_NOTIFICATION_TAG = "<task-notification>"
 
 # Per-session record of the keys already named, one JSON file per session.
-# The directory is per user and created 0700; the OS clears it on reboot.
+# The directory is per user and created 0700 inside the system temp dir.
 STATE_DIR = Path(tempfile.gettempdir()) / f"jira-skill-hook-{os.getuid() if hasattr(os, 'getuid') else 'user'}"
 
+# Windows has no getuid and reports no POSIX owner or mode bits.
+POSIX_OWNERSHIP = hasattr(os, "getuid")
+
 # Session ids are UUIDs; anything else is not used as a file name.
-SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 # Jira issue key pattern: PROJECT-123
 # Common project prefixes for Netresearch
@@ -188,49 +193,75 @@ def _state_file(session_id: object) -> Path | None:
     Refuses a malformed session id and a state directory that is a symlink,
     belongs to another user, or is open to group or others.
     """
-    if not isinstance(session_id, str) or not SESSION_ID_PATTERN.match(session_id):
+    if not isinstance(session_id, str) or not SESSION_ID_PATTERN.fullmatch(session_id):
         return None
     STATE_DIR.mkdir(mode=0o700, exist_ok=True)
     info = STATE_DIR.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o077:
+    if not stat.S_ISDIR(info.st_mode):
         return None
-    if hasattr(os, "getuid") and info.st_uid != os.getuid():
+    # Windows reads every writable directory as 0o777 and its temp dir is
+    # per user, so owner and mode are checked on POSIX only.
+    if POSIX_OWNERSHIP and (info.st_uid != os.getuid() or info.st_mode & 0o077):
         return None
     return STATE_DIR / f"{session_id}.json"
 
 
+def _read_seen(state_file: Path) -> set[str] | None:
+    """Return the keys recorded in a state file, or None if it is unreadable."""
+    try:
+        seen = json.loads(state_file.read_text())
+    except FileNotFoundError:
+        return set()
+    if not isinstance(seen, list):
+        return None
+    return {key for key in seen if isinstance(key, str)}
+
+
 def filter_unseen_keys(session_id: object, issue_keys: list[str]) -> list[str]:
-    """Return the keys not yet named in this session and record them as named.
+    """Return the keys not yet named in this session.
 
     Fails open: without a usable session id or state file, every key counts
     as unseen, which is the behaviour without deduplication.
     """
     try:
         state_file = _state_file(session_id)
-        if state_file is None:
-            return issue_keys
-        try:
-            seen = json.loads(state_file.read_text())
-        except FileNotFoundError:
-            seen = []
-        if not isinstance(seen, list):
-            return issue_keys
-        seen_set = {key for key in seen if isinstance(key, str)}
-        unseen = [key for key in issue_keys if key not in seen_set]
-        if unseen:
-            # Write to a temporary file and rename it over the state file, so
-            # a concurrent reader never sees a partly written file.
-            fd, tmp_name = tempfile.mkstemp(dir=STATE_DIR, prefix=".tmp-", suffix=".json")
-            try:
-                with os.fdopen(fd, "w") as handle:
-                    json.dump(sorted(seen_set | set(unseen)), handle)
-                os.replace(tmp_name, state_file)
-            except BaseException:
-                Path(tmp_name).unlink(missing_ok=True)
-                raise
-        return unseen
+        seen = _read_seen(state_file) if state_file else None
     except Exception:
         return issue_keys
+    if seen is None:
+        return issue_keys
+    return [key for key in issue_keys if key not in seen]
+
+
+def record_seen_keys(session_id: object, issue_keys: list[str]) -> None:
+    """Add keys to the session's record; any failure leaves it unchanged."""
+    try:
+        state_file = _state_file(session_id)
+        if state_file is None:
+            return
+        seen = _read_seen(state_file) or set()
+        # Write to a temporary file and rename it over the state file, so a
+        # concurrent reader never sees a partly written file.
+        fd, tmp_name = tempfile.mkstemp(dir=STATE_DIR, prefix=".tmp-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump(sorted(seen | set(issue_keys)), handle)
+            os.replace(tmp_name, state_file)
+        except BaseException:
+            Path(tmp_name).unlink(missing_ok=True)
+            raise
+    except Exception:
+        return
+
+
+def forget_session(session_id: object) -> None:
+    """Drop the session's record, so its keys are named again."""
+    try:
+        state_file = _state_file(session_id)
+        if state_file is not None:
+            state_file.unlink(missing_ok=True)
+    except Exception:
+        return
 
 
 def main():
@@ -248,8 +279,16 @@ def main():
         data = json.loads(input_data)
         prompt = data.get("prompt", "") or data.get("content", "") or data.get("message", "")
         session_id = data.get("session_id")
+        event = data.get("hook_event_name")
     except (json.JSONDecodeError, TypeError):
         prompt = input_data
+        event = None
+
+    # After compaction or /clear the earlier hint has left the
+    # model's context; forget the session's keys so they are named again.
+    if event == "SessionStart":
+        forget_session(session_id)
+        return
 
     if not prompt:
         return
@@ -316,6 +355,9 @@ Use Jira wiki markup (not Markdown) for descriptions and comments.
 Bringing a record up to date means its fields, not only its prose — read them
 with --json get before deciding what was stale.
 </system-reminder>""")
+        # Record only after printing: a run killed before this point names the
+        # keys again next time instead of never.
+        record_seen_keys(session_id, issue_keys)
 
 
 if __name__ == "__main__":

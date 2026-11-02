@@ -11,6 +11,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --offline \"${CLAUDE_PLUGIN_ROOT}/scripts/detect_jira_issues.py\" || true",
+            "timeout": 3
+          }
+        ]
+      }
     ]
   }
 }

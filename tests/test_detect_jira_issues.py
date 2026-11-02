@@ -373,13 +373,13 @@ class TestSessionNoise:
     def _isolated_state(self, tmp_path):
         self.state_dir = tmp_path / "state"
         with (
-            mock.patch("detect_jira_issues.STATE_DIR", self.state_dir, create=True),
+            mock.patch("detect_jira_issues.STATE_DIR", self.state_dir),
             mock.patch("detect_jira_issues.PROFILES_FILE", tmp_path / "nonexistent" / "profiles.json"),
         ):
             yield
 
-    def _run(self, capsys, prompt, session_id=SESSION):
-        payload = {"hook_event_name": "UserPromptSubmit", "prompt": prompt}
+    def _run(self, capsys, prompt, session_id=SESSION, event="UserPromptSubmit"):
+        payload = {"hook_event_name": event, "prompt": prompt}
         if session_id is not None:
             payload["session_id"] = session_id
         with mock.patch("sys.stdin") as mock_stdin:
@@ -443,7 +443,7 @@ class TestSessionNoise:
     def test_unwritable_state_dir_fails_open(self, capsys, tmp_path):
         blocker = tmp_path / "blocker"
         blocker.write_text("a file where the parent directory should be")
-        with mock.patch("detect_jira_issues.STATE_DIR", blocker / "state", create=True):
+        with mock.patch("detect_jira_issues.STATE_DIR", blocker / "state"):
             assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
             assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
 
@@ -469,3 +469,49 @@ class TestSessionNoise:
         self._run(capsys, "Fix WEB-1381")
         assert self.state_dir.stat().st_mode & 0o777 == 0o700
         assert [p.name for p in self.state_dir.iterdir()] == [f"{self.SESSION}.json"]
+
+    def test_notification_after_leading_whitespace_stays_silent(self, capsys):
+        assert self._run(capsys, "\n  " + SUBAGENT_REPORT) == ""
+
+    def test_typed_prompt_quoting_the_tag_still_fires(self, capsys):
+        """Only a prompt that starts with the wrapper is a notification."""
+        out = self._run(capsys, "Why did <task-notification> mention WEB-1381?")
+        assert self._detected(out) == ["WEB-1381"]
+
+    @pytest.mark.parametrize("source", ["compact", "clear"])
+    def test_session_start_forgets_the_keys(self, capsys, source):
+        """After compaction the earlier hint is gone from the context."""
+        self._run(capsys, "Fix WEB-1381")
+        payload = {"hook_event_name": "SessionStart", "source": source, "session_id": self.SESSION}
+        with mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.read.return_value = json.dumps(payload)
+            from detect_jira_issues import main
+
+            main()
+        assert capsys.readouterr().out == ""
+        assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+
+    def test_session_start_leaves_other_sessions_alone(self, capsys):
+        self._run(capsys, "Fix WEB-1381")
+        self._run(capsys, "", session_id="9f0c2b8e-0000-4000-8000-000000000001", event="SessionStart")
+        assert self._run(capsys, "Fix WEB-1381") == ""
+
+    def test_session_id_with_trailing_newline_is_not_used(self, capsys):
+        session_id = self.SESSION + "\n"
+        assert self._detected(self._run(capsys, "Fix WEB-1381", session_id=session_id)) == ["WEB-1381"]
+        assert self._detected(self._run(capsys, "Fix WEB-1381", session_id=session_id)) == ["WEB-1381"]
+
+    def test_keys_are_recorded_only_after_the_hint_is_printed(self, capsys):
+        """A run that dies while printing must not mark the key as named."""
+        with mock.patch("builtins.print", side_effect=BrokenPipeError):
+            with pytest.raises(BrokenPipeError):
+                self._run(capsys, "Fix WEB-1381")
+        assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+
+    def test_windows_mode_bits_do_not_disable_dedup(self, capsys):
+        """Windows reads every writable directory as 0o777 and has no getuid."""
+        self.state_dir.mkdir()
+        self.state_dir.chmod(0o777)
+        with mock.patch("detect_jira_issues.POSIX_OWNERSHIP", False):
+            assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+            assert self._run(capsys, "Fix WEB-1381") == ""
