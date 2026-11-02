@@ -515,3 +515,38 @@ class TestSessionNoise:
         with mock.patch("detect_jira_issues.POSIX_OWNERSHIP", False):
             assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
             assert self._run(capsys, "Fix WEB-1381") == ""
+
+    def test_no_state_dir_fails_open(self, capsys):
+        with mock.patch("detect_jira_issues.STATE_DIR", None):
+            assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+            assert self._detected(self._run(capsys, "Fix WEB-1381")) == ["WEB-1381"]
+
+
+class TestDefaultStateDir:
+    """Where the per-session records live on each platform."""
+
+    def test_posix_uses_a_uid_named_temp_dir(self):
+        import detect_jira_issues
+
+        with (
+            mock.patch("detect_jira_issues.POSIX_OWNERSHIP", True),
+            mock.patch("os.getuid", return_value=4242, create=True),
+        ):
+            state_dir = detect_jira_issues._default_state_dir()
+        assert state_dir.name == "jira-skill-hook-4242"
+        assert state_dir.parent == Path(detect_jira_issues.tempfile.gettempdir())
+
+    def test_windows_uses_local_app_data_not_temp(self, tmp_path):
+        """%TEMP% can be shared on Windows; %LOCALAPPDATA% belongs to the profile."""
+        import detect_jira_issues
+
+        env = {"LOCALAPPDATA": str(tmp_path / "Local"), "TEMP": str(tmp_path / "SharedTemp")}
+        with mock.patch("detect_jira_issues.POSIX_OWNERSHIP", False), mock.patch.dict(os.environ, env):
+            state_dir = detect_jira_issues._default_state_dir()
+        assert state_dir == tmp_path / "Local" / "jira-skill" / "hook-state"
+
+    def test_windows_without_local_app_data_has_no_state_dir(self):
+        import detect_jira_issues
+
+        with mock.patch("detect_jira_issues.POSIX_OWNERSHIP", False), mock.patch.dict(os.environ, clear=True):
+            assert detect_jira_issues._default_state_dir() is None

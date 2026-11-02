@@ -34,12 +34,28 @@ from urllib.parse import urlparse
 # origin; the only signal is the wrapper the prompt text starts with.
 TASK_NOTIFICATION_TAG = "<task-notification>"
 
-# Per-session record of the keys already named, one JSON file per session.
-# The directory is per user and created 0700 inside the system temp dir.
-STATE_DIR = Path(tempfile.gettempdir()) / f"jira-skill-hook-{os.getuid() if hasattr(os, 'getuid') else 'user'}"
-
 # Windows has no getuid and reports no POSIX owner or mode bits.
 POSIX_OWNERSHIP = hasattr(os, "getuid")
+
+
+def _default_state_dir() -> Path | None:
+    """Return the per-user directory for the per-session key records.
+
+    POSIX: a 0700 directory in the temp dir, named after the uid; owner and
+    mode are checked before each use. Windows: the temp dir can be a shared
+    one (TEMP may point at %SYSTEMROOT%\\Temp) and mode bits say nothing, so
+    the state lives under %LOCALAPPDATA%, which belongs to the user profile;
+    without it there is no deduplication.
+    """
+    if POSIX_OWNERSHIP:
+        return Path(tempfile.gettempdir()) / f"jira-skill-hook-{os.getuid()}"
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        return None
+    return Path(local_app_data) / "jira-skill" / "hook-state"
+
+
+STATE_DIR = _default_state_dir()
 
 # Session ids are UUIDs; anything else is not used as a file name.
 SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
@@ -193,14 +209,16 @@ def _state_file(session_id: object) -> Path | None:
     Refuses a malformed session id and a state directory that is a symlink,
     belongs to another user, or is open to group or others.
     """
+    if STATE_DIR is None:
+        return None
     if not isinstance(session_id, str) or not SESSION_ID_PATTERN.fullmatch(session_id):
         return None
-    STATE_DIR.mkdir(mode=0o700, exist_ok=True)
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     info = STATE_DIR.lstat()
     if not stat.S_ISDIR(info.st_mode):
         return None
-    # Windows reads every writable directory as 0o777 and its temp dir is
-    # per user, so owner and mode are checked on POSIX only.
+    # Windows reads every writable directory as 0o777; there the location
+    # under %LOCALAPPDATA% keeps the state per user (see _default_state_dir).
     if POSIX_OWNERSHIP and (info.st_uid != os.getuid() or info.st_mode & 0o077):
         return None
     return STATE_DIR / f"{session_id}.json"
@@ -247,9 +265,9 @@ def record_seen_keys(session_id: object, issue_keys: list[str]) -> None:
             with os.fdopen(fd, "w") as handle:
                 json.dump(sorted(seen | set(issue_keys)), handle)
             os.replace(tmp_name, state_file)
-        except BaseException:
+        finally:
+            # After a successful replace the temporary name no longer exists.
             Path(tmp_name).unlink(missing_ok=True)
-            raise
     except Exception:
         return
 
