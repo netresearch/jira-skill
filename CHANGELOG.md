@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.2] - 2026-11-04
+
 ### Fixed
 
 - The Jira reminder hook stays silent for the reports of background subagents and finished background commands, which Claude Code passes to `UserPromptSubmit` as `<task-notification>` prompts; a typed prompt that quotes the tag still gets the reminder. For prompts the user types it names each issue key at most once per session instead of repeating the same hint on every prompt. The keys already named are kept per session in `<session_id>.json`, on POSIX in `<temp dir>/jira-skill-hook-<uid>/` (used only when it is a real directory owned by the user with mode `0700`), on Windows in `%LOCALAPPDATA%\jira-skill\hook-state\`; when any of these checks fails, the hook names the keys on every prompt as before. A new `SessionStart` hook (matcher `compact|clear`) in `hooks/hooks.json` deletes the session's record, so the keys are named again after `/compact` or `/clear`. `docs/SECURITY-ASSURANCE.md` describes the state file ([#317](https://github.com/netresearch/jira-skill/pull/317))
@@ -997,7 +999,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.3.1...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.3.2...HEAD
+[4.3.2]: https://github.com/netresearch/jira-skill/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/netresearch/jira-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/jira-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/jira-skill/compare/v4.1.0...v4.2.0
