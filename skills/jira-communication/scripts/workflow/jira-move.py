@@ -204,6 +204,22 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
 
         # Refuse a change the REST edit cannot carry out correctly (see "Workflow guard").
         statuses = _statuses_by_type(client, current_project)
+        # An issue that already runs another workflow than its type's (an earlier
+        # REST change) is not changed further: the transitions show it.
+        current_statuses = statuses.get(current_type)
+        stray = _foreign_statuses(client, issue_key, status, current_statuses) if current_statuses is not None else None
+        if stray:
+            error(
+                f"Refusing to change {issue_key}: it already runs another workflow than the one of "
+                f"{current_type} (it offers {', '.join(repr(s) for s in sorted(stray))}, which that "
+                "workflow does not have).",
+                suggestion=(
+                    "Jira's Move refuses such an issue while it sits in a status the scheme's workflow "
+                    "lacks. Walk its transitions to a status both workflows have, then use the Jira "
+                    "UI's 'Move' action, which migrates the workflow."
+                ),
+            )
+            sys.exit(1)
         mismatch = _workflow_mismatch(client, current_project, statuses, current_type, target_type, status)
         if mismatch:
             error(
@@ -282,11 +298,16 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                     "(transitions or statuses unreadable)."
                 )
             elif foreign:
-                rollback = client._session.put(
-                    url, json={"fields": {"issuetype": {"name": current_type}}}, timeout=JIRA_TIMEOUT
-                )
-                restored = (client.issue(issue_key, fields="issuetype").get("fields") or {}).get("issuetype") or {}
-                restored_ok = rollback.status_code == 204 and restored.get("name") == current_type
+                try:
+                    rollback = client._session.put(
+                        url, json={"fields": {"issuetype": {"name": current_type}}}, timeout=JIRA_TIMEOUT
+                    )
+                    restored = (client.issue(issue_key, fields="issuetype").get("fields") or {}).get("issuetype") or {}
+                    restored_ok = rollback.status_code == 204 and restored.get("name") == current_type
+                    failure = f"HTTP {rollback.status_code}, type now {restored.get('name')}"
+                except Exception as exc:  # the change stands; report it, not a generic "failed to move"
+                    restored_ok = False
+                    failure = _sanitize_error(str(exc))
                 error(
                     f"{issue_key} still runs the workflow of {current_type}: it offers "
                     f"{', '.join(repr(s) for s in sorted(foreign))}, which the workflow of {target_type} "
@@ -294,8 +315,8 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                     + (
                         f"The type was set back to {current_type}."
                         if restored_ok
-                        else f"Setting the type back to {current_type} FAILED (HTTP {rollback.status_code}, "
-                        f"type now {restored.get('name')}); fix the issue in the Jira UI."
+                        else f"Setting the type back to {current_type} FAILED ({failure}); "
+                        f"{issue_key} may still be {target_type} on the old workflow, fix it in the Jira UI."
                     ),
                     suggestion="Use the Jira UI's 'Move' action, which maps the status to the new workflow.",
                 )

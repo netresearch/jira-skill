@@ -67,8 +67,18 @@ def _scheme(mapping: dict[str, str]):
     return {"issueTypes": types, "mappings": [{"name": wf, "issueTypes": ids} for wf, ids in by_wf.items()]}
 
 
-def _gets(statuses: dict, scheme=None, transitions: list[str] | None = ("Done",), transitions_status: int = 200):
-    """side_effect for client._session.get: statuses, scheme (or 403) and the issue's transition targets."""
+def _gets(
+    statuses: dict,
+    scheme=None,
+    transitions: list[str] | None = ("Done",),
+    transitions_status: int = 200,
+    later_transitions: list[str] | None = None,
+):
+    """side_effect for client._session.get: statuses, scheme (or 403) and the issue's transition targets.
+
+    ``later_transitions`` answers every transitions read after the first (the read after the PUT).
+    """
+    calls = {"transitions": 0}
 
     def get(url, timeout=None):
         if url.endswith("/statuses"):
@@ -76,7 +86,9 @@ def _gets(statuses: dict, scheme=None, transitions: list[str] | None = ("Done",)
         if "/rest/projectconfig/1/workflowscheme/" in url:
             return _json_response(scheme) if scheme is not None else _json_response({}, 403)
         if url.endswith("/transitions"):
-            payload = {"transitions": [{"id": str(i), "to": {"name": s}} for i, s in enumerate(transitions or [])]}
+            calls["transitions"] += 1
+            targets = later_transitions if later_transitions is not None and calls["transitions"] > 1 else transitions
+            payload = {"transitions": [{"id": str(i), "to": {"name": s}} for i, s in enumerate(targets or [])]}
             return _json_response(payload, transitions_status)
         raise AssertionError(f"unexpected GET {url}")
 
@@ -203,11 +215,10 @@ class TestWorkflowGuard:
         mc._session.put.assert_called_once()
 
     def test_issue_left_on_another_workflow_is_rolled_back(self):
-        """The scheme view says both types share a workflow, but the issue still runs another one.
+        """The scheme view says both types share a workflow, but after the change the issue runs another one.
 
-        HMKG-2540 after the REST change of 2026-11-06: a Technical task that still ran the
-        management workflow. Changing it on to Bug (same workflow per scheme) passes the check
-        before; its transitions still lead to UAT Stage, so the change is undone.
+        Its transitions then lead to UAT Stage, a status of the management workflow only
+        (the shape HMKG-2540 showed after the REST change of 2026-11-06), so the change is undone.
         """
         mc = _make_mock_client()
         mc.issue.side_effect = [
@@ -219,7 +230,8 @@ class TestWorkflowGuard:
         mc._session.get.side_effect = _gets(
             {**HMKG_STATUSES, "Bug": HMKG_STATUSES["Technical task"]},
             scheme=_scheme({"Task": "Management", "Technical task": "Technical", "Bug": "Technical"}),
-            transitions=["UAT Stage", "Open"],
+            transitions=["QA", "Open"],
+            later_transitions=["UAT Stage", "Open"],
         )
 
         result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Bug"], mc)
@@ -240,7 +252,7 @@ class TestWorkflowGuard:
             {"fields": {"issuetype": {"name": "Sub: Bug"}}},
         ]
         mc._session.put.side_effect = [_put_response(204), _put_response(400)]
-        mc._session.get.side_effect = _gets(SAME_STATUSES, transitions=["Rejected"])
+        mc._session.get.side_effect = _gets(SAME_STATUSES, later_transitions=["Rejected"])
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -273,3 +285,32 @@ class TestWorkflowGuard:
         assert result.exit_code == 1, result.output
         assert "have different statuses" in result.output
         mc._session.put.assert_not_called()
+
+    def test_issue_already_on_another_workflow_is_refused_with_the_repair(self):
+        """HMKG-2540 between 2026-11-06 and 2026-11-10: a Technical task running the management workflow."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Technical task", project="HMKG", status="UAT Stage")]
+        mc._session.get.side_effect = _gets(HMKG_STATUSES, transitions=["Deploy to Prod", "Open"])
+
+        result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Task"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "already runs another workflow than the one of Technical task" in result.output
+        assert "'Deploy to Prod', 'UAT Stage'" in result.output
+        assert "Walk its transitions to a status both workflows have" in result.output
+        mc._session.put.assert_not_called()
+
+    def test_exception_during_rollback_is_reported_as_failed_rollback(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.side_effect = [_put_response(204), _mod.requests.ConnectionError("connection reset")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES, later_transitions=["Rejected"])
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "Setting the type back to Sub: Task FAILED (connection reset)" in result.output
+        assert "Failed to move" not in result.output
