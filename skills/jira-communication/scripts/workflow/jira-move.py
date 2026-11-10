@@ -36,7 +36,13 @@ from lib.output import error, format_output, success, warning
 # its old workflow while the scheme names another one; when that one lacks the
 # current status, Jira's own Move refuses the issue afterwards ("incorrectly
 # associated with the status") and add-ons that look up the step for the status
-# fail on every view. Both checks below use the scheme's view of the types.
+# fail on every view.
+#
+# The check before the change uses the scheme's view of the types. The check
+# after it reads the issue's transitions, which come from the workflow the issue
+# actually runs: on HMKG-2540 (2026-11-06) the issue, already a Technical task,
+# was still moved through UAT Stage, Deploy to Prod and Closed, all statuses of
+# the management workflow only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -71,23 +77,46 @@ def _workflow_by_type(client, project_key: str) -> dict[str, str] | None:
         return None
 
 
-def _workflow_mismatch(client, project_key: str, current_type: str, target_type: str, status: str) -> str | None:
+def _workflow_mismatch(
+    client, project_key: str, statuses: dict[str, set[str]], current_type: str, target_type: str, status: str
+) -> str | None:
     """Why a REST type change would leave the issue inconsistent, or None when it would not."""
-    statuses = _statuses_by_type(client, project_key)
     target_statuses = statuses.get(target_type)
     if target_statuses is None:
         return None  # unknown type: Jira's own 400 explains it
     if status not in target_statuses:
         return f"status '{status}' does not exist in the workflow of '{target_type}'"
-    workflows = _workflow_by_type(client, project_key)
-    if workflows is not None:
-        current_wf, target_wf = workflows.get(current_type), workflows.get(target_type)
-        if current_wf and target_wf and current_wf != target_wf:
+    workflows = _workflow_by_type(client, project_key) or {}
+    current_wf, target_wf = workflows.get(current_type), workflows.get(target_type)
+    if current_wf and target_wf:
+        if current_wf != target_wf:
             return f"'{current_type}' uses workflow '{current_wf}', '{target_type}' uses '{target_wf}'"
         return None
+    # Scheme unreadable, or a type missing from it: two workflows with different
+    # status sets are different workflows. Equal sets pass, which can still be
+    # two workflows; only the scheme view tells them apart.
     if statuses.get(current_type, set()) != target_statuses:
         return f"'{current_type}' and '{target_type}' have different statuses, so they use different workflows"
     return None
+
+
+def _foreign_statuses(client, issue_key: str, status: str, allowed: set[str]) -> set[str] | None:
+    """Statuses the issue's own workflow offers that the new type's workflow lacks.
+
+    The current status and the target of every transition the issue offers now
+    belong to the workflow the issue actually runs. Any of them outside the new
+    type's statuses means the issue still runs another workflow. None when the
+    transitions cannot be read.
+    """
+    url = f"{client.url}/rest/api/2/issue/{issue_key}/transitions"
+    try:
+        response = client._session.get(url, timeout=JIRA_TIMEOUT)
+        if response.status_code != 200:
+            return None
+        targets = {((t.get("to") or {}).get("name")) for t in response.json().get("transitions", [])}
+    except (requests.RequestException, ValueError, AttributeError, TypeError):
+        return None
+    return {s for s in targets | {status} if s and s not in allowed}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -174,7 +203,8 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             sys.exit(1)
 
         # Refuse a change the REST edit cannot carry out correctly (see "Workflow guard").
-        mismatch = _workflow_mismatch(client, current_project, current_type, target_type, status)
+        statuses = _statuses_by_type(client, current_project)
+        mismatch = _workflow_mismatch(client, current_project, statuses, current_type, target_type, status)
         if mismatch:
             error(
                 f"Refusing to change {issue_key} from {current_type} to {target_type}: {mismatch}.",
@@ -235,19 +265,32 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                     ),
                 )
                 sys.exit(1)
-            # After the change: the issue's status must exist in the new type's
-            # workflow. If it does not, put the old type back and fail.
+            # After the change: the issue must run the new type's workflow. Its
+            # transitions come from the workflow it actually runs; a target the
+            # new type's workflow lacks means the old workflow stayed. Then put
+            # the old type back and fail.
             refreshed_status = (refreshed_fields.get("status") or {}).get("name") or status
-            new_statuses = _statuses_by_type(client, current_project).get(target_type)
-            if new_statuses is not None and refreshed_status not in new_statuses:
+            new_statuses = statuses.get(target_type)
+            foreign = (
+                _foreign_statuses(client, issue_key, refreshed_status, new_statuses)
+                if new_statuses is not None
+                else None
+            )
+            if foreign is None:
+                warning(
+                    f"Could not verify that {issue_key} runs the workflow of {target_type} "
+                    "(transitions or statuses unreadable)."
+                )
+            elif foreign:
                 rollback = client._session.put(
                     url, json={"fields": {"issuetype": {"name": current_type}}}, timeout=JIRA_TIMEOUT
                 )
                 restored = (client.issue(issue_key, fields="issuetype").get("fields") or {}).get("issuetype") or {}
                 restored_ok = rollback.status_code == 204 and restored.get("name") == current_type
                 error(
-                    f"{issue_key} ended up as {target_type} in status '{refreshed_status}', which the workflow "
-                    f"of {target_type} does not have. "
+                    f"{issue_key} still runs the workflow of {current_type}: it offers "
+                    f"{', '.join(repr(s) for s in sorted(foreign))}, which the workflow of {target_type} "
+                    "does not have. "
                     + (
                         f"The type was set back to {current_type}."
                         if restored_ok

@@ -67,17 +67,17 @@ def _scheme(mapping: dict[str, str]):
     return {"issueTypes": types, "mappings": [{"name": wf, "issueTypes": ids} for wf, ids in by_wf.items()]}
 
 
-def _gets(statuses: dict, scheme=None, later_statuses: dict | None = None):
-    """side_effect for client._session.get: statuses per call, scheme or 403."""
-    calls = {"statuses": 0}
+def _gets(statuses: dict, scheme=None, transitions: list[str] | None = ("Done",), transitions_status: int = 200):
+    """side_effect for client._session.get: statuses, scheme (or 403) and the issue's transition targets."""
 
     def get(url, timeout=None):
         if url.endswith("/statuses"):
-            calls["statuses"] += 1
-            data = later_statuses if later_statuses is not None and calls["statuses"] > 1 else statuses
-            return _json_response([{"name": n, "statuses": [{"name": s} for s in ss]} for n, ss in data.items()])
+            return _json_response([{"name": n, "statuses": [{"name": s} for s in ss]} for n, ss in statuses.items()])
         if "/rest/projectconfig/1/workflowscheme/" in url:
             return _json_response(scheme) if scheme is not None else _json_response({}, 403)
+        if url.endswith("/transitions"):
+            payload = {"transitions": [{"id": str(i), "to": {"name": s}} for i, s in enumerate(transitions or [])]}
+            return _json_response(payload, transitions_status)
         raise AssertionError(f"unexpected GET {url}")
 
     return get
@@ -202,23 +202,35 @@ class TestWorkflowGuard:
         assert result.exit_code == 0, result.output
         mc._session.put.assert_called_once()
 
-    def test_inconsistent_result_is_rolled_back(self):
-        """If the status is not in the new type's workflow after the change, the old type returns."""
+    def test_issue_left_on_another_workflow_is_rolled_back(self):
+        """The scheme view says both types share a workflow, but the issue still runs another one.
+
+        HMKG-2540 after the REST change of 2026-11-06: a Technical task that still ran the
+        management workflow. Changing it on to Bug (same workflow per scheme) passes the check
+        before; its transitions still lead to UAT Stage, so the change is undone.
+        """
         mc = _make_mock_client()
         mc.issue.side_effect = [
-            _issue("Sub: Task"),
-            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
-            {"fields": {"issuetype": {"name": "Sub: Task"}}},
+            _issue("Technical task", project="HMKG", status="In Progress"),
+            {"fields": {"issuetype": {"name": "Bug"}, "project": {"key": "HMKG"}, "status": {"name": "In Progress"}}},
+            {"fields": {"issuetype": {"name": "Technical task"}}},
         ]
         mc._session.put.return_value = _put_response(204)
-        mc._session.get.side_effect = _gets(SAME_STATUSES, later_statuses={"Sub: Task": ["Open"], "Sub: Bug": ["Done"]})
+        mc._session.get.side_effect = _gets(
+            {**HMKG_STATUSES, "Bug": HMKG_STATUSES["Technical task"]},
+            scheme=_scheme({"Task": "Management", "Technical task": "Technical", "Bug": "Technical"}),
+            transitions=["UAT Stage", "Open"],
+        )
 
-        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Bug"], mc)
 
         assert result.exit_code == 1, result.output
-        assert "The type was set back to Sub: Task" in result.output
+        assert "still runs the workflow of Technical task" in result.output
+        assert "'UAT Stage'" in result.output
+        assert "'Open'" not in result.output
+        assert "The type was set back to Technical task" in result.output
         assert mc._session.put.call_count == 2
-        assert mc._session.put.call_args.kwargs["json"] == {"fields": {"issuetype": {"name": "Sub: Task"}}}
+        assert mc._session.put.call_args.kwargs["json"] == {"fields": {"issuetype": {"name": "Technical task"}}}
 
     def test_failed_rollback_is_reported(self):
         mc = _make_mock_client()
@@ -228,9 +240,36 @@ class TestWorkflowGuard:
             {"fields": {"issuetype": {"name": "Sub: Bug"}}},
         ]
         mc._session.put.side_effect = [_put_response(204), _put_response(400)]
-        mc._session.get.side_effect = _gets(SAME_STATUSES, later_statuses={"Sub: Task": ["Open"], "Sub: Bug": ["Done"]})
+        mc._session.get.side_effect = _gets(SAME_STATUSES, transitions=["Rejected"])
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 
         assert result.exit_code == 1, result.output
         assert "FAILED (HTTP 400, type now Sub: Bug)" in result.output
+
+    def test_unreadable_transitions_warn_and_keep_the_change(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, transitions_status=500)
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
+
+    def test_type_missing_from_the_scheme_falls_back_to_status_sets(self):
+        """A readable scheme that does not name one of the two types is no proof of the same workflow."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Task", project="HMKG", status="In Progress")]
+        mc._session.get.side_effect = _gets(HMKG_STATUSES, scheme=_scheme({"Task": "Management"}))
+
+        result, _ = _run(["issue", "HMKG-1", "HMKG", "--issue-type", "Technical task"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "have different statuses" in result.output
+        mc._session.put.assert_not_called()
