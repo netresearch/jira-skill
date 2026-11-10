@@ -16,7 +16,7 @@ from lib.markup_cli import check_markup  # noqa: E402
 # The two comments that caused this check, verbatim (posted 2026-11-10).
 REAL_CASES = [
     '(x) Correction to the comment above: the "Deploy (Update)" workflow does not '
-    "recreate the Caddy container when nothing changed.",
+    + "recreate the Caddy container when nothing changed.",
     "because Caddy had no TLS certificate for the name yet (see the comments above).",
 ]
 
@@ -36,7 +36,7 @@ NOT_FLAGGED = [
     "The next comment will carry the result.",
     "Siehe den vorherigen Kommentar.",
     "See [the deploy comment|https://jira.example.com/browse/OPS-1?focusedCommentId=12345"
-    "&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-12345].",
+    + "&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-12345].",
     "The table above lists the hosts; the steps below fix it.",
     "See above.",
     "siehe oben",
