@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.3] - 2026-11-10
+
+### Fixed
+
+- `jira-move.py issue … --issue-type X` refuses a type change whose target type runs another workflow. Jira's REST edit (`PUT /rest/api/2/issue/{key}` with only `issuetype`) accepts such a change but does not migrate the issue's workflow the way the UI's Move does, so the issue kept its old workflow while the scheme named the new one; Jira's Move then refused the issue ("incorrectly associated with the status") and add-ons that look up the workflow step failed on every view. Before the change, also on `--dry-run`, the command refuses when the target type lacks the current status, when the project's workflow scheme (readable for project admins) maps the two types to different workflows, or, where the scheme is unreadable or does not name both types, when the two types have different status sets. An issue whose transitions already lead to statuses outside its own type's workflow may only be changed to a type that has all of them, which sets back the type of the workflow it runs. After the change the command reads the issue's transitions; when they show the issue did not get the new type's workflow, it sets the old type back and exits 1, and when they cannot be read it warns and keeps the change. `--issue-type` is matched against the project's type names without regard to case. Limit: without project-admin rights, two different workflows with identical status sets pass the check before the change, and the check after it cannot tell them apart either, so run type changes as a project admin where the scheme matters; in that case the issue's status exists in both workflows, so Jira's Move still accepts it and repairs it. `references/issue-editing.md` describes both checks and the repair paths ([#325](https://github.com/netresearch/jira-skill/pull/325))
+
 ## [4.3.2] - 2026-11-04
 
 ### Fixed
