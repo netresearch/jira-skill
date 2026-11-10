@@ -100,13 +100,12 @@ def _workflow_mismatch(
     return None
 
 
-def _foreign_statuses(client, issue_key: str, status: str, allowed: set[str]) -> set[str] | None:
-    """Statuses the issue's own workflow offers that the new type's workflow lacks.
+def _offered_statuses(client, issue_key: str, status: str) -> set[str] | None:
+    """The current status plus every transition target the issue offers now.
 
-    The current status and the target of every transition the issue offers now
-    belong to the workflow the issue actually runs. Any of them outside the new
-    type's statuses means the issue still runs another workflow. None when the
-    transitions cannot be read.
+    All of them belong to the workflow the issue actually runs. A status outside
+    a type's statuses means the issue does not run that type's workflow. None
+    when the transitions cannot be read.
     """
     url = f"{client.url}/rest/api/2/issue/{issue_key}/transitions"
     try:
@@ -116,7 +115,11 @@ def _foreign_statuses(client, issue_key: str, status: str, allowed: set[str]) ->
         targets = {((t.get("to") or {}).get("name")) for t in response.json().get("transitions", [])}
     except (requests.RequestException, ValueError, AttributeError, TypeError):
         return None
-    return {s for s in targets | {status} if s and s not in allowed}
+    return {s for s in targets | {status} if s}
+
+
+def _sorted_names(names: set[str]) -> str:
+    return ", ".join(repr(s) for s in sorted(names))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -204,23 +207,39 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
 
         # Refuse a change the REST edit cannot carry out correctly (see "Workflow guard").
         statuses = _statuses_by_type(client, current_project)
+        # Jira matches type names case-insensitively in places; the checks below
+        # look them up by the project's own spelling.
+        target_type = next((n for n in statuses if n.casefold() == target_type.casefold()), target_type)
+        if target_type == current_type:
+            error(f"{issue_key} is already type {current_type} in project {target_project}")
+            sys.exit(1)
         # An issue that already runs another workflow than its type's (an earlier
-        # REST change) is not changed further: the transitions show it.
-        current_statuses = statuses.get(current_type)
-        stray = _foreign_statuses(client, issue_key, status, current_statuses) if current_statuses is not None else None
-        if stray:
+        # REST change) shows it in its transitions. Setting the type of that
+        # workflow is the repair; any other change is refused.
+        offered = _offered_statuses(client, issue_key, status)
+        current_statuses, target_statuses = statuses.get(current_type), statuses.get(target_type)
+        stray = offered - current_statuses if offered is not None and current_statuses is not None else set()
+        repair = bool(stray) and target_statuses is not None and offered <= target_statuses
+        if stray and not repair:
             error(
                 f"Refusing to change {issue_key}: it already runs another workflow than the one of "
-                f"{current_type} (it offers {', '.join(repr(s) for s in sorted(stray))}, which that "
-                "workflow does not have).",
+                f"{current_type} (it offers {_sorted_names(stray)}, which that workflow does not have).",
                 suggestion=(
-                    "Jira's Move refuses such an issue while it sits in a status the scheme's workflow "
-                    "lacks. Walk its transitions to a status both workflows have, then use the Jira "
-                    "UI's 'Move' action, which migrates the workflow."
+                    "Change it to the type whose workflow it runs, or walk its transitions to a status "
+                    "both workflows have and then use the Jira UI's 'Move' action, which migrates the "
+                    "workflow. Jira's Move refuses such an issue while it sits in a status the scheme's "
+                    "workflow lacks."
                 ),
             )
             sys.exit(1)
-        mismatch = _workflow_mismatch(client, current_project, statuses, current_type, target_type, status)
+        if repair:
+            warning(
+                f"{issue_key} runs another workflow than the one of {current_type} (it offers "
+                f"{_sorted_names(stray)}); {target_type} has all its statuses, so the change repairs it."
+            )
+        mismatch = (
+            None if repair else _workflow_mismatch(client, current_project, statuses, current_type, target_type, status)
+        )
         if mismatch:
             error(
                 f"Refusing to change {issue_key} from {current_type} to {target_type}: {mismatch}.",
@@ -287,11 +306,8 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             # the old type back and fail.
             refreshed_status = (refreshed_fields.get("status") or {}).get("name") or status
             new_statuses = statuses.get(target_type)
-            foreign = (
-                _foreign_statuses(client, issue_key, refreshed_status, new_statuses)
-                if new_statuses is not None
-                else None
-            )
+            after = _offered_statuses(client, issue_key, refreshed_status)
+            foreign = after - new_statuses if after is not None and new_statuses is not None else None
             if foreign is None:
                 warning(
                     f"Could not verify that {issue_key} runs the workflow of {target_type} "
@@ -309,9 +325,8 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                     restored_ok = False
                     failure = _sanitize_error(str(exc))
                 error(
-                    f"{issue_key} still runs the workflow of {current_type}: it offers "
-                    f"{', '.join(repr(s) for s in sorted(foreign))}, which the workflow of {target_type} "
-                    "does not have. "
+                    f"{issue_key} does not run the workflow of {target_type}: it offers "
+                    f"{_sorted_names(foreign)}, which that workflow does not have. "
                     + (
                         f"The type was set back to {current_type}."
                         if restored_ok

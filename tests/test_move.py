@@ -237,7 +237,7 @@ class TestWorkflowGuard:
         result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Bug"], mc)
 
         assert result.exit_code == 1, result.output
-        assert "still runs the workflow of Technical task" in result.output
+        assert "does not run the workflow of Bug" in result.output
         assert "'UAT Stage'" in result.output
         assert "'Open'" not in result.output
         assert "The type was set back to Technical task" in result.output
@@ -286,18 +286,52 @@ class TestWorkflowGuard:
         assert "have different statuses" in result.output
         mc._session.put.assert_not_called()
 
-    def test_issue_already_on_another_workflow_is_refused_with_the_repair(self):
+    def test_issue_already_on_another_workflow_is_refused_for_a_third_type(self):
         """HMKG-2540 between 2026-11-06 and 2026-11-10: a Technical task running the management workflow."""
         mc = _make_mock_client()
         mc.issue.side_effect = [_issue("Technical task", project="HMKG", status="UAT Stage")]
-        mc._session.get.side_effect = _gets(HMKG_STATUSES, transitions=["Deploy to Prod", "Open"])
+        mc._session.get.side_effect = _gets(
+            {**HMKG_STATUSES, "Bug": HMKG_STATUSES["Technical task"]}, transitions=["Deploy to Prod", "Open"]
+        )
 
-        result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Task"], mc)
+        result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Bug"], mc)
 
         assert result.exit_code == 1, result.output
         assert "already runs another workflow than the one of Technical task" in result.output
         assert "'Deploy to Prod', 'UAT Stage'" in result.output
-        assert "Walk its transitions to a status both workflows have" in result.output
+        assert "Change it to the type whose workflow it runs" in result.output
+        mc._session.put.assert_not_called()
+
+    def test_issue_already_on_another_workflow_can_be_set_back(self):
+        """Setting the type whose workflow the issue runs is the repair, even though the scheme maps the types apart."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Technical task", project="HMKG", status="UAT Stage"),
+            {"fields": {"issuetype": {"name": "Task"}, "project": {"key": "HMKG"}, "status": {"name": "UAT Stage"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(
+            HMKG_STATUSES,
+            scheme=_scheme({"Task": "Management", "Technical task": "Technical"}),
+            transitions=["Deploy to Prod", "Open"],
+        )
+
+        result, _ = _run(["issue", "HMKG-2540", "HMKG", "--issue-type", "Task"], mc)
+
+        assert result.exit_code == 0, result.output
+        assert "Task has all its statuses, so the change repairs it" in result.output
+        mc._session.put.assert_called_once()
+        assert mc._session.put.call_args.kwargs["json"] == {"fields": {"issuetype": {"name": "Task"}}}
+
+    def test_type_name_in_other_case_is_checked_under_the_project_spelling(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Task", project="HMKG", status="UAT Stage")]
+        mc._session.get.side_effect = _gets(HMKG_STATUSES, transitions=["Deploy to Prod"])
+
+        result, _ = _run(["issue", "HMKG-1", "HMKG", "--issue-type", "technical task"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "status 'UAT Stage' does not exist in the workflow of 'Technical task'" in result.output
         mc._session.put.assert_not_called()
 
     def test_exception_during_rollback_is_reported_as_failed_rollback(self):
