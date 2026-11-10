@@ -28,6 +28,101 @@ from lib.client import JIRA_TIMEOUT, AuthenticationError, LazyJiraClient, Sessio
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Workflow guard
+#
+# Jira's REST edit endpoint accepts an issue-type change whose target type the
+# project's workflow scheme maps to a different workflow, and does not migrate
+# the issue's workflow entry the way the UI's Move does. The issue then keeps
+# its old workflow while the scheme names another one; when that one lacks the
+# current status, Jira's own Move refuses the issue afterwards ("incorrectly
+# associated with the status") and add-ons that look up the step for the status
+# fail on every view.
+#
+# The check before the change uses the scheme's view of the types. The check
+# after it reads the issue's transitions, which come from the workflow the issue
+# actually runs: on HMKG-2540 (2026-11-06) the issue, already a Technical task,
+# was still moved through UAT Stage, Deploy to Prod and Closed, all statuses of
+# the management workflow only.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _statuses_by_type(client, project_key: str) -> dict[str, set[str]]:
+    """Status names per issue type of the project (public endpoint)."""
+    url = f"{client.url}/rest/api/2/project/{project_key}/statuses"
+    response = client._session.get(url, timeout=JIRA_TIMEOUT)
+    response.raise_for_status()
+    return {t["name"]: {s["name"] for s in t.get("statuses", [])} for t in response.json()}
+
+
+def _workflow_by_type(client, project_key: str) -> dict[str, str] | None:
+    """Workflow name per issue type, or None when the caller cannot read the scheme.
+
+    The project-configuration endpoint is internal to Jira Server/DC and needs
+    project-admin rights; any failure means "unknown", never "same workflow".
+    """
+    url = f"{client.url}/rest/projectconfig/1/workflowscheme/{project_key}"
+    try:
+        response = client._session.get(url, timeout=JIRA_TIMEOUT)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        names = {t["id"]: t["name"] for t in data.get("issueTypes", [])}
+        result: dict[str, str] = {}
+        for mapping in data.get("mappings", []):
+            for type_id in mapping.get("issueTypes", []):
+                if type_id in names:
+                    result[names[type_id]] = mapping["name"]
+        return result or None
+    except (requests.RequestException, AuthenticationError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _workflow_mismatch(
+    client, project_key: str, statuses: dict[str, set[str]], current_type: str, target_type: str, status: str
+) -> str | None:
+    """Why a REST type change would leave the issue inconsistent, or None when it would not."""
+    target_statuses = statuses.get(target_type)
+    if target_statuses is None:
+        return None  # unknown type: Jira's own 400 explains it
+    if status not in target_statuses:
+        return f"status '{status}' does not exist in the workflow of '{target_type}'"
+    workflows = _workflow_by_type(client, project_key) or {}
+    current_wf, target_wf = workflows.get(current_type), workflows.get(target_type)
+    if current_wf and target_wf:
+        if current_wf != target_wf:
+            return f"'{current_type}' uses workflow '{current_wf}', '{target_type}' uses '{target_wf}'"
+        return None
+    # Scheme unreadable, or a type missing from it: two workflows with different
+    # status sets are different workflows. Equal sets pass, which can still be
+    # two workflows; only the scheme view tells them apart.
+    if statuses.get(current_type, set()) != target_statuses:
+        return f"'{current_type}' and '{target_type}' have different statuses, so they use different workflows"
+    return None
+
+
+def _offered_statuses(client, issue_key: str, status: str) -> set[str] | None:
+    """The current status plus every transition target the issue offers now.
+
+    All of them belong to the workflow the issue actually runs. A status outside
+    a type's statuses means the issue does not run that type's workflow. None
+    when the transitions cannot be read.
+    """
+    url = f"{client.url}/rest/api/2/issue/{issue_key}/transitions"
+    try:
+        response = client._session.get(url, timeout=JIRA_TIMEOUT)
+        if response.status_code != 200:
+            return None
+        targets = {((t.get("to") or {}).get("name")) for t in response.json().get("transitions", [])}
+    except (requests.RequestException, AuthenticationError, ValueError, AttributeError, TypeError):
+        return None
+    return {s for s in targets | {status} if s}
+
+
+def _sorted_names(names: set[str]) -> str:
+    return ", ".join(repr(s) for s in sorted(names))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -110,6 +205,52 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
             )
             sys.exit(1)
 
+        # Refuse a change the REST edit cannot carry out correctly (see "Workflow guard").
+        statuses = _statuses_by_type(client, current_project)
+        # Jira matches type names case-insensitively in places; the checks below
+        # look them up by the project's own spelling.
+        target_type = next((n for n in statuses if n.casefold() == target_type.casefold()), target_type)
+        if target_type == current_type:
+            error(f"{issue_key} is already type {current_type} in project {target_project}")
+            sys.exit(1)
+        # An issue that already runs another workflow than its type's (an earlier
+        # REST change) shows it in its transitions. Setting the type of that
+        # workflow is the repair; any other change is refused.
+        offered = _offered_statuses(client, issue_key, status)
+        current_statuses, target_statuses = statuses.get(current_type), statuses.get(target_type)
+        stray = offered - current_statuses if offered is not None and current_statuses is not None else set()
+        repair = bool(stray) and target_statuses is not None and offered <= target_statuses
+        if stray and not repair:
+            error(
+                f"Refusing to change {issue_key}: it already runs another workflow than the one of "
+                f"{current_type} (it offers {_sorted_names(stray)}, which that workflow does not have).",
+                suggestion=(
+                    "Change it to the type whose workflow it runs, or walk its transitions to a status "
+                    "both workflows have and then use the Jira UI's 'Move' action, which migrates the "
+                    "workflow. Jira's Move refuses such an issue while it sits in a status the scheme's "
+                    "workflow lacks."
+                ),
+            )
+            sys.exit(1)
+        if repair:
+            warning(
+                f"{issue_key} runs another workflow than the one of {current_type} (it offers "
+                f"{_sorted_names(stray)}); {target_type} has all its statuses, so the change repairs it."
+            )
+        mismatch = (
+            None if repair else _workflow_mismatch(client, current_project, statuses, current_type, target_type, status)
+        )
+        if mismatch:
+            error(
+                f"Refusing to change {issue_key} from {current_type} to {target_type}: {mismatch}.",
+                suggestion=(
+                    "Jira's REST edit changes the type without migrating the issue's workflow, which "
+                    "leaves the issue on the old workflow. Use the Jira UI's 'Move' action, which maps "
+                    "the status to the new workflow."
+                ),
+            )
+            sys.exit(1)
+
         # Dry run (same project only — cross-project moves are refused above)
         if dry_run:
             warning("DRY RUN - No changes will be made")
@@ -137,7 +278,7 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
 
         if response.status_code == 204:
             # Verify the update actually applied (defense against silent failures)
-            refreshed = client.issue(issue_key, fields="issuetype,project")
+            refreshed = client.issue(issue_key, fields="issuetype,project,status")
             refreshed_fields = refreshed.get("fields") or {}
             refreshed_type = (refreshed_fields.get("issuetype") or {}).get("name")
             refreshed_project = (refreshed_fields.get("project") or {}).get("key")
@@ -157,6 +298,42 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                         "Sub-Task and standard types. No payload variation makes it work via "
                         "REST. Use the Jira UI's 'Move' action on the issue instead."
                     ),
+                )
+                sys.exit(1)
+            # After the change: the issue must run the new type's workflow. Its
+            # transitions come from the workflow it actually runs; a target the
+            # new type's workflow lacks means the old workflow stayed. Then put
+            # the old type back and fail.
+            refreshed_status = (refreshed_fields.get("status") or {}).get("name") or status
+            new_statuses = statuses.get(target_type)
+            after = _offered_statuses(client, issue_key, refreshed_status)
+            foreign = after - new_statuses if after is not None and new_statuses is not None else None
+            if foreign is None:
+                warning(
+                    f"Could not verify that {issue_key} runs the workflow of {target_type} "
+                    "(transitions or statuses unreadable)."
+                )
+            elif foreign:
+                try:
+                    rollback = client._session.put(
+                        url, json={"fields": {"issuetype": {"name": current_type}}}, timeout=JIRA_TIMEOUT
+                    )
+                    restored = (client.issue(issue_key, fields="issuetype").get("fields") or {}).get("issuetype") or {}
+                    restored_ok = rollback.status_code == 204 and restored.get("name") == current_type
+                    failure = f"HTTP {rollback.status_code}, type now {restored.get('name')}"
+                except Exception as exc:  # the change stands; report it, not a generic "failed to move"
+                    restored_ok = False
+                    failure = _sanitize_error(str(exc))
+                error(
+                    f"{issue_key} does not run the workflow of {target_type}: it offers "
+                    f"{_sorted_names(foreign)}, which that workflow does not have. "
+                    + (
+                        f"The type was set back to {current_type}."
+                        if restored_ok
+                        else f"Setting the type back to {current_type} FAILED ({failure}); "
+                        f"{issue_key} may still be {target_type} on the old workflow, fix it in the Jira UI."
+                    ),
+                    suggestion="Use the Jira UI's 'Move' action, which maps the status to the new workflow.",
                 )
                 sys.exit(1)
             # Type change within same project — key stays the same
