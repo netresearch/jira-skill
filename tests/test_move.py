@@ -73,10 +73,13 @@ def _gets(
     transitions: list[str] | None = ("Done",),
     transitions_status: int = 200,
     later_transitions: list[str] | None = None,
+    auth_error: tuple[str, ...] = (),
 ):
     """side_effect for client._session.get: statuses, scheme (or 403) and the issue's transition targets.
 
     ``later_transitions`` answers every transitions read after the first (the read after the PUT).
+    ``auth_error`` names reads that raise AuthenticationError, as the client's response hook does
+    on 401/403: "scheme", "transitions" (every read) or "later_transitions" (reads after the first).
     """
     calls = {"transitions": 0}
 
@@ -84,9 +87,13 @@ def _gets(
         if url.endswith("/statuses"):
             return _json_response([{"name": n, "statuses": [{"name": s} for s in ss]} for n, ss in statuses.items()])
         if "/rest/projectconfig/1/workflowscheme/" in url:
+            if "scheme" in auth_error:
+                raise _mod.AuthenticationError("403 Forbidden")
             return _json_response(scheme) if scheme is not None else _json_response({}, 403)
         if url.endswith("/transitions"):
             calls["transitions"] += 1
+            if "transitions" in auth_error or ("later_transitions" in auth_error and calls["transitions"] > 1):
+                raise _mod.AuthenticationError("403 Forbidden")
             targets = later_transitions if later_transitions is not None and calls["transitions"] > 1 else transitions
             payload = {"transitions": [{"id": str(i), "to": {"name": s}} for i, s in enumerate(targets or [])]}
             return _json_response(payload, transitions_status)
@@ -267,6 +274,34 @@ class TestWorkflowGuard:
         ]
         mc._session.put.return_value = _put_response(204)
         mc._session.get.side_effect = _gets(SAME_STATUSES, transitions_status=500)
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
+
+    def test_scheme_read_raising_authentication_error_falls_back_to_status_sets(self):
+        """The client's response hook raises AuthenticationError on 403; that means "scheme unknown"."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Task", project="HMKG", status="In Progress")]
+        mc._session.get.side_effect = _gets(HMKG_STATUSES, auth_error=("scheme",))
+
+        result, _ = _run(["issue", "HMKG-1", "HMKG", "--issue-type", "Technical task"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "have different statuses" in result.output
+        assert "Authentication failed" not in result.output
+        mc._session.put.assert_not_called()
+
+    def test_transitions_read_raising_authentication_error_after_the_change_warns(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, auth_error=("later_transitions",))
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 

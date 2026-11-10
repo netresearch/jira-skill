@@ -73,7 +73,7 @@ def _workflow_by_type(client, project_key: str) -> dict[str, str] | None:
                 if type_id in names:
                     result[names[type_id]] = mapping["name"]
         return result or None
-    except (requests.RequestException, ValueError, KeyError, TypeError):
+    except (requests.RequestException, AuthenticationError, ValueError, KeyError, TypeError):
         return None
 
 
@@ -113,7 +113,7 @@ def _offered_statuses(client, issue_key: str, status: str) -> set[str] | None:
         if response.status_code != 200:
             return None
         targets = {((t.get("to") or {}).get("name")) for t in response.json().get("transitions", [])}
-    except (requests.RequestException, ValueError, AttributeError, TypeError):
+    except (requests.RequestException, AuthenticationError, ValueError, AttributeError, TypeError):
         return None
     return {s for s in targets | {status} if s}
 
