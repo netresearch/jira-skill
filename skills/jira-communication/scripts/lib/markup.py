@@ -559,6 +559,51 @@ def lint_wiki_markup(text: str) -> list[str]:
     return findings
 
 
+# A reference to ANOTHER comment by its position. Comment order is a per-user
+# preference (jira.issue.actions.order, asc or desc), so "the comment above"
+# names a different comment, or none, for the next reader. Every pattern needs
+# the word "comment"/"Kommentar" next to the position word: a bare "see above",
+# "as shown below" or "siehe oben" usually points inside the same comment, which
+# renders top to bottom and is fine, so it is deliberately not flagged. Words of
+# time (previous, earlier, next, later, vorheriger) are the alternative and never
+# match. The English lookahead keeps a code comment out: "the comment above the
+# method" is about source code, not about the Jira thread.
+_NOT_A_CODE_LOCATION = r"(?!\s+(?:the|this|that|these|those|a|an|each|every|its|line|lines)\b)"
+_POSITION_REF_RES = (
+    # comment above / comments below / comment further up
+    re.compile(r"\bcomments?\s+(?:above|below|further\s+(?:up|down))\b" + _NOT_A_CODE_LOCATION, re.IGNORECASE),
+    # the above comment / the below comments
+    re.compile(r"\b(?:above|below)\s+comments?\b", re.IGNORECASE),
+    # Kommentar oben / Kommentare weiter unten
+    re.compile(r"\bKommentar(?:e|en|s)?\s+(?:weiter\s+)?(?:oben|unten)\b", re.IGNORECASE),
+    # obigen Kommentar / oben stehenden Kommentar / untenstehende Kommentare
+    re.compile(r"\b(?:obige[nmrs]?|(?:oben|unten)\s*(?:stehende|genannte)[nmrs]?)\s+Kommentar", re.IGNORECASE),
+)
+
+
+def lint_comment_references(text: str) -> list[str]:
+    """Report references to another comment by its position on the page.
+
+    Content inside ``{code}``/``{noformat}`` is skipped: it is quoted, not
+    authored prose. Only phrases that name a comment are matched, so a bare
+    "see above" stays unreported - see ``_POSITION_REF_RES`` for why.
+    """
+    findings: list[str] = []
+    for lineno, (line, verbatim) in enumerate(_split_verbatim(text), 1):
+        if verbatim:
+            continue
+        for pattern in _POSITION_REF_RES:
+            for m in pattern.finditer(line):
+                findings.append(
+                    f"line {lineno}: {m.group(0)!r} points at another comment by position - "
+                    f"comment order is a per-user setting (oldest or newest first), so it names "
+                    f"a different comment, or none, for another reader; write 'the previous/earlier "
+                    f"comment', link it with a permalink (?focusedCommentId=...), or name its "
+                    f"heading or timestamp"
+                )
+    return findings
+
+
 # Projects whose agent-authored content is English by convention. Team rules
 # live in the consuming skill (netresearch-jira, references/it/language.md);
 # this list only decides where the reminder fires. Matched on the key's

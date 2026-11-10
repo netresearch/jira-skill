@@ -35,7 +35,7 @@ from dataclasses import dataclass, replace
 
 import click
 
-from lib.markup import escape_strikethrough, lint_ticket_language, lint_wiki_markup
+from lib.markup import escape_strikethrough, lint_comment_references, lint_ticket_language, lint_wiki_markup
 from lib.output import error, warning
 from lib.preview import preflight_render
 
@@ -143,7 +143,7 @@ def repair_markup(text: str, auto_escape: bool, *, label: str = "text") -> str:
 
 
 def check_markup(text: str, force: bool, issue_key: str | None = None, *, label: str = "text") -> None:
-    """Lint wiki markup and ticket language; abort on findings unless forced.
+    """Lint wiki markup, ticket language and comment references; abort on findings unless forced.
 
     The two kinds are labelled and explained separately: a language-only
     finding reported as a markup problem, with a suggestion about block tags,
@@ -151,7 +151,8 @@ def check_markup(text: str, force: bool, issue_key: str | None = None, *, label:
     """
     markup_findings = lint_wiki_markup(text)
     language_findings = lint_ticket_language(text, issue_key)
-    if not markup_findings and not language_findings:
+    reference_findings = lint_comment_references(text)
+    if not markup_findings and not language_findings and not reference_findings:
         return
 
     if force:
@@ -159,14 +160,22 @@ def check_markup(text: str, force: bool, issue_key: str | None = None, *, label:
             warning(f"markup: {finding}")
         for finding in language_findings:
             warning(f"language: {finding}")
+        for finding in reference_findings:
+            warning(f"reference: {finding}")
         return
 
-    labelled = [f"markup: {f}" for f in markup_findings] + [f"language: {f}" for f in language_findings]
+    labelled = (
+        [f"markup: {f}" for f in markup_findings]
+        + [f"language: {f}" for f in language_findings]
+        + [f"reference: {f}" for f in reference_findings]
+    )
     hints = []
     if markup_findings:
         hints.append("Block tags are never inline; escape literal mentions as \\{code\\}.")
     if language_findings:
         hints.append("Re-resolve the language for this ticket; quoted user content stays verbatim.")
+    if reference_findings:
+        hints.append("Refer to the other comment by time, permalink, heading or timestamp, not by position.")
     hints.append("Re-run with --force to post anyway.")
 
     error(f"Lint found problems in the {label}:\n  " + "\n  ".join(labelled), suggestion=" ".join(hints))
