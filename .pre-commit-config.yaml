@@ -29,7 +29,7 @@ repos:
         args: [--allow-multiple-documents]
 
   - repo: https://github.com/netresearch/skill-repo-skill
-    rev: v3.2.2
+    rev: v3.3.1
     hooks:
       - id: validate-skill
       - id: check-version-parity
