@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The markup lint of the seven gated write options (`jira-comment.py add`/`edit`, `jira-transition.py do --comment` and `path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`) refuses a reference to another comment by position, such as "the comment above", "the above comment", "Kommentar oben" or "der obige Kommentar", because comment order is a per-user setting. Text that posted before now aborts with a `reference:` finding; `--force` posts it with a warning. A bare "see above", "the comment above the method" and content inside `{code}`/`{noformat}` are not flagged ([#328](https://github.com/netresearch/jira-skill/pull/328))
+
+### Changed
+
+- **Breaking:** `jira-move.py issue … --issue-type X` refuses a type change when the two types have the same statuses but the workflow scheme cannot confirm they run the same workflow, because the account cannot read the scheme (it needs project-admin rights) or the scheme does not name both types. Up to 4.3.3 equal status sets passed. Pass `--assume-same-workflow` when you know both types run the same workflow; it allows only this case and does not override the other refusals (missing status, different workflows in the scheme, different status sets). The refusal names which case applies and gives advice for it ([#330](https://github.com/netresearch/jira-skill/pull/330))
+- `references/comments.md` allows time words ("previous", "earlier", "next", "later") and the comment permalink (`?focusedCommentId=`) to refer to another comment; on a ticket with restricted comments, pair the time word with the comment's heading or timestamp ([#327](https://github.com/netresearch/jira-skill/pull/327))
+- `skills/jira-communication/AGENTS.md`: `AuthenticationError` subclasses `Exception`, not `requests.RequestException`, so a function that treats any read failure as unknown must name it in its `except` clause ([#331](https://github.com/netresearch/jira-skill/pull/331))
+
 ## [4.3.3] - 2026-11-10
 
 ### Fixed
