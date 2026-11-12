@@ -1,6 +1,6 @@
 {
   "name": "jira",
-  "version": "4.3.3",
+  "version": "5.0.0",
   "description": "Comprehensive Jira integration with auto-detection of issue keys",
   "author": {
     "name": "Netresearch DTT GmbH",

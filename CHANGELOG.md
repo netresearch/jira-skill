@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-11-12
+
 ### Added
 
 - The markup lint of the seven gated write options (`jira-comment.py add`/`edit`, `jira-transition.py do --comment` and `path --comment`, `jira-worklog.py add --comment`, and the `--description` of `jira-create.py issue` and `jira-issue.py update`) refuses a reference to another comment by position, such as "the comment above", "the above comment", "Kommentar oben" or "der obige Kommentar", because comment order is a per-user setting. Text that posted before now aborts with a `reference:` finding; `--force` posts it with a warning. A bare "see above", "the comment above the method" and content inside `{code}`/`{noformat}` are not flagged ([#328](https://github.com/netresearch/jira-skill/pull/328))
@@ -1015,7 +1017,9 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v4.3.2...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v5.0.0...HEAD
+[5.0.0]: https://github.com/netresearch/jira-skill/compare/v4.3.3...v5.0.0
+[4.3.3]: https://github.com/netresearch/jira-skill/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/netresearch/jira-skill/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/netresearch/jira-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/jira-skill/compare/v4.2.0...v4.3.0
