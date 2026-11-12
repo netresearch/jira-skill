@@ -41,6 +41,7 @@ uv run scripts/core/jira-validate.py --verbose
 - Never hardcode credentials
 - Use `lib/config.py` for env loading
 - Test `--dry-run` before actual writes
+- `AuthenticationError` from `lib/errors.py` (raised by the client's response hook on 401/403) subclasses `Exception`, not `requests.RequestException`. A function whose contract is "any read failure means unknown" must name it in its `except` clause, or a 403 aborts the command instead of falling back. (jira-move's scheme read, review on #325.)
 
 ## PR/commit checklist
 
