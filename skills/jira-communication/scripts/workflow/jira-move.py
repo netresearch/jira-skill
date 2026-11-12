@@ -77,27 +77,64 @@ def _workflow_by_type(client, project_key: str) -> dict[str, str] | None:
         return None
 
 
+MOVE_SUGGESTION = (
+    "Jira's REST edit changes the type without migrating the issue's workflow, which "
+    "leaves the issue on the old workflow. Use the Jira UI's 'Move' action, which maps "
+    "the status to the new workflow."
+)
+UNREADABLE_SUGGESTION = (
+    "Run it with an account that has project-admin rights, which can read the scheme, or use the "
+    "Jira UI's 'Move' action. If you know both types run the same workflow, pass --assume-same-workflow."
+)
+SCHEME_GAP_SUGGESTION = (
+    "Check the project's workflow scheme in the Jira UI, or use its 'Move' action. If you know both "
+    "types run the same workflow, pass --assume-same-workflow."
+)
+
+
 def _workflow_mismatch(
-    client, project_key: str, statuses: dict[str, set[str]], current_type: str, target_type: str, status: str
-) -> str | None:
-    """Why a REST type change would leave the issue inconsistent, or None when it would not."""
+    client,
+    project_key: str,
+    statuses: dict[str, set[str]],
+    current_type: str,
+    target_type: str,
+    status: str,
+    assume_same: bool = False,
+) -> tuple[str, str] | None:
+    """Why a REST type change would leave the issue inconsistent, with the advice for it; None when it would not."""
     target_statuses = statuses.get(target_type)
     if target_statuses is None:
         return None  # unknown type: Jira's own 400 explains it
     if status not in target_statuses:
-        return f"status '{status}' does not exist in the workflow of '{target_type}'"
+        return f"status '{status}' does not exist in the workflow of '{target_type}'", MOVE_SUGGESTION
     workflows = _workflow_by_type(client, project_key) or {}
     current_wf, target_wf = workflows.get(current_type), workflows.get(target_type)
     if current_wf and target_wf:
         if current_wf != target_wf:
-            return f"'{current_type}' uses workflow '{current_wf}', '{target_type}' uses '{target_wf}'"
+            return f"'{current_type}' uses workflow '{current_wf}', '{target_type}' uses '{target_wf}'", MOVE_SUGGESTION
         return None
     # Scheme unreadable, or a type missing from it: two workflows with different
-    # status sets are different workflows. Equal sets pass, which can still be
-    # two workflows; only the scheme view tells them apart.
+    # status sets are different workflows. Equal sets prove nothing, because two
+    # workflows can share every status, and the check after the change cannot
+    # see that case either: the old workflow offers no status the new type lacks.
+    # So equal sets are refused unless the caller vouches for the workflow.
     if statuses.get(current_type, set()) != target_statuses:
-        return f"'{current_type}' and '{target_type}' have different statuses, so they use different workflows"
-    return None
+        return (
+            f"'{current_type}' and '{target_type}' have different statuses, so they use different workflows",
+            MOVE_SUGGESTION,
+        )
+    if assume_same:
+        return None
+    if workflows:
+        unknown, advice = f"the workflow scheme of {project_key} does not name both types", SCHEME_GAP_SUGGESTION
+    else:
+        unknown = f"this account cannot read the workflow scheme of {project_key} (it needs project-admin rights)"
+        advice = UNREADABLE_SUGGESTION
+    return (
+        f"{unknown}, so it cannot confirm that '{current_type}' and '{target_type}' use the same workflow; "
+        "their statuses match, which two different workflows can have as well",
+        advice,
+    )
 
 
 def _offered_statuses(client, issue_key: str, status: str) -> set[str] | None:
@@ -155,8 +192,18 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 @click.argument("target_project")
 @click.option("--issue-type", "-t", help="Issue type in target project (default: keep current)")
 @click.option("--dry-run", is_flag=True, help="Show what would happen without making changes")
+@click.option(
+    "--assume-same-workflow",
+    is_flag=True,
+    help=(
+        "Allow the change when both types have the same statuses but the workflow scheme cannot "
+        "confirm their workflow: it is unreadable (needs project-admin rights) or does not name both types."
+    ),
+)
 @click.pass_context
-def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None, dry_run: bool):
+def move_issue(
+    ctx, issue_key: str, target_project: str, issue_type: str | None, dry_run: bool, assume_same_workflow: bool
+):
     """Change an issue's type within the same project.
 
     ISSUE_KEY: The Jira issue key to move (e.g., NRS-4301)
@@ -238,17 +285,15 @@ def move_issue(ctx, issue_key: str, target_project: str, issue_type: str | None,
                 f"{_sorted_names(stray)}); {target_type} has all its statuses, so the change repairs it."
             )
         mismatch = (
-            None if repair else _workflow_mismatch(client, current_project, statuses, current_type, target_type, status)
+            None
+            if repair
+            else _workflow_mismatch(
+                client, current_project, statuses, current_type, target_type, status, assume_same_workflow
+            )
         )
         if mismatch:
-            error(
-                f"Refusing to change {issue_key} from {current_type} to {target_type}: {mismatch}.",
-                suggestion=(
-                    "Jira's REST edit changes the type without migrating the issue's workflow, which "
-                    "leaves the issue on the old workflow. Use the Jira UI's 'Move' action, which maps "
-                    "the status to the new workflow."
-                ),
-            )
+            reason, advice = mismatch
+            error(f"Refusing to change {issue_key} from {current_type} to {target_type}: {reason}.", suggestion=advice)
             sys.exit(1)
 
         # Dry run (same project only — cross-project moves are refused above)
