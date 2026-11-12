@@ -82,9 +82,13 @@ MOVE_SUGGESTION = (
     "leaves the issue on the old workflow. Use the Jira UI's 'Move' action, which maps "
     "the status to the new workflow."
 )
-UNVERIFIED_SUGGESTION = (
+UNREADABLE_SUGGESTION = (
     "Run it with an account that has project-admin rights, which can read the scheme, or use the "
     "Jira UI's 'Move' action. If you know both types run the same workflow, pass --assume-same-workflow."
+)
+SCHEME_GAP_SUGGESTION = (
+    "Check the project's workflow scheme in the Jira UI, or use its 'Move' action. If you know both "
+    "types run the same workflow, pass --assume-same-workflow."
 )
 
 
@@ -121,15 +125,15 @@ def _workflow_mismatch(
         )
     if assume_same:
         return None
-    unknown = (
-        f"the workflow scheme of {project_key} does not name both types"
-        if workflows
-        else f"this account cannot read the workflow scheme of {project_key} (it needs project-admin rights)"
-    )
+    if workflows:
+        unknown, advice = f"the workflow scheme of {project_key} does not name both types", SCHEME_GAP_SUGGESTION
+    else:
+        unknown = f"this account cannot read the workflow scheme of {project_key} (it needs project-admin rights)"
+        advice = UNREADABLE_SUGGESTION
     return (
         f"{unknown}, so it cannot confirm that '{current_type}' and '{target_type}' use the same workflow; "
         "their statuses match, which two different workflows can have as well",
-        UNVERIFIED_SUGGESTION,
+        advice,
     )
 
 

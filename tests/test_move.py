@@ -401,6 +401,7 @@ class TestWorkflowGuard:
 
         assert result.exit_code == 1, result.output
         assert "cannot confirm that 'Sub: Task' and 'Sub: Bug' use the same workflow" in result.output
+        assert "project-admin rights, which can read the scheme" in result.output
         assert "--assume-same-workflow" in result.output
         mc._session.put.assert_not_called()
 
@@ -462,4 +463,6 @@ class TestWorkflowGuard:
         assert result.exit_code == 1, result.output
         assert "the workflow scheme of FX does not name both types" in result.output
         assert "cannot read the workflow scheme" not in result.output
+        assert "project-admin rights" not in result.output
+        assert "Check the project's workflow scheme" in result.output
         mc._session.put.assert_not_called()
