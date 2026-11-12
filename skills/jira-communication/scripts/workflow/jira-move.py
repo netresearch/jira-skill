@@ -196,8 +196,8 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
     "--assume-same-workflow",
     is_flag=True,
     help=(
-        "Allow the change when this account cannot read the workflow scheme (needs project-admin "
-        "rights) and both types have the same statuses. Jira cannot confirm the workflow then."
+        "Allow the change when both types have the same statuses but the workflow scheme cannot "
+        "confirm their workflow: it is unreadable (needs project-admin rights) or does not name both types."
     ),
 )
 @click.pass_context
