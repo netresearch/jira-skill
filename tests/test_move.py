@@ -67,6 +67,9 @@ def _scheme(mapping: dict[str, str]):
     return {"issueTypes": types, "mappings": [{"name": wf, "issueTypes": ids} for wf, ids in by_wf.items()]}
 
 
+SAME_SCHEME = _scheme({"Sub: Task": "W", "Sub: Bug": "W"})
+
+
 def _gets(
     statuses: dict,
     scheme=None,
@@ -112,7 +115,7 @@ class TestSubtaskTypeRejection:
             {"fields": {"issuetype": {"name": "Sub: Task"}, "project": {"key": "FX"}}},
         ]
         mc._session.put.return_value = _put_response(204)
-        mc._session.get.side_effect = _gets(SAME_STATUSES)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
 
         result, _ = _run(["issue", "FX-1095", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -131,7 +134,7 @@ class TestSubtaskTypeRejection:
             {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}}},
         ]
         mc._session.put.return_value = _put_response(204)
-        mc._session.get.side_effect = _gets(SAME_STATUSES)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
 
         result, _ = _run(["issue", "FX-1095", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -148,7 +151,7 @@ class TestRequestTimeout:
             {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}}},
         ]
         mc._session.put.return_value = _put_response(204)
-        mc._session.get.side_effect = _gets(SAME_STATUSES)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
 
         result, _ = _run(["issue", "FX-1095", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -259,7 +262,7 @@ class TestWorkflowGuard:
             {"fields": {"issuetype": {"name": "Sub: Bug"}}},
         ]
         mc._session.put.side_effect = [_put_response(204), _put_response(400)]
-        mc._session.get.side_effect = _gets(SAME_STATUSES, later_transitions=["Rejected"])
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME, later_transitions=["Rejected"])
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -273,7 +276,7 @@ class TestWorkflowGuard:
             {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
         ]
         mc._session.put.return_value = _put_response(204)
-        mc._session.get.side_effect = _gets(SAME_STATUSES, transitions_status=500)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME, transitions_status=500)
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -301,7 +304,7 @@ class TestWorkflowGuard:
             {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
         ]
         mc._session.put.return_value = _put_response(204)
-        mc._session.get.side_effect = _gets(SAME_STATUSES, auth_error=("later_transitions",))
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME, auth_error=("later_transitions",))
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 
@@ -376,10 +379,75 @@ class TestWorkflowGuard:
             {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
         ]
         mc._session.put.side_effect = [_put_response(204), _mod.requests.ConnectionError("connection reset")]
-        mc._session.get.side_effect = _gets(SAME_STATUSES, later_transitions=["Rejected"])
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME, later_transitions=["Rejected"])
 
         result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
 
         assert result.exit_code == 1, result.output
         assert "Setting the type back to Sub: Task FAILED (connection reset)" in result.output
         assert "Failed to move" not in result.output
+
+    def test_equal_statuses_with_unreadable_scheme_are_refused(self):
+        """Two workflows can share every status; without the scheme the change is unverifiable.
+
+        The check after the change cannot catch this case either, because the old workflow
+        offers no status the new type lacks.
+        """
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES)  # scheme answers 403
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "cannot confirm that 'Sub: Task' and 'Sub: Bug' use the same workflow" in result.output
+        assert "--assume-same-workflow" in result.output
+        mc._session.put.assert_not_called()
+
+    def test_equal_statuses_with_scheme_raising_authentication_error_are_refused(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES, auth_error=("scheme",))
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug", "--dry-run"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "cannot confirm" in result.output
+        assert "DRY RUN" not in result.output
+        mc._session.put.assert_not_called()
+
+    def test_assume_same_workflow_allows_equal_statuses_without_the_scheme(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES)
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug", "--assume-same-workflow"], mc)
+
+        assert result.exit_code == 0, result.output
+        mc._session.put.assert_called_once()
+
+    def test_assume_same_workflow_does_not_override_different_statuses(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Task", project="HMKG", status="In Progress")]
+        mc._session.get.side_effect = _gets(HMKG_STATUSES)
+
+        result, _ = _run(["issue", "HMKG-1", "HMKG", "--issue-type", "Technical task", "--assume-same-workflow"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "have different statuses" in result.output
+        mc._session.put.assert_not_called()
+
+    def test_assume_same_workflow_does_not_override_a_readable_scheme(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=_scheme({"Sub: Task": "A", "Sub: Bug": "B"}))
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug", "--assume-same-workflow"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "'Sub: Task' uses workflow 'A', 'Sub: Bug' uses 'B'" in result.output
+        mc._session.put.assert_not_called()
