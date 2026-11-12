@@ -121,9 +121,13 @@ def _workflow_mismatch(
         )
     if assume_same:
         return None
+    unknown = (
+        f"the workflow scheme of {project_key} does not name both types"
+        if workflows
+        else f"this account cannot read the workflow scheme of {project_key} (it needs project-admin rights)"
+    )
     return (
-        f"this account cannot read the workflow scheme of {project_key} (it needs project-admin rights), "
-        f"so it cannot confirm that '{current_type}' and '{target_type}' use the same workflow; "
+        f"{unknown}, so it cannot confirm that '{current_type}' and '{target_type}' use the same workflow; "
         "their statuses match, which two different workflows can have as well",
         UNVERIFIED_SUGGESTION,
     )

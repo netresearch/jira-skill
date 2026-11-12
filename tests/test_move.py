@@ -451,3 +451,15 @@ class TestWorkflowGuard:
         assert result.exit_code == 1, result.output
         assert "'Sub: Task' uses workflow 'A', 'Sub: Bug' uses 'B'" in result.output
         mc._session.put.assert_not_called()
+
+    def test_equal_statuses_with_a_type_missing_from_the_scheme_name_the_gap(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=_scheme({"Sub: Task": "W"}))
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "the workflow scheme of FX does not name both types" in result.output
+        assert "cannot read the workflow scheme" not in result.output
+        mc._session.put.assert_not_called()
