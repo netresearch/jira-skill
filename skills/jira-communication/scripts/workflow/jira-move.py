@@ -24,7 +24,14 @@ if _lib_path.exists():
 
 import click
 import requests
-from lib.client import JIRA_TIMEOUT, AuthenticationError, LazyJiraClient, SessionExpiredError, _sanitize_error
+from lib.client import (
+    JIRA_TIMEOUT,
+    AuthenticationError,
+    CaptchaError,
+    LazyJiraClient,
+    SessionExpiredError,
+    _sanitize_error,
+)
 from lib.output import error, format_output, success, warning
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -54,17 +61,25 @@ def _statuses_by_type(client, project_key: str) -> dict[str, set[str]]:
     return {t["name"]: {s["name"] for s in t.get("statuses", [])} for t in response.json()}
 
 
-def _workflow_by_type(client, project_key: str) -> dict[str, str] | None:
-    """Workflow name per issue type, or None when the caller cannot read the scheme.
+SCHEME_NO_RIGHTS = "no rights"
+
+
+def _workflow_by_type(client, project_key: str) -> tuple[dict[str, str] | None, str | None]:
+    """Workflow name per issue type, or None with the reason the scheme could not be read.
 
     The project-configuration endpoint is internal to Jira Server/DC and needs
     project-admin rights; any failure means "unknown", never "same workflow".
+    The reason is ``SCHEME_NO_RIGHTS`` for 401/403, otherwise the HTTP status
+    or the exception class, so the refusal does not blame the rights for an
+    outage. A readable scheme that maps no type returns an empty dict.
     """
     url = f"{client.url}/rest/projectconfig/1/workflowscheme/{project_key}"
     try:
         response = client._session.get(url, timeout=JIRA_TIMEOUT)
+        if response.status_code in (401, 403):
+            return None, SCHEME_NO_RIGHTS
         if response.status_code != 200:
-            return None
+            return None, f"HTTP {response.status_code}"
         data = response.json()
         names = {t["id"]: t["name"] for t in data.get("issueTypes", [])}
         result: dict[str, str] = {}
@@ -72,9 +87,11 @@ def _workflow_by_type(client, project_key: str) -> dict[str, str] | None:
             for type_id in mapping.get("issueTypes", []):
                 if type_id in names:
                     result[names[type_id]] = mapping["name"]
-        return result or None
-    except (requests.RequestException, AuthenticationError, ValueError, KeyError, TypeError):
-        return None
+        return result, None
+    except AuthenticationError:
+        return None, SCHEME_NO_RIGHTS
+    except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError) as exc:
+        return None, type(exc).__name__
 
 
 MOVE_SUGGESTION = (
@@ -85,6 +102,10 @@ MOVE_SUGGESTION = (
 UNREADABLE_SUGGESTION = (
     "Run it with an account that has project-admin rights, which can read the scheme, or use the "
     "Jira UI's 'Move' action. If you know both types run the same workflow, pass --assume-same-workflow."
+)
+READ_FAILED_SUGGESTION = (
+    "Retry; if the read keeps failing, use the Jira UI's 'Move' action. If you know both types run "
+    "the same workflow, pass --assume-same-workflow."
 )
 SCHEME_GAP_SUGGESTION = (
     "Check the project's workflow scheme in the Jira UI, or use its 'Move' action. If you know both "
@@ -107,7 +128,8 @@ def _workflow_mismatch(
         return None  # unknown type: Jira's own 400 explains it
     if status not in target_statuses:
         return f"status '{status}' does not exist in the workflow of '{target_type}'", MOVE_SUGGESTION
-    workflows = _workflow_by_type(client, project_key) or {}
+    scheme, scheme_problem = _workflow_by_type(client, project_key)
+    workflows = scheme or {}
     current_wf, target_wf = workflows.get(current_type), workflows.get(target_type)
     if current_wf and target_wf:
         if current_wf != target_wf:
@@ -125,11 +147,16 @@ def _workflow_mismatch(
         )
     if assume_same:
         return None
-    if workflows:
+    if scheme is not None:
         unknown, advice = f"the workflow scheme of {project_key} does not name both types", SCHEME_GAP_SUGGESTION
-    else:
+    elif scheme_problem == SCHEME_NO_RIGHTS:
         unknown = f"this account cannot read the workflow scheme of {project_key} (it needs project-admin rights)"
         advice = UNREADABLE_SUGGESTION
+    else:
+        unknown, advice = (
+            f"reading the workflow scheme of {project_key} failed ({scheme_problem})",
+            READ_FAILED_SUGGESTION,
+        )
     return (
         f"{unknown}, so it cannot confirm that '{current_type}' and '{target_type}' use the same workflow; "
         "their statuses match, which two different workflows can have as well",
@@ -351,7 +378,12 @@ def move_issue(
             # the old type back and fail.
             refreshed_status = (refreshed_fields.get("status") or {}).get("name") or status
             new_statuses = statuses.get(target_type)
-            after = _offered_statuses(client, issue_key, refreshed_status)
+            try:
+                after = _offered_statuses(client, issue_key, refreshed_status)
+            except (SessionExpiredError, CaptchaError):
+                # The change stands; report it as unverified. Before the PUT
+                # these errors still abort through the handlers below.
+                after = None
             foreign = after - new_statuses if after is not None and new_statuses is not None else None
             if foreign is None:
                 warning(

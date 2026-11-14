@@ -77,12 +77,17 @@ def _gets(
     transitions_status: int = 200,
     later_transitions: list[str] | None = None,
     auth_error: tuple[str, ...] = (),
+    scheme_status: int = 403,
+    scheme_raises: Exception | None = None,
+    later_raises: Exception | None = None,
 ):
-    """side_effect for client._session.get: statuses, scheme (or 403) and the issue's transition targets.
+    """side_effect for client._session.get: statuses, scheme (or ``scheme_status``) and the issue's transition targets.
 
     ``later_transitions`` answers every transitions read after the first (the read after the PUT).
     ``auth_error`` names reads that raise AuthenticationError, as the client's response hook does
     on 401/403: "scheme", "transitions" (every read) or "later_transitions" (reads after the first).
+    ``scheme_raises`` and ``later_raises`` raise any other exception from the scheme read or from
+    the transitions reads after the first.
     """
     calls = {"transitions": 0}
 
@@ -92,9 +97,13 @@ def _gets(
         if "/rest/projectconfig/1/workflowscheme/" in url:
             if "scheme" in auth_error:
                 raise _mod.AuthenticationError("403 Forbidden")
-            return _json_response(scheme) if scheme is not None else _json_response({}, 403)
+            if scheme_raises is not None:
+                raise scheme_raises
+            return _json_response(scheme) if scheme is not None else _json_response({}, scheme_status)
         if url.endswith("/transitions"):
             calls["transitions"] += 1
+            if later_raises is not None and calls["transitions"] > 1:
+                raise later_raises
             if "transitions" in auth_error or ("later_transitions" in auth_error and calls["transitions"] > 1):
                 raise _mod.AuthenticationError("403 Forbidden")
             targets = later_transitions if later_transitions is not None and calls["transitions"] > 1 else transitions
@@ -466,3 +475,86 @@ class TestWorkflowGuard:
         assert "project-admin rights" not in result.output
         assert "Check the project's workflow scheme" in result.output
         mc._session.put.assert_not_called()
+
+    def test_readable_scheme_without_any_mapping_names_the_gap(self):
+        """A 200 scheme whose types have no workflow mapping is readable; rights are not the cause."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        scheme = {"issueTypes": [{"id": "1", "name": "Sub: Task"}, {"id": "2", "name": "Sub: Bug"}], "mappings": []}
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=scheme)
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "the workflow scheme of FX does not name both types" in result.output
+        assert "project-admin rights" not in result.output
+        mc._session.put.assert_not_called()
+
+
+class TestSchemeReadFailures:
+    """A scheme read that fails for another reason than missing rights must not blame the rights."""
+
+    def _refusal(self, **gets):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES, **gets)
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        assert result.exit_code == 1, result.output
+        assert "cannot confirm that 'Sub: Task' and 'Sub: Bug' use the same workflow" in result.output
+        assert "--assume-same-workflow" in result.output
+        mc._session.put.assert_not_called()
+        return result.output
+
+    def test_401_names_the_rights(self):
+        output = self._refusal(scheme_status=401)
+        assert "cannot read the workflow scheme of FX (it needs project-admin rights)" in output
+
+    def test_404_names_the_status_not_the_rights(self):
+        output = self._refusal(scheme_status=404)
+        assert "reading the workflow scheme of FX failed (HTTP 404)" in output
+        assert "project-admin rights" not in output
+
+    def test_500_names_the_status_not_the_rights(self):
+        output = self._refusal(scheme_status=500)
+        assert "reading the workflow scheme of FX failed (HTTP 500)" in output
+        assert "project-admin rights" not in output
+
+    def test_timeout_names_the_failure_not_the_rights(self):
+        output = self._refusal(scheme_raises=_mod.requests.Timeout("read timed out"))
+        assert "reading the workflow scheme of FX failed (Timeout)" in output
+        assert "project-admin rights" not in output
+
+    def test_unparsable_body_names_the_failure_not_the_rights(self):
+        output = self._refusal(scheme={"mappings": [{"issueTypes": ["1"]}], "issueTypes": [{"id": "1", "name": "X"}]})
+        assert "reading the workflow scheme of FX failed (KeyError)" in output
+        assert "project-admin rights" not in output
+
+
+class TestVerificationAfterTheChange:
+    """Once Jira accepted the type change, a failed check must not hide that the change stands."""
+
+    def _change(self, exc):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME, later_raises=exc)
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        return result, mc
+
+    def test_expired_session_on_the_transitions_read_warns_and_keeps_the_change(self):
+        result, mc = self._change(_mod.SessionExpiredError("html login page"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
+
+    def test_captcha_on_the_transitions_read_warns_and_keeps_the_change(self):
+        result, mc = self._change(_mod.CaptchaError("captcha required", "https://jira.example.com/login.jsp"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
