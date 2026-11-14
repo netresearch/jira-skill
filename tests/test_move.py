@@ -529,6 +529,11 @@ class TestSchemeReadFailures:
         assert "reading the workflow scheme of FX failed (KeyError)" in output
         assert "project-admin rights" not in output
 
+    def test_list_body_names_the_failure_not_the_rights(self):
+        output = self._refusal(scheme=[{"issueTypes": []}])
+        assert "reading the workflow scheme of FX failed (AttributeError)" in output
+        assert "project-admin rights" not in output
+
 
 class TestVerificationAfterTheChange:
     """Once Jira accepted the type change, a failed check must not hide that the change stands."""
@@ -574,6 +579,25 @@ class TestVerificationAfterTheChange:
         assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
         assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
         mc._session.put.assert_called_once()
+
+    def test_timeout_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
+
+    def test_server_error_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.requests.HTTPError("500 Server Error"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+
+    def test_authentication_error_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.AuthenticationError("Authentication failed (HTTP 401)"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
 
     def test_captcha_on_the_read_back_warns_and_keeps_the_change(self):
         result, mc = self._change_with_unreadable_issue(

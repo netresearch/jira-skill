@@ -353,7 +353,7 @@ def move_issue(
             unreadable = False
             try:
                 refreshed = client.issue(issue_key, fields="issuetype,project,status")
-            except (SessionExpiredError, CaptchaError):
+            except (SessionExpiredError, CaptchaError, AuthenticationError, requests.RequestException):
                 # Jira answered 204, so the change stands; it cannot be read back.
                 refreshed, unreadable = {}, True
             refreshed_fields = refreshed.get("fields") or {}
