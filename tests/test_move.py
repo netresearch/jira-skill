@@ -610,6 +610,13 @@ class TestVerificationAfterTheChange:
         assert payload["new_type"] == "Sub: Bug"
         assert payload["type_verified"] is False
 
+    def test_quiet_keeps_the_key_on_stdout_and_the_warning_on_stderr(self):
+        result, _ = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"), "--quiet")
+
+        assert result.exit_code == 0, result.output
+        assert result.stdout.strip() == "FX-1"
+        assert "its type is unverified" in result.stderr
+
     def test_json_marks_the_type_verified_after_a_successful_read_back(self):
         mc = _make_mock_client()
         mc.issue.side_effect = [
