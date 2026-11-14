@@ -354,8 +354,13 @@ def move_issue(
             try:
                 refreshed = client.issue(issue_key, fields="issuetype,project,status")
             except (SessionExpiredError, CaptchaError, AuthenticationError, requests.RequestException):
-                # Jira answered 204, so the change stands; it cannot be read back.
+                # Jira answered 204 but can refuse a type change silently; without
+                # the read-back the type itself stays unverified.
                 refreshed, unreadable = {}, True
+                warning(
+                    f"Jira accepted the type change of {issue_key} (HTTP 204), but the issue could not be "
+                    "read back, so its type is unverified. Check it in the Jira UI."
+                )
             refreshed_fields = refreshed.get("fields") or {}
             refreshed_type = (refreshed_fields.get("issuetype") or {}).get("name")
             refreshed_project = (refreshed_fields.get("project") or {}).get("key")
@@ -429,9 +434,13 @@ def move_issue(
                         "new_type": target_type,
                         "project": current_project,
                         "summary": summary,
+                        "type_verified": not unreadable,
                     },
                     as_json=True,
                 )
+            elif unreadable:
+                print(f"Type change sent for {issue_key}: {current_type} → {target_type} (unverified)")
+                print(f"  Summary:    {summary}")
             else:
                 success(f"Changed {issue_key} type: {current_type} → {target_type}")
                 print(f"  Summary:    {summary}")

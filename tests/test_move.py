@@ -9,6 +9,7 @@ read-after-write check; this verifies the error message explains the REST
 limitation and points the user at the UI Move action.
 """
 
+import json
 from unittest import mock
 
 from conftest import load_script, make_mock_client, run_cli
@@ -564,46 +565,68 @@ class TestVerificationAfterTheChange:
         assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
         mc._session.put.assert_called_once()
 
-    def _change_with_unreadable_issue(self, exc):
+    def _change_with_unreadable_issue(self, exc, *flags):
         mc = _make_mock_client()
         mc.issue.side_effect = [_issue("Sub: Task"), exc]
         mc._session.put.return_value = _put_response(204)
         mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
-        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        result, _ = _run([*flags, "issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
         return result, mc
+
+    def _assert_kept_but_unverified(self, result):
+        # The read-back is the only check against Jira's silent refusal of a
+        # type change, so without it the output must not claim the new type.
+        assert result.exit_code == 0, result.output
+        assert "its type is unverified" in result.output
+        assert "Type change sent for FX-1: Sub: Task → Sub: Bug (unverified)" in result.output
+        assert "Changed FX-1 type" not in result.output
 
     def test_expired_session_on_the_read_back_warns_and_keeps_the_change(self):
         result, mc = self._change_with_unreadable_issue(_mod.SessionExpiredError("html login page"))
 
-        assert result.exit_code == 0, result.output
-        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
-        assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
+        self._assert_kept_but_unverified(result)
         mc._session.put.assert_called_once()
 
     def test_timeout_on_the_read_back_warns_and_keeps_the_change(self):
         result, mc = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"))
 
-        assert result.exit_code == 0, result.output
-        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
-        assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
+        self._assert_kept_but_unverified(result)
 
     def test_server_error_on_the_read_back_warns_and_keeps_the_change(self):
         result, mc = self._change_with_unreadable_issue(_mod.requests.HTTPError("500 Server Error"))
 
-        assert result.exit_code == 0, result.output
-        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        self._assert_kept_but_unverified(result)
 
     def test_authentication_error_on_the_read_back_warns_and_keeps_the_change(self):
         result, mc = self._change_with_unreadable_issue(_mod.AuthenticationError("Authentication failed (HTTP 401)"))
 
+        self._assert_kept_but_unverified(result)
+
+    def test_json_marks_the_type_unverified_when_the_read_back_fails(self):
+        result, _ = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"), "--json")
+
         assert result.exit_code == 0, result.output
-        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        payload = json.loads(result.stdout)
+        assert payload["new_type"] == "Sub: Bug"
+        assert payload["type_verified"] is False
+
+    def test_json_marks_the_type_verified_after_a_successful_read_back(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
+        result, _ = _run(["--json", "issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["type_verified"] is True
 
     def test_captcha_on_the_read_back_warns_and_keeps_the_change(self):
         result, mc = self._change_with_unreadable_issue(
             _mod.CaptchaError("captcha required", "https://jira.example.com/login.jsp")
         )
 
-        assert result.exit_code == 0, result.output
-        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        self._assert_kept_but_unverified(result)
         mc._session.put.assert_called_once()
