@@ -558,3 +558,28 @@ class TestVerificationAfterTheChange:
         assert result.exit_code == 0, result.output
         assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
         mc._session.put.assert_called_once()
+
+    def _change_with_unreadable_issue(self, exc):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task"), exc]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        return result, mc
+
+    def test_expired_session_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.SessionExpiredError("html login page"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
+
+    def test_captcha_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(
+            _mod.CaptchaError("captcha required", "https://jira.example.com/login.jsp")
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        mc._session.put.assert_called_once()

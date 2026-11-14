@@ -350,7 +350,12 @@ def move_issue(
 
         if response.status_code == 204:
             # Verify the update actually applied (defense against silent failures)
-            refreshed = client.issue(issue_key, fields="issuetype,project,status")
+            unreadable = False
+            try:
+                refreshed = client.issue(issue_key, fields="issuetype,project,status")
+            except (SessionExpiredError, CaptchaError):
+                # Jira answered 204, so the change stands; it cannot be read back.
+                refreshed, unreadable = {}, True
             refreshed_fields = refreshed.get("fields") or {}
             refreshed_type = (refreshed_fields.get("issuetype") or {}).get("name")
             refreshed_project = (refreshed_fields.get("project") or {}).get("key")
@@ -379,7 +384,7 @@ def move_issue(
             refreshed_status = (refreshed_fields.get("status") or {}).get("name") or status
             new_statuses = statuses.get(target_type)
             try:
-                after = _offered_statuses(client, issue_key, refreshed_status)
+                after = None if unreadable else _offered_statuses(client, issue_key, refreshed_status)
             except (SessionExpiredError, CaptchaError):
                 # The change stands; report it as unverified. Before the PUT
                 # these errors still abort through the handlers below.
@@ -388,7 +393,7 @@ def move_issue(
             if foreign is None:
                 warning(
                     f"Could not verify that {issue_key} runs the workflow of {target_type} "
-                    "(transitions or statuses unreadable)."
+                    "(issue, transitions or statuses unreadable)."
                 )
             elif foreign:
                 try:
