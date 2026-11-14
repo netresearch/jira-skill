@@ -610,6 +610,26 @@ class TestVerificationAfterTheChange:
         assert payload["new_type"] == "Sub: Bug"
         assert payload["type_verified"] is False
 
+    def _change_with_read_back_returning(self, value, *flags):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task"), value]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
+        result, _ = _run([*flags, "issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        return result
+
+    def test_empty_read_back_body_reports_the_type_unverified(self):
+        self._assert_kept_but_unverified(self._change_with_read_back_returning(None))
+
+    def test_unparsed_read_back_text_reports_the_type_unverified(self):
+        self._assert_kept_but_unverified(self._change_with_read_back_returning("<html>gateway error</html>"))
+
+    def test_read_back_without_the_type_is_not_verified(self):
+        result = self._change_with_read_back_returning({"fields": {}}, "--json")
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["type_verified"] is False
+
     def test_quiet_keeps_the_key_on_stdout_and_the_warning_on_stderr(self):
         result, _ = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"), "--quiet")
 

@@ -350,18 +350,13 @@ def move_issue(
 
         if response.status_code == 204:
             # Verify the update actually applied (defense against silent failures)
-            unreadable = False
             try:
                 refreshed = client.issue(issue_key, fields="issuetype,project,status")
             except (SessionExpiredError, CaptchaError, AuthenticationError, requests.RequestException):
-                # Jira answered 204 but can refuse a type change silently; without
-                # the read-back the type itself stays unverified.
-                refreshed, unreadable = {}, True
-                warning(
-                    f"Jira accepted the type change of {issue_key} (HTTP 204), but the issue could not be "
-                    "read back, so its type is unverified. Check it in the Jira UI."
-                )
-            refreshed_fields = refreshed.get("fields") or {}
+                refreshed = None
+            # The client can also return None or text for an empty or broken body.
+            fields = refreshed.get("fields") if isinstance(refreshed, dict) else None
+            refreshed_fields = fields if isinstance(fields, dict) else {}
             refreshed_type = (refreshed_fields.get("issuetype") or {}).get("name")
             refreshed_project = (refreshed_fields.get("project") or {}).get("key")
             if refreshed_project and refreshed_project.upper() != current_project.upper():
@@ -382,6 +377,14 @@ def move_issue(
                     ),
                 )
                 sys.exit(1)
+            # Jira can answer 204 and keep the old type, so only a read-back that
+            # shows the target type verifies the change; anything else is unverified.
+            unreadable = refreshed_type != target_type
+            if unreadable:
+                warning(
+                    f"Jira accepted the type change of {issue_key} (HTTP 204), but the issue could not be "
+                    "read back, so its type is unverified. Check it in the Jira UI."
+                )
             # After the change: the issue must run the new type's workflow. Its
             # transitions come from the workflow it actually runs; a target the
             # new type's workflow lacks means the old workflow stayed. Then put
