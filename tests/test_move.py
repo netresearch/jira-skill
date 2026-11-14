@@ -9,6 +9,7 @@ read-after-write check; this verifies the error message explains the REST
 limitation and points the user at the UI Move action.
 """
 
+import json
 from unittest import mock
 
 from conftest import load_script, make_mock_client, run_cli
@@ -77,12 +78,17 @@ def _gets(
     transitions_status: int = 200,
     later_transitions: list[str] | None = None,
     auth_error: tuple[str, ...] = (),
+    scheme_status: int = 403,
+    scheme_raises: Exception | None = None,
+    later_raises: Exception | None = None,
 ):
-    """side_effect for client._session.get: statuses, scheme (or 403) and the issue's transition targets.
+    """side_effect for client._session.get: statuses, scheme (or ``scheme_status``) and the issue's transition targets.
 
     ``later_transitions`` answers every transitions read after the first (the read after the PUT).
     ``auth_error`` names reads that raise AuthenticationError, as the client's response hook does
     on 401/403: "scheme", "transitions" (every read) or "later_transitions" (reads after the first).
+    ``scheme_raises`` and ``later_raises`` raise any other exception from the scheme read or from
+    the transitions reads after the first.
     """
     calls = {"transitions": 0}
 
@@ -92,9 +98,13 @@ def _gets(
         if "/rest/projectconfig/1/workflowscheme/" in url:
             if "scheme" in auth_error:
                 raise _mod.AuthenticationError("403 Forbidden")
-            return _json_response(scheme) if scheme is not None else _json_response({}, 403)
+            if scheme_raises is not None:
+                raise scheme_raises
+            return _json_response(scheme) if scheme is not None else _json_response({}, scheme_status)
         if url.endswith("/transitions"):
             calls["transitions"] += 1
+            if later_raises is not None and calls["transitions"] > 1:
+                raise later_raises
             if "transitions" in auth_error or ("later_transitions" in auth_error and calls["transitions"] > 1):
                 raise _mod.AuthenticationError("403 Forbidden")
             targets = later_transitions if later_transitions is not None and calls["transitions"] > 1 else transitions
@@ -466,3 +476,184 @@ class TestWorkflowGuard:
         assert "project-admin rights" not in result.output
         assert "Check the project's workflow scheme" in result.output
         mc._session.put.assert_not_called()
+
+    def test_readable_scheme_without_any_mapping_names_the_gap(self):
+        """A 200 scheme whose types have no workflow mapping is readable; rights are not the cause."""
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        scheme = {"issueTypes": [{"id": "1", "name": "Sub: Task"}, {"id": "2", "name": "Sub: Bug"}], "mappings": []}
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=scheme)
+
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 1, result.output
+        assert "the workflow scheme of FX does not name both types" in result.output
+        assert "project-admin rights" not in result.output
+        mc._session.put.assert_not_called()
+
+
+class TestSchemeReadFailures:
+    """A scheme read that fails for another reason than missing rights must not blame the rights."""
+
+    def _refusal(self, **gets):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task")]
+        mc._session.get.side_effect = _gets(SAME_STATUSES, **gets)
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        assert result.exit_code == 1, result.output
+        assert "cannot confirm that 'Sub: Task' and 'Sub: Bug' use the same workflow" in result.output
+        assert "--assume-same-workflow" in result.output
+        mc._session.put.assert_not_called()
+        return result.output
+
+    def test_401_names_the_rights(self):
+        output = self._refusal(scheme_status=401)
+        assert "cannot read the workflow scheme of FX (it needs project-admin rights)" in output
+
+    def test_404_names_the_status_not_the_rights(self):
+        output = self._refusal(scheme_status=404)
+        assert "reading the workflow scheme of FX failed (HTTP 404)" in output
+        assert "project-admin rights" not in output
+
+    def test_500_names_the_status_not_the_rights(self):
+        output = self._refusal(scheme_status=500)
+        assert "reading the workflow scheme of FX failed (HTTP 500)" in output
+        assert "project-admin rights" not in output
+
+    def test_timeout_names_the_failure_not_the_rights(self):
+        output = self._refusal(scheme_raises=_mod.requests.Timeout("read timed out"))
+        assert "reading the workflow scheme of FX failed (Timeout)" in output
+        assert "project-admin rights" not in output
+
+    def test_unparsable_body_names_the_failure_not_the_rights(self):
+        output = self._refusal(scheme={"mappings": [{"issueTypes": ["1"]}], "issueTypes": [{"id": "1", "name": "X"}]})
+        assert "reading the workflow scheme of FX failed (KeyError)" in output
+        assert "project-admin rights" not in output
+
+    def test_list_body_names_the_failure_not_the_rights(self):
+        output = self._refusal(scheme=[{"issueTypes": []}])
+        assert "reading the workflow scheme of FX failed (AttributeError)" in output
+        assert "project-admin rights" not in output
+
+
+class TestVerificationAfterTheChange:
+    """Once Jira accepted the type change, a failed check must not hide that the change stands."""
+
+    def _change(self, exc):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME, later_raises=exc)
+        result, _ = _run(["issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        return result, mc
+
+    def test_expired_session_on_the_transitions_read_warns_and_keeps_the_change(self):
+        result, mc = self._change(_mod.SessionExpiredError("html login page"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        assert "Changed FX-1 type: Sub: Task → Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
+
+    def test_captcha_on_the_transitions_read_warns_and_keeps_the_change(self):
+        result, mc = self._change(_mod.CaptchaError("captcha required", "https://jira.example.com/login.jsp"))
+
+        assert result.exit_code == 0, result.output
+        assert "Could not verify that FX-1 runs the workflow of Sub: Bug" in result.output
+        mc._session.put.assert_called_once()
+
+    def _change_with_unreadable_issue(self, exc, *flags):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task"), exc]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
+        result, _ = _run([*flags, "issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        return result, mc
+
+    def _assert_kept_but_unverified(self, result):
+        # The read-back is the only check against Jira's silent refusal of a
+        # type change, so without it the output must not claim the new type.
+        assert result.exit_code == 0, result.output
+        assert "its type is unverified" in result.output
+        assert "Type change sent for FX-1: Sub: Task → Sub: Bug (unverified)" in result.output
+        assert "Changed FX-1 type" not in result.output
+
+    def test_expired_session_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.SessionExpiredError("html login page"))
+
+        self._assert_kept_but_unverified(result)
+        mc._session.put.assert_called_once()
+
+    def test_timeout_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"))
+
+        self._assert_kept_but_unverified(result)
+
+    def test_server_error_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.requests.HTTPError("500 Server Error"))
+
+        self._assert_kept_but_unverified(result)
+
+    def test_authentication_error_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(_mod.AuthenticationError("Authentication failed (HTTP 401)"))
+
+        self._assert_kept_but_unverified(result)
+
+    def test_json_marks_the_type_unverified_when_the_read_back_fails(self):
+        result, _ = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"), "--json")
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.stdout)
+        assert payload["new_type"] == "Sub: Bug"
+        assert payload["type_verified"] is False
+
+    def _change_with_read_back_returning(self, value, *flags):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [_issue("Sub: Task"), value]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
+        result, _ = _run([*flags, "issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+        return result
+
+    def test_empty_read_back_body_reports_the_type_unverified(self):
+        self._assert_kept_but_unverified(self._change_with_read_back_returning(None))
+
+    def test_unparsed_read_back_text_reports_the_type_unverified(self):
+        self._assert_kept_but_unverified(self._change_with_read_back_returning("<html>gateway error</html>"))
+
+    def test_read_back_without_the_type_is_not_verified(self):
+        result = self._change_with_read_back_returning({"fields": {}}, "--json")
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["type_verified"] is False
+
+    def test_quiet_keeps_the_key_on_stdout_and_the_warning_on_stderr(self):
+        result, _ = self._change_with_unreadable_issue(_mod.requests.Timeout("read timed out"), "--quiet")
+
+        assert result.exit_code == 0, result.output
+        assert result.stdout.strip() == "FX-1"
+        assert "its type is unverified" in result.stderr
+
+    def test_json_marks_the_type_verified_after_a_successful_read_back(self):
+        mc = _make_mock_client()
+        mc.issue.side_effect = [
+            _issue("Sub: Task"),
+            {"fields": {"issuetype": {"name": "Sub: Bug"}, "project": {"key": "FX"}, "status": {"name": "Open"}}},
+        ]
+        mc._session.put.return_value = _put_response(204)
+        mc._session.get.side_effect = _gets(SAME_STATUSES, scheme=SAME_SCHEME)
+        result, _ = _run(["--json", "issue", "FX-1", "FX", "--issue-type", "Sub: Bug"], mc)
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["type_verified"] is True
+
+    def test_captcha_on_the_read_back_warns_and_keeps_the_change(self):
+        result, mc = self._change_with_unreadable_issue(
+            _mod.CaptchaError("captcha required", "https://jira.example.com/login.jsp")
+        )
+
+        self._assert_kept_but_unverified(result)
+        mc._session.put.assert_called_once()
