@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-11-15
+
 ### Added
 
 - `jira-move.py issue … --issue-type X --json` reports `"type_verified"`: `true` when the read-back after the change shows the target type, `false` when the read-back fails or returns no type, because Jira can answer 204 and keep the old type. A read-back that shows another type still exits 1 without JSON output ([#334](https://github.com/netresearch/jira-skill/pull/334))
@@ -1026,7 +1028,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v5.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v5.1.0...HEAD
+[5.1.0]: https://github.com/netresearch/jira-skill/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/netresearch/jira-skill/compare/v4.3.3...v5.0.0
 [4.3.3]: https://github.com/netresearch/jira-skill/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/netresearch/jira-skill/compare/v4.3.1...v4.3.2
