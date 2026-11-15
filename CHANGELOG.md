@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `jira-move.py issue … --issue-type X --json` reports `"type_verified"`: `true` when the read-back after the change shows the target type, `false` when the read-back fails or returns no type, because Jira can answer 204 and keep the old type. A read-back that shows another type still exits 1 without JSON output ([#334](https://github.com/netresearch/jira-skill/pull/334))
+
+### Fixed
+
+- `jira-move.py issue … --issue-type X` keeps a type change that Jira already applied when a read after the change fails (an expired session, a CAPTCHA, a timeout, a server or authentication error on the read-back of the issue or its transitions): it warns, keeps the change and exits 0, as `references/issue-editing.md` describes, instead of "Failed to move" with exit 1. When the read-back fails or returns no type, it prints `Type change sent … (unverified)` instead of `Changed …` ([#334](https://github.com/netresearch/jira-skill/pull/334))
+- The refusal for an unconfirmed workflow names the cause of a failed scheme read (HTTP status, timeout, unparsable body) and advises a retry, instead of always blaming missing project-admin rights; a readable scheme that maps neither type is reported as a scheme gap ([#334](https://github.com/netresearch/jira-skill/pull/334))
+
 ## [5.0.0] - 2026-11-12
 
 ### Added
