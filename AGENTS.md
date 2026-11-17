@@ -62,12 +62,12 @@ Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On 
 2. Backfill any missing CHANGELOG entries, rename `[Unreleased]` to `[<version>] - <today>`, add a fresh empty `[Unreleased]` above it
 3. Bump the version in `.claude-plugin/plugin.json` **and** `plugin.json`
 4. Bump `metadata.version` in **both** `skills/*/SKILL.md` to match (CI and the pre-commit parity hook validate consistency)
-5. Branch `release/v<version>`, commit `chore: release v<version>` (signed, as always), push, open a PR with the same title
+5. Branch `release/v<version>`, commit `chore(release): v<version>` (signed, as always), push, open a PR with the same title
 6. Merge the PR once CI is green — plain merge, no bypass
 7. Tag the merge commit: `git fetch origin main`, assert local HEAD equals the remote `main` tip, then `git tag -s v<version> -m "v<version>"` (signed annotated — never lightweight)
 8. Push the tag: `git push origin v<version>`
 
-The GitHub Action on the tag push creates the release with all packages, checksums and SLSA provenance. Never `gh release create`. Write the narrative release notes before tagging and apply them with `gh release edit v<version> --notes-file …` once the Action has published.
+The GitHub Action on the tag push creates the release with all packages, checksums and SLSA provenance. Never `gh release create`. Keep the release notes the Action generates; do not replace them with hand-written notes (netresearch/skill-repo-skill#257). Where a merged PR fixed an issue, add its reporter at that PR's line: `… in <PR URL> — reported by @reporter in #N`.
 
 ## Index of scoped AGENTS.md
 
