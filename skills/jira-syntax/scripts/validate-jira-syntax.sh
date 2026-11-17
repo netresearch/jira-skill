@@ -477,6 +477,38 @@ validate_file() {
         warning "Found Markdown-style bullets (- item). Jira prefers: * item"
     fi
 
+    # A nested bullet (** item) must continue a list. After a blank line, a
+    # heading, a table row, a block tag or a plain paragraph Jira opens a new
+    # list and renders an empty level-1 bullet with the item nested under it.
+    # A non-blank line inside a list continues the item above, so the list
+    # stays open across it. {code}/{noformat} content is verbatim and skipped.
+    local orphan_hits
+    orphan_hits=$(awk '
+        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ {
+            tag = $0
+            sub(/^[[:space:]]*\{/, "", tag)
+            sub(/[:}].*$/, "", tag)
+            # Only the tag that opened a verbatim block closes it; another
+            # block tag inside it is literal content.
+            if (verbatim == "") verbatim = tag
+            else if (tag == verbatim) verbatim = ""
+            inlist = 0
+            next
+        }
+        verbatim != "" { next }
+        /^[*#]+ / {
+            if ($0 ~ /^\*\*+ / && !inlist) printf "%d:%s\n", NR, $0
+            inlist = 1
+            next
+        }
+        /^[[:space:]]*$/ || /^h[1-6]\. / || /^\|/ || /^[[:space:]]*\{[a-z]+(:[^}]*)?\}[[:space:]]*$/ { inlist = 0 }
+    ' <<< "$content" | head -3)
+    if [ -n "$orphan_hits" ]; then
+        warning "Nested bullet without a list item above — Jira renders an empty bullet with the item under it. Put a '* item' line directly above, or remove the blank line between them"
+        echo "   Lines with issue:"
+        echo "$orphan_hits"
+    fi
+
     # Positive checks
     if echo "$content" | grep -qE "^h[1-6]\. "; then
         success "Found correctly formatted Jira headings"

@@ -77,6 +77,10 @@ Space required after the period (`h2. Title`, not `h2.Title`).
 **Rules:**
 - Space after `*` or `#`
 - Nesting uses additional symbols (`**`, `##`), not indentation
+- A `** item` must continue a list: the line above is a list item, or a
+  non-blank line that continues one. After a blank line, a heading or a plain
+  paragraph, Jira renders an empty bullet with the item nested under it
+  (measured with `POST /rest/api/1.0/render`). The validator warns on it
 - Can mix list types with combined syntax (`#*`)
 
 ## Links
