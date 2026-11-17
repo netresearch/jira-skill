@@ -58,6 +58,8 @@ def _warned_lines(text: str, tmp_path: Path) -> list[str]:
         # verbatim: not markup inside {code}/{noformat}
         ("{code}\n** not a list\n{code}\n", []),
         ("{noformat}\n\n** not a list\n{noformat}\n", []),
+        # a different block tag inside a verbatim block is literal content
+        ("{noformat}\n{code}\n** literal\n{noformat}\n** orphan\n", ["5"]),
     ],
 )
 def test_nested_bullet_needs_a_list_item_above(text, lines, tmp_path):

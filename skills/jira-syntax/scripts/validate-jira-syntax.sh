@@ -484,8 +484,18 @@ validate_file() {
     # stays open across it. {code}/{noformat} content is verbatim and skipped.
     local orphan_hits
     orphan_hits=$(awk '
-        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ { verbatim = !verbatim; inlist = 0; next }
-        verbatim { next }
+        /^[[:space:]]*\{(code|noformat)(:[^}]*)?\}[[:space:]]*$/ {
+            tag = $0
+            sub(/^[[:space:]]*\{/, "", tag)
+            sub(/[:}].*$/, "", tag)
+            # Only the tag that opened a verbatim block closes it; another
+            # block tag inside it is literal content.
+            if (verbatim == "") verbatim = tag
+            else if (tag == verbatim) verbatim = ""
+            inlist = 0
+            next
+        }
+        verbatim != "" { next }
         /^[*#]+ / {
             if ($0 ~ /^\*\*+ / && !inlist) printf "%d:%s\n", NR, $0
             inlist = 1

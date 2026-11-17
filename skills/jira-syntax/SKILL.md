@@ -73,7 +73,7 @@ posting command.
 | `` `code` `` | `{{code}}` |
 | `[text](url)` | `[text\|url]` |
 | `- bullet` | `* bullet` |
-| `** child` after a blank line, heading or paragraph | a `* parent` line directly above `** child` — otherwise Jira renders an empty bullet |
+| `** child` after a blank line, heading or paragraph | a `* parent` line, or a line continuing it, directly above `** child` — otherwise Jira renders an empty bullet |
 | `h2.Title` | `h2. Title` |
 | `MR !42` (bare GitLab ref) | `[MR 42\|url]` or full `group/project!42` — a bare `!…!` is image markup |
 | `(/)` on an open/proposed item | `(x)` — `(/)` renders as a green check (done); use `(x)` for open items |
