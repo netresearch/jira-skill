@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-11-17
+
+### Added
+
+- `validate-jira-syntax.sh` warns when a `**`-or-deeper bullet follows a blank line, heading, table row, block tag or paragraph outside a list instead of a list item, because Jira then renders an empty bullet with the item nested under it. A non-blank line inside a list continues the item above it and keeps the list open; `{code}`/`{noformat}` content is skipped. The quick reference states the rule and `SKILL.md` lists it under Common Mistakes. `lint_wiki_markup` in `jira-communication`, which gates posting, is unchanged ([#340](https://github.com/netresearch/jira-skill/pull/340))
+
 ## [5.1.0] - 2026-11-15
 
 ### Added
@@ -1028,7 +1034,8 @@ First stable release providing comprehensive Jira integration through Claude Cod
 - [Claude Code Marketplace](https://github.com/netresearch/claude-code-marketplace)
 - [Jira Wiki Markup Reference](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all)
 
-[Unreleased]: https://github.com/netresearch/jira-skill/compare/v5.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/jira-skill/compare/v5.2.0...HEAD
+[5.2.0]: https://github.com/netresearch/jira-skill/compare/v5.1.0...v5.2.0
 [5.1.0]: https://github.com/netresearch/jira-skill/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/netresearch/jira-skill/compare/v4.3.3...v5.0.0
 [4.3.3]: https://github.com/netresearch/jira-skill/compare/v4.3.2...v4.3.3
