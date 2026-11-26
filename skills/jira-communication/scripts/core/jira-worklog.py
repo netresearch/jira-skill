@@ -373,7 +373,7 @@ def delete(ctx, issue_key: str, worklog_id: str, keep_remaining: bool, dry_run: 
         existing = client.get(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}") or {}
         # Delete only what the GET proved to be this worklog: a response
         # without the matching id came from another resource.
-        if str(existing.get("id")) != worklog_id:
+        if str(existing.get("id")) != str(int(worklog_id)):
             error(f"{issue_key} has no worklog {worklog_id}; nothing deleted")
             sys.exit(1)
         author = person_label(existing.get("author"))

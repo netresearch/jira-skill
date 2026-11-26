@@ -526,6 +526,19 @@ class TestDownloadAll:
         assert (tmp_path / "dup.txt").exists()
         assert (tmp_path / "2_dup.txt").exists()
 
+    def test_an_issue_key_with_a_path_sends_nothing(self, tmp_path):
+        """download-all PROJ-1/../PROJ-2 read PROJ-2's attachments as PROJ-1's."""
+        runner = click.testing.CliRunner()
+        with (
+            mock.patch.object(jira_attachment, "load_config", return_value=_FAKE_CONFIG),
+            mock.patch.object(jira_attachment.requests, "get") as get,
+            mock.patch.object(jira_attachment.Path, "cwd", return_value=tmp_path),
+        ):
+            result = runner.invoke(jira_attachment.cli, ["download-all", "PROJ-1/../PROJ-2"])
+        assert result.exit_code == 2, result.output
+        assert "ISSUE_KEY" in result.output
+        get.assert_not_called()
+
     def test_dir_outside_cwd_rejected(self, tmp_path):
         """--dir resolving outside cwd must be rejected (path traversal guard)."""
         result = self._run(tmp_path, [_att("1", "a.pdf")], extra_args=["--dir", "../escape"])

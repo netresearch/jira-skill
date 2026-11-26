@@ -35,6 +35,7 @@ from lib.client import (
     SessionExpiredError,
     _handle_response,
     _sanitize_error,
+    check_issue_ref,
 )
 from lib.config import load_config
 from lib.output import error, success, warning
@@ -362,6 +363,8 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
 
       jira-attachment download-all PROJ-123 --dry-run
     """
+    # This request bypasses the client session and its URL check.
+    check_issue_ref(issue_key)
     try:
         config = load_config(env_file=ctx.obj["env_file"], profile=ctx.obj.get("profile"))
         jira_url = config["JIRA_URL"]

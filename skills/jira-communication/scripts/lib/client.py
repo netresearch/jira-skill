@@ -6,6 +6,7 @@
 import re
 from urllib.parse import unquote, urlparse, urlsplit
 
+import click
 from atlassian import Jira
 from requests import Response
 from requests.adapters import HTTPAdapter
@@ -378,6 +379,29 @@ def _handle_response(response: Response, jira_url: str, url: str | None = None) 
     _check_session_expiry(response, url or getattr(response, "url", ""))
 
 
+# An issue key ("PROJ-123", any case) or a numeric issue id. A browse URL is
+# also accepted by with_context(), for profile resolution only.
+_ISSUE_REF_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*-[0-9]+|[0-9]+", re.ASCII)
+
+
+def check_issue_ref(issue_key: str) -> None:
+    """Refuse an ISSUE_KEY that is neither a key, a numeric id nor a URL.
+
+    Commands put the key into REST paths. Anything else in it can change the
+    request: "PROJ-1?deleteSubtasks=true" adds a parameter that the
+    command's own flag cannot override, "PROJ-1/comment/7" addresses a
+    comment instead of the issue.
+
+    Raises:
+        click.BadParameter: shown by click as a usage error, exit code 2.
+    """
+    if issue_key.startswith(("http://", "https://")) or _ISSUE_REF_RE.fullmatch(issue_key):
+        return
+    raise click.BadParameter(
+        f"{issue_key!r} is not an issue key (PROJ-123) or a numeric issue id", param_hint="ISSUE_KEY"
+    )
+
+
 def _check_request_url(url: str) -> None:
     """Refuse a URL that the HTTP stack would send to another resource.
 
@@ -480,8 +504,11 @@ class LazyJiraClient:
         client is already initialized.
 
         If *issue_key* looks like a URL (starts with http(s)://), it is
-        also used as *url* for host-based profile resolution.
+        also used as *url* for host-based profile resolution. Any other
+        *issue_key* must be a key or a numeric id (see check_issue_ref).
         """
+        if issue_key is not None:
+            check_issue_ref(issue_key)
         if object.__getattribute__(self, "_client") is None:
             if issue_key is not None:
                 object.__setattr__(self, "_issue_key", issue_key)

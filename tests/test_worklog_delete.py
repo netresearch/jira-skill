@@ -55,6 +55,15 @@ def test_a_response_for_another_worklog_deletes_nothing(monkeypatch):
     client.delete.assert_not_called()
 
 
+def test_a_leading_zero_still_matches_the_fetched_id(monkeypatch):
+    client = run_delete(monkeypatch)  # fetched id "42"
+    client.delete.reset_mock()
+    result = CliRunner().invoke(worklog.cli, ["delete", "PROJ-1", "042"])
+
+    assert result.exit_code == 0, result.output
+    client.delete.assert_called_once()
+
+
 def test_dry_run_deletes_nothing(monkeypatch):
     client = run_delete(monkeypatch, "--keep-remaining", "--dry-run")
 

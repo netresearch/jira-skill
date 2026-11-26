@@ -5,8 +5,15 @@
 
 from unittest import mock
 
+import click
 import pytest
-from lib.client import UnsafeRequestPathError, _check_request_url, _patch_session_for_response_validation
+from lib.client import (
+    LazyJiraClient,
+    UnsafeRequestPathError,
+    _check_request_url,
+    _patch_session_for_response_validation,
+    check_issue_ref,
+)
 
 BASE = "https://jira.example.com/rest/api/2/issue"
 
@@ -62,3 +69,30 @@ def test_the_patched_session_sends_nothing_for_a_refused_url():
         client._session.request("DELETE", f"{BASE}/PROJ-1/worklog/../../PROJ-2")
 
     original.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "issue_key",
+    [
+        # jira-issue delete 'PROJ-1?deleteSubtasks=true' -> the library appends
+        # &deleteSubtasks=false, and Jira reads the first value.
+        "PROJ-1?deleteSubtasks=true",
+        "PROJ-1/comment/7",
+        "PROJ-1#",
+        "../PROJ-2",
+        "PROJ-1 ",
+        "PROJ-٤٢",
+        "",
+    ],
+)
+def test_with_context_refuses_what_is_not_an_issue_reference(issue_key):
+    with pytest.raises(click.BadParameter):
+        LazyJiraClient().with_context(issue_key=issue_key)
+
+
+@pytest.mark.parametrize(
+    "issue_key", ["PROJ-123", "proj-1", "AB_2-7", "10042", "https://jira.example.com/browse/WEB-99"]
+)
+def test_with_context_accepts_keys_ids_and_urls(issue_key):
+    check_issue_ref(issue_key)
+    LazyJiraClient().with_context(issue_key=issue_key)
