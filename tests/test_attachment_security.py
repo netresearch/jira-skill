@@ -539,6 +539,13 @@ class TestDownloadAll:
         assert "ISSUE_KEY" in result.output
         get.assert_not_called()
 
+    def test_the_metadata_url_goes_through_the_url_check(self, tmp_path):
+        """download-all bypasses the client session, so it runs the check itself."""
+        with mock.patch.object(jira_attachment, "_check_request_url") as check:
+            result = self._run(tmp_path, [])
+        assert result.exit_code == 0, result.output
+        check.assert_called_once_with("https://jira.example.com/rest/api/2/issue/TEST-1")
+
     def test_dir_outside_cwd_rejected(self, tmp_path):
         """--dir resolving outside cwd must be rejected (path traversal guard)."""
         result = self._run(tmp_path, [_att("1", "a.pdf")], extra_args=["--dir", "../escape"])

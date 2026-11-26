@@ -33,6 +33,7 @@ from lib.client import (
     CaptchaError,
     LazyJiraClient,
     SessionExpiredError,
+    _check_request_url,
     _handle_response,
     _sanitize_error,
     check_issue_ref,
@@ -377,8 +378,10 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
             sys.exit(1)
 
         # Fetch attachment metadata for the issue
+        meta_url = f"{jira_url}/rest/api/2/issue/{issue_key}"
+        _check_request_url(meta_url)
         meta_response = requests.get(
-            f"{jira_url}/rest/api/2/issue/{issue_key}",
+            meta_url,
             params={"fields": "attachment"},
             auth=auth,
             headers={**headers, "Accept": "application/json"},

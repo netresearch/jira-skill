@@ -381,9 +381,9 @@ def _handle_response(response: Response, jira_url: str, url: str | None = None) 
 
 # An issue key ("PROJ-123", any case) or a numeric issue id. A browse URL is
 # also accepted by with_context(), for profile resolution only: no query, no
-# fragment, no dot segment, and a key after /browse/.
-_ISSUE_REF_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*-[0-9]+|[0-9]+", re.ASCII)
-_BROWSE_URL_RE = re.compile(r"https?://[^/?#\s\\]+(?:/[^?#\s\\%]*)?/browse/[A-Za-z][A-Za-z0-9_]*-[0-9]+", re.ASCII)
+# fragment, no ';' path parameter, no dot segment, and a key after /browse/.
+_ISSUE_REF_RE = re.compile(r"[A-Za-z]\w*-\d+|\d+", re.ASCII)
+_BROWSE_URL_RE = re.compile(r"https?://[^/?#;\s\\]+(?:/[^?#;\s\\%]*)?/browse/[A-Za-z]\w*-\d+", re.ASCII)
 
 
 def check_issue_ref(issue_key: str) -> None:

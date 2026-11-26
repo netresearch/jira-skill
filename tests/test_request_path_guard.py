@@ -90,6 +90,8 @@ def test_the_patched_session_sends_nothing_for_a_refused_url():
         "https://jira.example.com/browse/PROJ-1/../PROJ-2",
         "https://jira.example.com/rest/api/2/issue/PROJ-1",
         "https://jira.example.com/jira/%2e%2e/browse/PROJ-1",
+        "https://jira.example.com/..;x/browse/PROJ-1",
+        "https://jira.example.com;x/browse/PROJ-1",
     ],
 )
 def test_with_context_refuses_what_is_not_an_issue_reference(issue_key):
