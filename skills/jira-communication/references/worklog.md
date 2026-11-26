@@ -42,9 +42,20 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py delete PROJ-123 409062 -
 
 # Delete it
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py delete PROJ-123 409062
+
+# Delete it without touching the remaining estimate
+uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py delete PROJ-123 409062 --keep-remaining
 ```
 
 `delete` fetches the entry first and echoes its date, author and duration, so a mistyped id surfaces before anything is removed rather than after. Deleting your own worklog needs the "Delete Own Worklogs" permission; someone else's needs "Delete All Worklogs".
+
+How Jira Server treats the remaining estimate:
+
+- `add` lowers it by the booked time but not below zero. An issue without an estimate shows `0m` after a booking.
+- A default `delete` adds the whole deleted time to it, also where booking that time lowered it by less or not at all.
+- `delete --keep-remaining` leaves it as it is.
+
+So after a default delete the estimate can be higher than before the deleted entry was booked. Read `timetracking` (`jira-issue.py --json get KEY --fields timetracking`) when the value matters, because the printed ticket state shows both `0m` and an empty estimate as a dash.
 
 ## `jira-worklog-query.py` — cross-cutting query
 
