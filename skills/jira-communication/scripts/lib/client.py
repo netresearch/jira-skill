@@ -386,8 +386,12 @@ def _check_request_url(url: str) -> None:
     change the target, and none of them occurs in a path this client builds
     itself:
 
-    - a ``.`` or ``..`` segment, also percent-encoded: requests removes it, so
-      ``issue/PROJ-1/worklog/../../PROJ-2`` goes to ``issue/PROJ-2``;
+    - a ``.`` or ``..`` segment, also percent-encoded or with a ``;`` path
+      parameter: requests removes it, Tomcat (which Jira runs on) treats
+      ``..;x`` as ``..``, so ``issue/PROJ-1/worklog/../../PROJ-2`` goes to
+      ``issue/PROJ-2``;
+    - a backslash or an encoded ``/`` or ``\\``, which some servers read as a
+      separator;
     - a ``#``: everything after it is a fragment and never sent;
     - a ``/`` in the query: a ``?`` in an identifier moves the rest of the path
       into the query. Parameters passed as ``params=`` are encoded, so they
@@ -399,8 +403,10 @@ def _check_request_url(url: str) -> None:
     parts = urlsplit(url)
     if "#" in url:
         reason = "a '#'"
-    elif any(unquote(segment) in (".", "..") for segment in parts.path.split("/")):
+    elif any(unquote(segment).split(";", 1)[0] in (".", "..") for segment in parts.path.split("/")):
         reason = "a '.' or '..' path segment"
+    elif "\\" in parts.path or re.search(r"%(?:2f|5c)", parts.path, re.IGNORECASE):
+        reason = "a backslash or an encoded separator"
     elif "/" in parts.query:
         reason = "a '/' after '?'"
     else:

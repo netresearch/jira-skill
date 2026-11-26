@@ -22,6 +22,12 @@ BASE = "https://jira.example.com/rest/api/2/issue"
         f"{BASE}/PROJ-2?x=/worklog/42",
         f"{BASE}/PROJ-1/worklog/%2e%2e/%2E%2E/PROJ-2",
         f"{BASE}/./PROJ-1",
+        # Tomcat strips the path parameter and then normalises the segment.
+        f"{BASE}/PROJ-1/worklog/..;/..;/PROJ-2",
+        f"{BASE}/PROJ-1/worklog/..%3Bx/..%3bx/PROJ-2",
+        f"{BASE}/PROJ-1/worklog/..%2F..%2FPROJ-2",
+        f"{BASE}/PROJ-1/worklog/..\\..\\PROJ-2",
+        f"{BASE}/PROJ-1/worklog/..%5C..%5CPROJ-2",
     ],
 )
 def test_refuses_a_retargeting_url(url):
