@@ -331,9 +331,10 @@ def list_worklogs(ctx, issue_key: str, limit: int, truncate: int | None):
 @cli.command()
 @click.argument("issue_key")
 @click.argument("worklog_id")
+@click.option("--keep-remaining", is_flag=True, help="Leave the issue's remaining estimate unchanged")
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
 @click.pass_context
-def delete(ctx, issue_key: str, worklog_id: str, dry_run: bool):
+def delete(ctx, issue_key: str, worklog_id: str, keep_remaining: bool, dry_run: bool):
     """Delete a worklog entry from an issue.
 
     ISSUE_KEY: The Jira issue key (e.g., PROJ-123)
@@ -344,6 +345,11 @@ def delete(ctx, issue_key: str, worklog_id: str, dry_run: bool):
     duration, or the wrong system — e.g. when the team's system of record is a
     separate time tracker that syncs its own entries into Jira, and a direct
     Jira worklog would double-book.
+
+    By default Jira adds the whole deleted time to the remaining estimate, also
+    where booking that time lowered the estimate by less or not at all (it does
+    not go below zero, and an issue without an estimate shows 0m after a
+    booking). --keep-remaining leaves the estimate as it is.
 
     Deleting another user's worklog requires the "Delete All Worklogs"
     permission; your own needs "Delete Own Worklogs".
@@ -371,7 +377,8 @@ def delete(ctx, issue_key: str, worklog_id: str, dry_run: bool):
             print(f"  [{started}] {author}: {time_spent}")
             return
 
-        client.delete(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}")
+        params = {"adjustEstimate": "leave"} if keep_remaining else None
+        client.delete(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}", params=params)
 
         if ctx.obj["quiet"]:
             print(worklog_id)
