@@ -47,7 +47,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py delete PROJ-123 409062
 uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-worklog.py delete PROJ-123 409062 --keep-remaining
 ```
 
-`delete` fetches the entry first and echoes its date, author and duration, so a mistyped id surfaces before anything is removed rather than after. Deleting your own worklog needs the "Delete Own Worklogs" permission; someone else's needs "Delete All Worklogs".
+`delete` fetches the entry first and echoes its date, author and duration, so a mistyped id surfaces before anything is removed rather than after. `WORKLOG_ID` must be numeric, and `delete` removes nothing when the fetched entry does not carry that id. Deleting your own worklog needs the "Delete Own Worklogs" permission; someone else's needs "Delete All Worklogs".
 
 How Jira Server treats the remaining estimate:
 

@@ -4,7 +4,7 @@
 """Jira client initialization for CLI scripts."""
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse, urlsplit
 
 from atlassian import Jira
 from requests import Response
@@ -12,7 +12,12 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, load_config, resolve_is_cloud, validate_config
-from .errors import AuthenticationError, CaptchaError, _sanitize_error  # noqa: F401  (re-exported)
+from .errors import (  # noqa: F401  (re-exported)
+    AuthenticationError,
+    CaptchaError,
+    UnsafeRequestPathError,
+    _sanitize_error,
+)
 from .users import find_users, is_cloud_client
 
 # Default timeout for all Jira API requests (seconds)
@@ -373,6 +378,36 @@ def _handle_response(response: Response, jira_url: str, url: str | None = None) 
     _check_session_expiry(response, url or getattr(response, "url", ""))
 
 
+def _check_request_url(url: str) -> None:
+    """Refuse a URL that the HTTP stack would send to another resource.
+
+    Paths are built from identifiers the caller passed in (issue keys,
+    worklog, comment and version ids). Three shapes in such an identifier
+    change the target, and none of them occurs in a path this client builds
+    itself:
+
+    - a ``.`` or ``..`` segment, also percent-encoded: requests removes it, so
+      ``issue/PROJ-1/worklog/../../PROJ-2`` goes to ``issue/PROJ-2``;
+    - a ``#``: everything after it is a fragment and never sent;
+    - a ``/`` in the query: a ``?`` in an identifier moves the rest of the path
+      into the query. Parameters passed as ``params=`` are encoded, so they
+      never contain a raw ``/``.
+
+    Raises:
+        UnsafeRequestPathError: before anything is sent.
+    """
+    parts = urlsplit(url)
+    if "#" in url:
+        reason = "a '#'"
+    elif any(unquote(segment) in (".", "..") for segment in parts.path.split("/")):
+        reason = "a '.' or '..' path segment"
+    elif "/" in parts.query:
+        reason = "a '/' after '?'"
+    else:
+        return
+    raise UnsafeRequestPathError(f"Refusing request: the URL contains {reason}, check the issue key or id: {url}")
+
+
 def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
     """Patch the Jira client session to run response validation on every request.
 
@@ -388,6 +423,7 @@ def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
     original_request = client._session.request
 
     def patched_request(method: str, url: str, **kwargs) -> Response:
+        _check_request_url(url)
         response = original_request(method, url, **kwargs)
         _handle_response(response, jira_url, url=url)
         return response

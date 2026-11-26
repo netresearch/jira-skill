@@ -360,6 +360,8 @@ def delete(ctx, issue_key: str, worklog_id: str, keep_remaining: bool, dry_run: 
 
       jira-worklog delete PROJ-123 409062
     """
+    if not re.fullmatch(r"[0-9]+", worklog_id):
+        raise click.BadParameter("must be the numeric worklog id", param_hint="WORKLOG_ID")
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]
 
@@ -368,6 +370,11 @@ def delete(ctx, issue_key: str, worklog_id: str, keep_remaining: bool, dry_run: 
         # away — a bare numeric id is easy to mistype and impossible to sanity
         # check after the fact.
         existing = client.get(f"rest/api/2/issue/{issue_key}/worklog/{worklog_id}") or {}
+        # Delete only what the GET proved to be this worklog: a response
+        # without the matching id came from another resource.
+        if str(existing.get("id")) != worklog_id:
+            error(f"{issue_key} has no worklog {worklog_id}; nothing deleted")
+            sys.exit(1)
         author = person_label(existing.get("author"))
         time_spent = existing.get("timeSpent", "N/A")
         started = existing.get("started", "N/A")[:10] if existing.get("started") else "N/A"
