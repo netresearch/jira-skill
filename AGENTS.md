@@ -59,7 +59,7 @@ Releases are automated via GitHub Actions (`.github/workflows/release.yml`). On 
 
 **Steps (release PR — `main` requires pull requests; do not push it directly, that only works via owner bypass and rings the ruleset alarm):**
 1. Check commits since last release: `git log --oneline v<last>..HEAD`
-2. Backfill any missing CHANGELOG entries, rename `[Unreleased]` to `[<version>] - <today>`, add a fresh empty `[Unreleased]` above it
+2. Backfill any missing CHANGELOG entries, then run `roll-changelog.py CHANGELOG.md <version>` from the skill-repo skill: it collects the fragments in `changelog.d/` (see `changelog.d/README.md`) into `[Unreleased]`, renames `[Unreleased]` to `[<version>] - <today>` and adds a fresh empty `[Unreleased]` above it
 3. Bump the version in `.claude-plugin/plugin.json` **and** `plugin.json`
 4. Bump `metadata.version` in **both** `skills/*/SKILL.md` to match (CI and the pre-commit parity hook validate consistency)
 5. Branch `release/v<version>`, commit `chore(release): v<version>` (signed, as always), push, open a PR with the same title
