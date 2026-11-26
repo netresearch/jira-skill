@@ -114,3 +114,22 @@ def test_unknown_issue_type_lists_available_types():
 def test_missing_arguments_without_edit_exits_2():
     result, _ = run_cli(_fields_mod, ["meta", "PROJ"])
     assert result.exit_code == 2
+
+
+def test_a_numeric_project_id_resolves_without_an_issue_key_context():
+    """'10000-1' is no issue key; with_context refuses it, so it is not built."""
+    from lib.client import check_issue_ref
+
+    for args in (["--quiet", "meta", "10000", "Task"], ["--quiet", "types", "10000"]):
+        mc = _client_with_pages({"startAt": 0, "total": 1, "isLast": True, "values": [_SUMMARY]})
+        mc.with_context.side_effect = lambda issue_key=None, url=None: check_issue_ref(issue_key)
+        result, mc = run_cli(_fields_mod, args, mc)
+        assert result.exit_code == 0, result.output
+        mc.with_context.assert_not_called()
+
+
+def test_a_project_key_still_sets_the_profile_context():
+    mc = _client_with_pages({"startAt": 0, "total": 1, "isLast": True, "values": [_SUMMARY]})
+    result, mc = run_cli(_fields_mod, ["--quiet", "meta", "PROJ", "Task"], mc)
+    assert result.exit_code == 0, result.output
+    mc.with_context.assert_called_once_with(issue_key="PROJ-1")

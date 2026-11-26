@@ -33,8 +33,10 @@ from lib.client import (
     CaptchaError,
     LazyJiraClient,
     SessionExpiredError,
+    _check_request_url,
     _handle_response,
     _sanitize_error,
+    check_issue_ref,
 )
 from lib.config import load_config
 from lib.output import error, success, warning
@@ -362,6 +364,8 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
 
       jira-attachment download-all PROJ-123 --dry-run
     """
+    # This request bypasses the client session and its URL check.
+    check_issue_ref(issue_key)
     try:
         config = load_config(env_file=ctx.obj["env_file"], profile=ctx.obj.get("profile"))
         jira_url = config["JIRA_URL"]
@@ -374,8 +378,10 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
             sys.exit(1)
 
         # Fetch attachment metadata for the issue
+        meta_url = f"{jira_url}/rest/api/2/issue/{issue_key}"
+        _check_request_url(meta_url)
         meta_response = requests.get(
-            f"{jira_url}/rest/api/2/issue/{issue_key}",
+            meta_url,
             params={"fields": "attachment"},
             auth=auth,
             headers={**headers, "Accept": "application/json"},

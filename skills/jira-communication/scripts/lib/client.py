@@ -4,15 +4,21 @@
 """Jira client initialization for CLI scripts."""
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse, urlsplit
 
+import click
 from atlassian import Jira
 from requests import Response
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import get_auth_mode, load_config, resolve_is_cloud, validate_config
-from .errors import AuthenticationError, CaptchaError, _sanitize_error  # noqa: F401  (re-exported)
+from .errors import (  # noqa: F401  (re-exported)
+    AuthenticationError,
+    CaptchaError,
+    UnsafeRequestPathError,
+    _sanitize_error,
+)
 from .users import find_users, is_cloud_client
 
 # Default timeout for all Jira API requests (seconds)
@@ -373,6 +379,69 @@ def _handle_response(response: Response, jira_url: str, url: str | None = None) 
     _check_session_expiry(response, url or getattr(response, "url", ""))
 
 
+# An issue key ("PROJ-123", any case) or a numeric issue id. A browse URL is
+# also accepted by with_context(), for profile resolution only: no query, no
+# fragment, no ';' path parameter, no dot segment, and a key after /browse/.
+_ISSUE_REF_RE = re.compile(r"[A-Za-z]\w*-\d+|\d+", re.ASCII)
+_BROWSE_URL_RE = re.compile(r"https?://[^/?#;\s\\]+(?:/[^?#;\s\\%]*)?/browse/[A-Za-z]\w*-\d+", re.ASCII)
+
+
+def check_issue_ref(issue_key: str) -> None:
+    """Refuse an ISSUE_KEY that is neither a key, a numeric id nor a URL.
+
+    Commands put the key into REST paths. Anything else in it can change the
+    request: "PROJ-1?deleteSubtasks=true" adds a parameter that the
+    command's own flag cannot override, "PROJ-1/comment/7" addresses a
+    comment instead of the issue.
+
+    Raises:
+        click.BadParameter: shown by click as a usage error, exit code 2.
+    """
+    if _ISSUE_REF_RE.fullmatch(issue_key):
+        return
+    if _BROWSE_URL_RE.fullmatch(issue_key) and not any(s in (".", "..") for s in issue_key.split("/")):
+        return
+    raise click.BadParameter(
+        f"{issue_key!r} is not an issue key (PROJ-123), a numeric issue id or a browse URL", param_hint="ISSUE_KEY"
+    )
+
+
+def _check_request_url(url: str) -> None:
+    """Refuse a URL that the HTTP stack would send to another resource.
+
+    Paths are built from identifiers the caller passed in (issue keys,
+    worklog, comment and version ids). Three shapes in such an identifier
+    change the target, and none of them occurs in a path this client builds
+    itself:
+
+    - a ``.`` or ``..`` segment, also percent-encoded or with a ``;`` path
+      parameter: requests removes it, Tomcat (which Jira runs on) treats
+      ``..;x`` as ``..``, so ``issue/PROJ-1/worklog/../../PROJ-2`` goes to
+      ``issue/PROJ-2``;
+    - a backslash or an encoded ``/`` or ``\\``, which some servers read as a
+      separator;
+    - a ``#``: everything after it is a fragment and never sent;
+    - a ``/`` in the query: a ``?`` in an identifier moves the rest of the path
+      into the query. Parameters passed as ``params=`` are encoded, so they
+      never contain a raw ``/``.
+
+    Raises:
+        UnsafeRequestPathError: before anything is sent.
+    """
+    parts = urlsplit(url)
+    if "#" in url:
+        reason = "a '#'"
+    elif any(unquote(segment).split(";", 1)[0] in (".", "..") for segment in parts.path.split("/")):
+        reason = "a '.' or '..' path segment"
+    elif "\\" in parts.path or re.search(r"%(?:2f|5c)", parts.path, re.IGNORECASE):
+        reason = "a backslash or an encoded separator"
+    elif "/" in parts.query:
+        reason = "a '/' after '?'"
+    else:
+        return
+    raise UnsafeRequestPathError(f"Refusing request: the URL contains {reason}, check the issue key or id: {url}")
+
+
 def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
     """Patch the Jira client session to run response validation on every request.
 
@@ -388,6 +457,7 @@ def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
     original_request = client._session.request
 
     def patched_request(method: str, url: str, **kwargs) -> Response:
+        _check_request_url(url)
         response = original_request(method, url, **kwargs)
         _handle_response(response, jira_url, url=url)
         return response
@@ -438,8 +508,11 @@ class LazyJiraClient:
         client is already initialized.
 
         If *issue_key* looks like a URL (starts with http(s)://), it is
-        also used as *url* for host-based profile resolution.
+        also used as *url* for host-based profile resolution. Any other
+        *issue_key* must be a key or a numeric id (see check_issue_ref).
         """
+        if issue_key is not None:
+            check_issue_ref(issue_key)
         if object.__getattribute__(self, "_client") is None:
             if issue_key is not None:
                 object.__setattr__(self, "_issue_key", issue_key)

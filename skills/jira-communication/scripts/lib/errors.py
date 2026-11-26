@@ -24,6 +24,15 @@ class CaptchaError(Exception):
         self.login_url = login_url
 
 
+class UnsafeRequestPathError(ValueError):
+    """Raised before a request whose URL would address another resource than its path names.
+
+    An identifier interpolated into a REST path can carry ``..``, ``#`` or
+    ``?``. The HTTP stack then normalises or cuts the path, and a worklog DELETE
+    becomes an issue DELETE. The request is refused instead of sent.
+    """
+
+
 class AuthenticationError(Exception):
     """Raised when Jira returns 401 or 403 on an authenticated request.
 

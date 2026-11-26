@@ -189,8 +189,10 @@ def list_types(ctx, project: str | None):
 
     try:
         if project:
-            # Use project key for profile resolution
-            client.with_context(issue_key=f"{project}-1")
+            # Use project key for profile resolution. A numeric project id
+            # makes no issue key, so it uses the default profile.
+            if not _is_numeric_project_id(project):
+                client.with_context(issue_key=f"{project}-1")
             types = get_project_issue_types(client, project)
         else:
             types = client.get_all_issuetypes()
@@ -220,6 +222,11 @@ def list_types(ctx, project: str | None):
             raise
         error(f"Failed to list issue types: {e}")
         sys.exit(1)
+
+
+def _is_numeric_project_id(project: str) -> bool:
+    """A project id such as 10000; "10000-1" is no issue key, so it gets no context."""
+    return project.isascii() and project.isdigit()
 
 
 def _resolve_issue_type_id(types: list[dict], issue_type: str) -> str | None:
@@ -315,7 +322,8 @@ def meta(ctx, project: str | None, issue_type: str | None, edit_key: str | None)
             if not project or not issue_type:
                 error("PROJECT and ISSUE_TYPE are required unless --edit KEY is given")
                 sys.exit(2)
-            client.with_context(issue_key=f"{project}-1")
+            if not _is_numeric_project_id(project):
+                client.with_context(issue_key=f"{project}-1")
             types = get_project_issue_types(client, project)
             type_id = _resolve_issue_type_id(types, issue_type)
             if type_id is None:
