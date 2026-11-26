@@ -83,6 +83,13 @@ def test_the_patched_session_sends_nothing_for_a_refused_url():
         "PROJ-1 ",
         "PROJ-٤٢",
         "",
+        # download-all puts the value into a URL that bypasses the session check.
+        "https://jira.example.com/browse/../../rest/api/2/issue/PROJ-2",
+        "https://jira.example.com/browse/PROJ-1?deleteSubtasks=true",
+        "https://jira.example.com/browse/PROJ-1#x",
+        "https://jira.example.com/browse/PROJ-1/../PROJ-2",
+        "https://jira.example.com/rest/api/2/issue/PROJ-1",
+        "https://jira.example.com/jira/%2e%2e/browse/PROJ-1",
     ],
 )
 def test_with_context_refuses_what_is_not_an_issue_reference(issue_key):
@@ -91,7 +98,15 @@ def test_with_context_refuses_what_is_not_an_issue_reference(issue_key):
 
 
 @pytest.mark.parametrize(
-    "issue_key", ["PROJ-123", "proj-1", "AB_2-7", "10042", "https://jira.example.com/browse/WEB-99"]
+    "issue_key",
+    [
+        "PROJ-123",
+        "proj-1",
+        "AB_2-7",
+        "10042",
+        "https://jira.example.com/browse/WEB-99",
+        "http://jira.example.com:8080/jira/browse/WEB-99",
+    ],
 )
 def test_with_context_accepts_keys_ids_and_urls(issue_key):
     check_issue_ref(issue_key)

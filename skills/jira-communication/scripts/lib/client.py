@@ -380,8 +380,10 @@ def _handle_response(response: Response, jira_url: str, url: str | None = None) 
 
 
 # An issue key ("PROJ-123", any case) or a numeric issue id. A browse URL is
-# also accepted by with_context(), for profile resolution only.
+# also accepted by with_context(), for profile resolution only: no query, no
+# fragment, no dot segment, and a key after /browse/.
 _ISSUE_REF_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*-[0-9]+|[0-9]+", re.ASCII)
+_BROWSE_URL_RE = re.compile(r"https?://[^/?#\s\\]+(?:/[^?#\s\\%]*)?/browse/[A-Za-z][A-Za-z0-9_]*-[0-9]+", re.ASCII)
 
 
 def check_issue_ref(issue_key: str) -> None:
@@ -395,10 +397,12 @@ def check_issue_ref(issue_key: str) -> None:
     Raises:
         click.BadParameter: shown by click as a usage error, exit code 2.
     """
-    if issue_key.startswith(("http://", "https://")) or _ISSUE_REF_RE.fullmatch(issue_key):
+    if _ISSUE_REF_RE.fullmatch(issue_key):
+        return
+    if _BROWSE_URL_RE.fullmatch(issue_key) and not any(s in (".", "..") for s in issue_key.split("/")):
         return
     raise click.BadParameter(
-        f"{issue_key!r} is not an issue key (PROJ-123) or a numeric issue id", param_hint="ISSUE_KEY"
+        f"{issue_key!r} is not an issue key (PROJ-123), a numeric issue id or a browse URL", param_hint="ISSUE_KEY"
     )
 
 
