@@ -360,7 +360,8 @@ def delete(ctx, issue_key: str, worklog_id: str, keep_remaining: bool, dry_run: 
 
       jira-worklog delete PROJ-123 409062
     """
-    if not re.fullmatch(r"[0-9]+", worklog_id):
+    # ASCII only: a bare \d also takes other scripts' digits, such as "٤٢".
+    if not re.fullmatch(r"\d+", worklog_id, re.ASCII):
         raise click.BadParameter("must be the numeric worklog id", param_hint="WORKLOG_ID")
     ctx.obj["client"].with_context(issue_key=issue_key)
     client = ctx.obj["client"]

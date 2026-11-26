@@ -31,7 +31,7 @@ def test_delete_passes_the_estimate_mode(monkeypatch, args, params):
     client.delete.assert_called_once_with("rest/api/2/issue/PROJ-1/worklog/42", params=params)
 
 
-@pytest.mark.parametrize("worklog_id", ["../../PROJ-2", "42#", "4 2", "", "²"])
+@pytest.mark.parametrize("worklog_id", ["../../PROJ-2", "42#", "4 2", "", "²", "٤٢"])
 def test_a_non_numeric_worklog_id_sends_nothing(monkeypatch, worklog_id):
     client = MagicMock()
     monkeypatch.setattr(worklog, "LazyJiraClient", lambda *a, **kw: client)
