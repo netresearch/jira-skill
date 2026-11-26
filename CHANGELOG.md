@@ -10,10 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- The Jira client refuses a request whose URL contains `#`, a `.` or `..` path segment (also encoded or with a `;` parameter), a backslash, an encoded separator or a `/` in the query, before sending it. An issue key or id carrying one of them changed the resource a request addressed: `jira-worklog.py delete PROJ-1 '../../PROJ-2'` sent a DELETE for issue PROJ-2 and reported a deleted worklog. `jira-worklog.py delete` also requires a numeric `WORKLOG_ID` and deletes nothing unless the fetched entry carries that id ([#347](https://github.com/netresearch/jira-skill/pull/347)) — reported by @magicsunday
-
 ## [5.2.0] - 2026-11-17
 
 ### Added
