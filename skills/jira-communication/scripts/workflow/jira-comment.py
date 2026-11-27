@@ -23,6 +23,7 @@ if _lib_path.exists():
     sys.path.insert(0, str(_lib_path.parent))
 
 import click
+from lib.changelog import parse_jira_datetime
 from lib.client import LazyJiraClient, _sanitize_error, fetch_comments_paginated
 from lib.input import read_stdin_utf8
 from lib.markup_cli import MarkupGates, guard_wiki_markup, markup_options
@@ -418,6 +419,22 @@ def delete(ctx, issue_key: str, comment_id: str, dry_run: bool):
         sys.exit(1)
 
 
+def _local_time(created: str | None) -> str:
+    """A comment's `created` stamp in the reader's local time, with the zone named.
+
+    Jira returns UTC (`2026-11-25T11:16:05.000+0000`). The table used to print
+    the first 16 characters of that string with no zone, which reads as local
+    time and puts a booking taken from it one hour off in CET.
+    """
+    if not created:
+        return "N/A"
+    try:
+        local = parse_jira_datetime(created).astimezone()
+    except ValueError:
+        return created
+    return local.strftime("%Y-%m-%d %H:%M ") + (local.strftime("%Z") or local.strftime("%z"))
+
+
 @cli.command("list")
 @click.argument("issue_key")
 @click.option(
@@ -484,7 +501,7 @@ def list_comments(ctx, issue_key: str, limit: int, truncate: int | None):
                     print(f"Comments on {issue_key} ({len(shown)} shown):\n")
                 for c in shown:
                     author = person_label(c.get("author"))
-                    created = c.get("created", "")[:16].replace("T", " ") if c.get("created") else "N/A"
+                    created = _local_time(c.get("created"))
                     body = c.get("body", "")
 
                     # Handle ADF format
