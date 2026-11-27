@@ -1,0 +1,1 @@
+- `jira-comment.py list` prints each comment's time in local time with the zone (`[2026-11-25 12:16 CET]`). It printed the UTC stamp without a zone, which reads as local time.
